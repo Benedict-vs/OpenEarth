@@ -113,5 +113,4 @@ streamlit run app/main.py
 - [ ] Basic tests for aggregation/coverage
 
 ## License
-
-Choose a license before publishing (MIT is common for portfolio projects).
+MIT - see LICENSE.
