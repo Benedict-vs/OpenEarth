@@ -1,0 +1,42 @@
+# Bytecode / caches
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging / build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test / coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Env / secrets
+.env
+.env.*
+.streamlit/secrets.toml
+
+# Logs / temp
+*.log
+*.tmp
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Project-local scratch
+update.txt

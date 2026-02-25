@@ -53,6 +53,9 @@ Or using pip:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .
+# for interactive ROI drawing:
+pip install folium streamlit-folium
 ```
 
 ### 2) Run the app
@@ -83,9 +86,11 @@ streamlit run app/main.py
 ├── app/                 # Streamlit UI
 │   └── main.py
 ├── src/                 # reusable core
-│   ├── providers/       # data access (gee, stac, etc.)
-│   ├── analytics/       # compositing, aggregation, trends
-│   └── viz/             # map + plotting helpers
+│   └── openearth/
+│       ├── providers/   # data access (gee, stac, etc.)
+│       ├── analytics/   # compositing, aggregation, trends
+│       └── viz/         # map + plotting helpers
+├── pyproject.toml       # package metadata (editable install)
 ├── cli.py               # optional CLI wrapper (planned)
 ├── tests/               # unit tests for core reducers
 ├── environment.yml

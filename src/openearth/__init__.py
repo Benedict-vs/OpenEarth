@@ -1,0 +1,2 @@
+"""OpenEarth core package."""
+
