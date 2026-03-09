@@ -9,19 +9,14 @@ from typing import Any
 import ee
 import pandas as pd
 import streamlit as st
+import folium
+
+from folium.plugins import Draw
+from streamlit_folium import st_folium
 
 from openearth.analytics.no2_daily import build_no2_daily_timeseries
 from openearth.analytics.smoothing import add_rolling_no2
 from openearth.providers.gee_session import initialize_ee
-
-try:
-    import folium
-    from folium.plugins import Draw
-    from streamlit_folium import st_folium
-
-    HAS_DRAW_MAP = True
-except ModuleNotFoundError:
-    HAS_DRAW_MAP = False
 
 ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
     "Heidelberg (Germany)": (8.58, 49.35, 8.77, 49.46),
@@ -56,7 +51,8 @@ def _apply_pending_bbox() -> None:
     _set_bbox(west, south, east, north)
 
 
-def _bbox_from_geometry(geometry: dict[str, Any] | None) -> tuple[float, float, float, float] | None:
+def _bbox_from_geometry(geometry: dict[str, Any] | None
+                        ) -> tuple[float, float, float, float] | None:
     if not isinstance(geometry, dict):
         return None
     coordinates = geometry.get("coordinates")
@@ -85,7 +81,8 @@ def _bbox_from_geometry(geometry: dict[str, Any] | None) -> tuple[float, float, 
     return min(lons), min(lats), max(lons), max(lats)
 
 
-def _map_center(west: float, south: float, east: float, north: float) -> tuple[float, float]:
+def _map_center(west: float, south: float, east: float, north: float
+                ) -> tuple[float, float]:
     return ((south + north) / 2.0, (west + east) / 2.0)
 
 
@@ -102,14 +99,9 @@ def _map_zoom(west: float, south: float, east: float, north: float) -> int:
     return 6
 
 
-def _render_roi_draw_map(west: float, south: float, east: float, north: float) -> None:
+def _render_roi_draw_map(west: float, south: float, east: float, north: float
+                         ) -> None:
     st.subheader("Draw ROI on Map")
-    if not HAS_DRAW_MAP:
-        st.info(
-            "Map drawing is unavailable. Install `folium` and `streamlit-folium` "
-            "to draw rectangle/polygon ROIs."
-        )
-        return
 
     center_lat, center_lon = _map_center(west, south, east, north)
     fmap = folium.Map(
@@ -301,7 +293,8 @@ coverage_mean = pd.to_numeric(chart_df["coverage_fraction"],
                               errors="coerce").mean()
 st.caption(
     f"Rows: {len(chart_df)} | Mean coverage: {coverage_mean:.2%} | "
-    "Date input uses inclusive end date in UI (converted to EE exclusive internally)."
+    "Date input uses inclusive end date in UI (converted to EE exclusive \
+        internally)."
 )
 
 st.subheader("Data")
