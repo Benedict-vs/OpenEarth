@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import ee
 from datetime import date, datetime
+
+import ee
 
 
 def to_ee_date(value: str | date | datetime) -> ee.Date:

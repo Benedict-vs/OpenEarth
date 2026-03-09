@@ -17,6 +17,15 @@ from streamlit_folium import st_folium
 from openearth.analytics.no2_daily import build_no2_daily_timeseries
 from openearth.analytics.smoothing import add_rolling_no2
 from openearth.providers.gee_session import initialize_ee
+from openearth.visualization.no2_heatmap import (
+    build_mean_composite,
+    build_date_composite,
+    get_tile_url,
+    create_heatmap_folium,
+    NO2_VIS_PALETTE,
+    NO2_VIS_MIN,
+    NO2_VIS_MAX,
+)
 
 ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
     "Heidelberg (Germany)": (8.58, 49.35, 8.77, 49.46),
@@ -99,6 +108,34 @@ def _map_zoom(west: float, south: float, east: float, north: float) -> int:
     return 6
 
 
+def _render_color_legend() -> None:
+    """Render an HTML color bar legend for the NO2 heatmap."""
+    gradient_css = ", ".join(NO2_VIS_PALETTE)
+    # Display in µmol/m² (multiply mol/m² by 1e6) for readability
+    label_min = NO2_VIS_MIN * 1e6
+    label_max = NO2_VIS_MAX * 1e6
+    st.markdown(
+        f"""
+        <div style="display:flex; align-items:center; margin:8px 0 16px 0;">
+            <span style="font-size:0.85em; margin-right:8px;">
+                {label_min:.0f} &mu;mol/m&sup2;
+            </span>
+            <div style="
+                flex:1;
+                height:16px;
+                background: linear-gradient(to right, {gradient_css});
+                border-radius:4px;
+                border:1px solid #ccc;
+            "></div>
+            <span style="font-size:0.85em; margin-left:8px;">
+                {label_max:.0f} &mu;mol/m&sup2;
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_roi_draw_map(west: float, south: float, east: float, north: float
                          ) -> None:
     st.subheader("Draw ROI on Map")
@@ -136,8 +173,16 @@ def _render_roi_draw_map(west: float, south: float, east: float, north: float
         use_container_width=True,
         returned_objects=["last_active_drawing"],
     )
-    drawing = map_state.get("last_active_drawing") if isinstance(map_state, dict) else None
-    drawing_geom = drawing.get("geometry") if isinstance(drawing, dict) else None
+    drawing = (
+        map_state.get("last_active_drawing")
+        if isinstance(map_state, dict)
+        else None
+    )
+    drawing_geom = (
+        drawing.get("geometry")
+        if isinstance(drawing, dict)
+        else None
+    )
     drawn_bbox = _bbox_from_geometry(drawing_geom)
     if drawn_bbox is None:
         st.caption("Draw a rectangle or polygon, then click `Use drawn ROI`.")
@@ -145,11 +190,16 @@ def _render_roi_draw_map(west: float, south: float, east: float, north: float
 
     draw_west, draw_south, draw_east, draw_north = drawn_bbox
     st.caption(
-        "Drawn ROI: "
-        f"W {draw_west:.4f}, S {draw_south:.4f}, E {draw_east:.4f}, N {draw_north:.4f}"
+        f"Drawn ROI: W {draw_west:.4f}, "
+        f"S {draw_south:.4f}, "
+        f"E {draw_east:.4f}, "
+        f"N {draw_north:.4f}"
     )
     if st.button("Use drawn ROI"):
-        st.session_state["pending_bbox"] = (draw_west, draw_south, draw_east, draw_north)
+        st.session_state["pending_bbox"] = (
+            draw_west, draw_south,
+            draw_east, draw_north,
+        )
         st.rerun()
 
 
@@ -199,10 +249,13 @@ st.sidebar.header("Smoothing")
 window_days = st.sidebar.slider("Window (days)",
                                 min_value=3, max_value=30, value=14)
 min_periods = st.sidebar.slider(
-    "Minimum valid days", min_value=1, max_value=window_days, value=min(4, window_days)
+    "Minimum valid days",
+    min_value=1,
+    max_value=window_days,
+    value=min(4, window_days),
 )
 smoothing_method = st.sidebar.selectbox("Method",
-                                        options=["mean", "median"],
+                                        options=["median", "mean"],
                                         index=0)
 
 _render_roi_draw_map(west, south, east, north)
@@ -214,7 +267,10 @@ if run:
         st.error("Project ID is required.")
         st.stop()
     if east <= west or north <= south:
-        st.error("Invalid bounding box. Ensure east > west and north > south.")
+        st.error(
+            "Invalid bounding box. "
+            "Ensure east > west and north > south."
+        )
         st.stop()
     if end_date_inclusive < start_date:
         st.error("End date must be on or after start date.")
@@ -222,7 +278,10 @@ if run:
     end_date_exclusive = end_date_inclusive + timedelta(days=1)
 
     try:
-        with st.spinner("Initializing Earth Engine and computing daily NO2..."):
+        with st.spinner(
+            "Initializing Earth Engine "
+            "and computing daily NO2..."
+        ):
             initialize_ee(project_id=project_id,
                           authenticate=authenticate_on_fail)
             roi = ee.Geometry.BBox(west, south, east, north)
@@ -240,6 +299,15 @@ if run:
         st.stop()
 
     st.session_state["analysis_df"] = df
+    st.session_state["heatmap_params"] = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date_exclusive.isoformat(),
+        "west": west,
+        "south": south,
+        "east": east,
+        "north": north,
+        "project_id": project_id,
+    }
 
 if "analysis_df" not in st.session_state:
     st.info("Configure inputs in the sidebar and click 'Run NO2 analysis'.")
@@ -283,19 +351,135 @@ with plot_col:
         st.line_chart(chart_df.set_index("date")[plot_cols],
                       use_container_width=True)
 
-st.subheader("Coverage")
-st.area_chart(
-    chart_df.set_index("date")[["coverage_fraction"]],
-    use_container_width=True,
-)
-
 coverage_mean = pd.to_numeric(chart_df["coverage_fraction"],
                               errors="coerce").mean()
-st.caption(
-    f"Rows: {len(chart_df)} | Mean coverage: {coverage_mean:.2%} | "
-    "Date input uses inclusive end date in UI (converted to EE exclusive \
-        internally)."
-)
 
-st.subheader("Data")
-st.dataframe(chart_df, use_container_width=True)
+with st.expander("Coverage", expanded=False):
+    st.area_chart(
+        chart_df.set_index("date")[["coverage_fraction"]],
+        use_container_width=True,
+    )
+    st.caption(
+        f"Rows: {len(chart_df)} | Mean coverage: {coverage_mean:.2%} | "
+        "Date input uses inclusive end date in UI (converted to EE exclusive "
+        "internally)."
+    )
+
+with st.expander("Data", expanded=False):
+    st.dataframe(chart_df, use_container_width=True)
+
+# ── Spatial Heatmap Visualizations ─────────────────────────────
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_mean_tile_url(
+    west: float, south: float, east: float, north: float,
+    start_date: str, end_date: str,
+) -> str:
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_mean_composite(roi, start_date, end_date)
+    return get_tile_url(image)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_date_tile_url(
+    west: float, south: float, east: float, north: float,
+    target_date: str, half_window_days: int,
+) -> str:
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_date_composite(roi, target_date, half_window_days)
+    return get_tile_url(image)
+
+
+if "heatmap_params" in st.session_state:
+    hp = st.session_state["heatmap_params"]
+
+    # Ensure EE is initialized (needed on Streamlit reruns)
+    initialize_ee(
+        project_id=hp["project_id"],
+        authenticate=authenticate_on_fail,
+    )
+
+    center_lat, center_lon = _map_center(
+        hp["west"], hp["south"], hp["east"], hp["north"]
+    )
+    zoom = _map_zoom(hp["west"], hp["south"], hp["east"], hp["north"])
+    bounds = [[hp["south"], hp["west"]], [hp["north"], hp["east"]]]
+
+    # ── 1. Mean heatmap over full date range ──────────────────
+    st.subheader("Mean NO2 Spatial Distribution")
+    st.caption(
+        f"Composite mean of all Sentinel-5P passes from "
+        f"{hp['start_date']} to {hp['end_date']}"
+    )
+
+    try:
+        with st.spinner("Loading mean NO2 heatmap..."):
+            mean_tile_url = _cached_mean_tile_url(
+                hp["west"], hp["south"], hp["east"], hp["north"],
+                hp["start_date"], hp["end_date"],
+            )
+        mean_map = create_heatmap_folium(
+            tile_url=mean_tile_url,
+            center_lat=center_lat,
+            center_lon=center_lon,
+            zoom=zoom,
+            bounds=bounds,
+            layer_name="Mean NO2",
+        )
+        st_folium(mean_map, key="mean_heatmap", height=500,
+                  use_container_width=True)
+    except Exception as exc:
+        st.error(f"Could not render mean heatmap: {exc}")
+
+    _render_color_legend()
+
+    # ── 2. Date-slider heatmap ────────────────────────────────
+    st.subheader("NO2 by Date")
+
+    available_dates = sorted(chart_df["date"].dt.date.unique())
+    if len(available_dates) >= 2:
+        selected_date = st.select_slider(
+            "Select date",
+            options=available_dates,
+            value=available_dates[len(available_dates) // 2],
+            key="heatmap_date_slider",
+        )
+
+        half_window = st.slider(
+            "Composite window (+/- days)",
+            min_value=0, max_value=7, value=3,
+            help="Days before and after the selected date to include. "
+                 "Wider windows fill gaps but reduce temporal specificity.",
+            key="heatmap_half_window",
+        )
+
+        window_label = (
+            f"{selected_date}"
+            if half_window == 0
+            else f"{selected_date} +/- {half_window} days"
+        )
+        st.caption(f"Showing: {window_label}")
+
+        try:
+            with st.spinner("Loading date heatmap..."):
+                date_tile_url = _cached_date_tile_url(
+                    hp["west"], hp["south"], hp["east"], hp["north"],
+                    selected_date.isoformat(), half_window,
+                )
+            date_map = create_heatmap_folium(
+                tile_url=date_tile_url,
+                center_lat=center_lat,
+                center_lon=center_lon,
+                zoom=zoom,
+                bounds=bounds,
+                layer_name=f"NO2 {window_label}",
+            )
+            st_folium(date_map, key="date_heatmap", height=500,
+                      use_container_width=True)
+        except Exception as exc:
+            st.error(f"Could not render date heatmap: {exc}")
+
+        _render_color_legend()
+    else:
+        st.info("Need at least 2 dates in the result to use the date slider.")

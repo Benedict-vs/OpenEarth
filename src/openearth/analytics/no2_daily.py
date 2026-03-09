@@ -14,6 +14,15 @@ from openearth.providers.gee_no2 import NO2_BAND, get_no2_collection
 DEFAULT_SCALE_METERS = 11_132
 DEFAULT_MAX_PIXELS = 1_000_000_000
 
+_RESULT_COLUMNS = [
+    "date",
+    "no2_value",
+    "n_images",
+    "valid_pixel_count",
+    "total_pixel_count",
+    "coverage_fraction",
+]
+
 
 def build_no2_daily_timeseries(
     geometry: ee.Geometry,
@@ -131,29 +140,11 @@ def build_no2_daily_timeseries(
     daily_fc = ee.FeatureCollection(day_offsets.map(build_day_feature))
     info = daily_fc.getInfo()
     if not isinstance(info, dict):
-        return pd.DataFrame(
-            columns=[
-                "date",
-                "no2_value",
-                "n_images",
-                "valid_pixel_count",
-                "total_pixel_count",
-                "coverage_fraction",
-            ]
-        )
+        return pd.DataFrame(columns=_RESULT_COLUMNS)
 
     raw_features = info.get("features")
     if not isinstance(raw_features, list):
-        return pd.DataFrame(
-            columns=[
-                "date",
-                "no2_value",
-                "n_images",
-                "valid_pixel_count",
-                "total_pixel_count",
-                "coverage_fraction",
-            ]
-        )
+        return pd.DataFrame(columns=_RESULT_COLUMNS)
 
     rows: list[dict[str, Any]] = []
     for feature in raw_features:
@@ -165,14 +156,5 @@ def build_no2_daily_timeseries(
 
     df = pd.DataFrame(rows)
     if df.empty:
-        return pd.DataFrame(
-            columns=[
-                "date",
-                "no2_value",
-                "n_images",
-                "valid_pixel_count",
-                "total_pixel_count",
-                "coverage_fraction",
-            ]
-        )
+        return pd.DataFrame(columns=_RESULT_COLUMNS)
     return df.sort_values("date").reset_index(drop=True)

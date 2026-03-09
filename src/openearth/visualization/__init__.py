@@ -1,0 +1,1 @@
+"""OpenEarth visualization helpers."""

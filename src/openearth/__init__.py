@@ -1,2 +1,1 @@
 """OpenEarth core package."""
-

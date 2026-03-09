@@ -1,6 +1,7 @@
 """Earth Engine session helpers."""
 
 from __future__ import annotations
+
 import ee
 
 
@@ -11,8 +12,8 @@ def initialize_ee(project_id: str,
 
     Args:
         project_id: Explicit GCP project ID for Earth Engine.
-        authenticate: If True, run ee.Authenticate() and retry on auth/init \
-        failure.
+        authenticate: If True, run ee.Authenticate() and
+            retry on auth/init failure.
     """
 
     try:
