@@ -14,19 +14,20 @@ import folium
 from folium.plugins import Draw
 from streamlit_folium import st_folium
 
-from openearth.analytics.no2_daily import (
-    build_no2_daily_timeseries,
-)
 from openearth.analytics.smoothing import add_rolling_no2
+from openearth.analytics.trace_gas_daily import (
+    build_daily_timeseries,
+)
+from openearth.providers.gas_registry import (
+    GAS_REGISTRY,
+    get_gas_config,
+)
 from openearth.providers.gee_session import initialize_ee
-from openearth.visualization.no2_heatmap import (
+from openearth.visualization.trace_gas_heatmap import (
     build_mean_composite,
     build_date_composite,
     get_tile_url,
     create_heatmap_folium,
-    NO2_VIS_PALETTE,
-    NO2_VIS_MIN,
-    NO2_VIS_MAX,
 )
 
 # ── Constants ──────────────────────────────────────────────────
@@ -44,12 +45,7 @@ ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
 DEFAULT_EXAMPLE = "Heidelberg (Germany)"
 
 TRACE_GASES: dict[str, str] = {
-    "NO2": "Nitrogen Dioxide",
-    "SO2": "Sulphur Dioxide",
-    "CO": "Carbon Monoxide",
-    "O3": "Ozone",
-    "CH4": "Methane",
-    "HCHO": "Formaldehyde",
+    k: cfg.name for k, cfg in GAS_REGISTRY.items()
 }
 
 # ── Helper functions ───────────────────────────────────────────
@@ -137,18 +133,20 @@ def _map_zoom(
     return 6
 
 
-def _render_color_legend() -> None:
-    """Render an HTML color bar legend."""
-    gradient_css = ", ".join(NO2_VIS_PALETTE)
-    label_min = NO2_VIS_MIN * 1e6
-    label_max = NO2_VIS_MAX * 1e6
+def _render_color_legend(gas_key: str) -> None:
+    """Render an HTML color bar legend for *gas_key*."""
+    cfg = get_gas_config(gas_key)
+    gradient_css = ", ".join(cfg.palette)
+    label_min = cfg.vis_min * cfg.display_scale
+    label_max = cfg.vis_max * cfg.display_scale
+    unit = cfg.display_unit
     st.markdown(
         f"""
         <div style="display:flex;align-items:center;
                     margin:8px 0 16px 0;">
             <span style="font-size:0.85em;
                          margin-right:8px;">
-                {label_min:.0f} &mu;mol/m&sup2;
+                {label_min:.4g} {unit}
             </span>
             <div style="
                 flex:1; height:16px;
@@ -159,7 +157,7 @@ def _render_color_legend() -> None:
             "></div>
             <span style="font-size:0.85em;
                          margin-left:8px;">
-                {label_max:.0f} &mu;mol/m&sup2;
+                {label_max:.4g} {unit}
             </span>
         </div>
         """,
@@ -248,19 +246,21 @@ def _render_roi_draw_map(
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _cached_mean_tile_url(
+    gas_key: str,
     west: float, south: float,
     east: float, north: float,
     start_date: str, end_date: str,
 ) -> str:
     roi = ee.Geometry.BBox(west, south, east, north)
     image = build_mean_composite(
-        roi, start_date, end_date,
+        gas_key, roi, start_date, end_date,
     )
-    return get_tile_url(image)
+    return get_tile_url(image, gas_key)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _cached_date_tile_url(
+    gas_key: str,
     west: float, south: float,
     east: float, north: float,
     target_date: str,
@@ -268,9 +268,10 @@ def _cached_date_tile_url(
 ) -> str:
     roi = ee.Geometry.BBox(west, south, east, north)
     image = build_date_composite(
-        roi, target_date, half_window_days,
+        gas_key, roi, target_date,
+        half_window_days,
     )
-    return get_tile_url(image)
+    return get_tile_url(image, gas_key)
 
 
 # ── Page config ────────────────────────────────────────────────
@@ -378,21 +379,16 @@ if run:
         )
         st.stop()
 
-    if selected_gas != "NO2":
-        st.warning(
-            f"{selected_gas} support is not yet "
-            "implemented. Select NO2 to run."
-        )
-        st.stop()
-
     end_date_exclusive = (
         end_date_inclusive + timedelta(days=1)
     )
 
+    gas_cfg = get_gas_config(selected_gas)
+
     try:
         with st.spinner(
-            "Initializing Earth Engine "
-            "and computing daily NO2..."
+            "Initializing Earth Engine and "
+            f"computing daily {gas_cfg.key}..."
         ):
             initialize_ee(
                 project_id=project_id,
@@ -401,7 +397,8 @@ if run:
             roi = ee.Geometry.BBox(
                 west, south, east, north,
             )
-            df = build_no2_daily_timeseries(
+            df = build_daily_timeseries(
+                gas_key=selected_gas,
                 geometry=roi,
                 start_date=start_date.isoformat(),
                 end_date=(
@@ -421,6 +418,7 @@ if run:
 
     st.session_state["analysis_df"] = df
     st.session_state["heatmap_params"] = {
+        "gas_key": selected_gas,
         "start_date": start_date.isoformat(),
         "end_date": (
             end_date_exclusive.isoformat()
@@ -467,6 +465,7 @@ with tab_spatial:
         st.info("Run an analysis first.")
     else:
         hp = st.session_state["heatmap_params"]
+        gas_key = hp["gas_key"]
 
         initialize_ee(
             project_id=hp["project_id"],
@@ -507,7 +506,7 @@ with tab_spatial:
             half_window = st.slider(
                 "Composite window (+/- days)",
                 min_value=0,
-                max_value=7,
+                max_value=14,
                 value=3,
                 help=(
                     "Days before and after the "
@@ -531,6 +530,7 @@ with tab_spatial:
                 ):
                     date_tile_url = (
                         _cached_date_tile_url(
+                            gas_key,
                             hp["west"],
                             hp["south"],
                             hp["east"],
@@ -546,7 +546,7 @@ with tab_spatial:
                     zoom=zoom,
                     bounds=bounds,
                     layer_name=(
-                        f"NO2 {window_label}"
+                        f"{gas_key} {window_label}"
                     ),
                 )
                 st_folium(
@@ -561,7 +561,7 @@ with tab_spatial:
                     f"heatmap: {exc}"
                 )
 
-            _render_color_legend()
+            _render_color_legend(gas_key)
         else:
             st.info(
                 "Need at least 2 dates to "
@@ -583,6 +583,7 @@ with tab_spatial:
             ):
                 mean_tile_url = (
                     _cached_mean_tile_url(
+                        gas_key,
                         hp["west"],
                         hp["south"],
                         hp["east"],
@@ -597,7 +598,7 @@ with tab_spatial:
                 center_lon=center_lon,
                 zoom=zoom,
                 bounds=bounds,
-                layer_name="Mean NO2",
+                layer_name=f"Mean {gas_key}",
             )
             st_folium(
                 mean_map,
@@ -611,7 +612,7 @@ with tab_spatial:
                 f"heatmap: {exc}"
             )
 
-        _render_color_legend()
+        _render_color_legend(gas_key)
 
 # ── Tab 2: Time Series ────────────────────────────────────────
 
@@ -655,21 +656,23 @@ with tab_timeseries:
     if show_smooth:
         ts_df = add_rolling_no2(
             ts_df,
-            value_col="no2_value",
+            value_col="value",
             window_days=window_days,
             min_periods=min_periods,
             method=smoothing_method,
-            output_col="no2_smoothed",
+            output_col="smoothed",
         )
 
     plot_cols: list[str] = []
     if show_raw:
-        plot_cols.append("no2_value")
+        plot_cols.append("value")
     if show_smooth:
-        plot_cols.append("no2_smoothed")
+        plot_cols.append("smoothed")
 
     with ts_plot:
-        st.subheader("Daily NO2 Time Series")
+        st.subheader(
+            f"Daily {selected_gas} Time Series",
+        )
         if not plot_cols:
             st.warning(
                 "Select at least one series."
@@ -716,7 +719,9 @@ with tab_compare:
     with c1:
         st.selectbox(
             "Region / Gas A",
-            options=["Current ROI – NO2"],
+            options=[
+                f"Current ROI – {selected_gas}"
+            ],
             disabled=True,
             key="cmp_a",
         )
