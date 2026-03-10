@@ -507,7 +507,7 @@ with tab_spatial:
                 "Composite window (+/- days)",
                 min_value=0,
                 max_value=14,
-                value=3,
+                value=7,
                 help=(
                     "Days before and after the "
                     "selected date to include."
