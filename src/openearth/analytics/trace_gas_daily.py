@@ -94,12 +94,13 @@ def build_daily_timeseries(
         .getInfo()
     ) or 0
 
-    n_days: int = (
+    n_days_raw = (
         end.difference(start, "day")
         .toInt()
         .getInfo()
     )
-    if not isinstance(n_days, int) or n_days <= 0:
+    n_days: int = int(n_days_raw) if n_days_raw is not None else 0
+    if n_days <= 0:
         return pd.DataFrame(columns=_RESULT_COLUMNS)
 
     # Combined reducer: one reduceRegion per day.
