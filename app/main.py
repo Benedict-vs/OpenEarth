@@ -117,22 +117,6 @@ def _map_center(
     )
 
 
-def _map_zoom(
-    west: float, south: float,
-    east: float, north: float,
-) -> int:
-    span = max(east - west, north - south)
-    if span <= 0.06:
-        return 11
-    if span <= 0.12:
-        return 10
-    if span <= 0.30:
-        return 9
-    if span <= 0.80:
-        return 8
-    return 6
-
-
 def _render_color_legend(gas_key: str) -> None:
     """Render an HTML color bar legend for *gas_key*."""
     cfg = get_gas_config(gas_key)
@@ -175,11 +159,9 @@ def _render_roi_draw_map(
     )
     fmap = folium.Map(
         location=[center_lat, center_lon],
-        zoom_start=_map_zoom(
-            west, south, east, north,
-        ),
         tiles="CartoDB positron",
     )
+    fmap.fit_bounds([[south, west], [north, east]])
     folium.Rectangle(
         bounds=[[south, west], [north, east]],
         color="#1f77b4",
@@ -476,10 +458,6 @@ with tab_spatial:
             hp["west"], hp["south"],
             hp["east"], hp["north"],
         )
-        zoom = _map_zoom(
-            hp["west"], hp["south"],
-            hp["east"], hp["north"],
-        )
         bounds = [
             [hp["south"], hp["west"]],
             [hp["north"], hp["east"]],
@@ -543,7 +521,6 @@ with tab_spatial:
                     tile_url=date_tile_url,
                     center_lat=center_lat,
                     center_lon=center_lon,
-                    zoom=zoom,
                     bounds=bounds,
                     layer_name=(
                         f"{gas_key} {window_label}"
@@ -596,7 +573,6 @@ with tab_spatial:
                 tile_url=mean_tile_url,
                 center_lat=center_lat,
                 center_lon=center_lon,
-                zoom=zoom,
                 bounds=bounds,
                 layer_name=f"Mean {gas_key}",
             )

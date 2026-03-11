@@ -98,16 +98,16 @@ def create_heatmap_folium(
     tile_url: str,
     center_lat: float,
     center_lon: float,
-    zoom: int,
     bounds: list[list[float]] | None = None,
     layer_name: str = "Trace Gas Heatmap",
 ) -> folium.Map:
     """Build a folium Map with an EE tile overlay."""
     fmap = folium.Map(
         location=[center_lat, center_lon],
-        zoom_start=zoom,
         tiles="CartoDB positron",
     )
+    if isinstance(bounds, list) and len(bounds) == 2:
+        fmap.fit_bounds(bounds)
 
     folium.TileLayer(
         tiles=tile_url,

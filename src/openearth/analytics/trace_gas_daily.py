@@ -16,6 +16,7 @@ from openearth.providers.gee_trace_gas import (
 
 DEFAULT_SCALE_METERS = 11_132
 DEFAULT_MAX_PIXELS = 1_000_000_000
+_BATCH_SIZE = 10
 
 _RESULT_COLUMNS = [
     "date",
@@ -27,29 +28,45 @@ _RESULT_COLUMNS = [
 ]
 
 
+def _rows_from_fc_info(
+    info: Any,
+) -> list[dict[str, Any]]:
+    """Extract row dicts from a FeatureCollection info."""
+    if not isinstance(info, dict):
+        return []
+    raw = info.get("features")
+    if not isinstance(raw, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for feat in raw:
+        if not isinstance(feat, dict):
+            continue
+        props = feat.get("properties")
+        if isinstance(props, dict):
+            rows.append(props)
+    return rows
+
+
 def build_daily_timeseries(
     gas_key: str,
     geometry: ee.Geometry,
     start_date: str | date | datetime,
     end_date: str | date | datetime,
     scale_meters: int = DEFAULT_SCALE_METERS,
-    reducer: ee.Reducer | None = None,
     max_pixels: int = DEFAULT_MAX_PIXELS,
     best_effort: bool = True,
+    batch_size: int = _BATCH_SIZE,
 ) -> pd.DataFrame:
     """Compute daily statistics for *gas_key* over an ROI.
 
-    Date handling follows Earth Engine semantics:
-    - start_date is inclusive
-    - end_date is exclusive
+    Days are processed in batches to stay within the Earth
+    Engine concurrent-aggregation limit.  Each day uses a
+    single combined ``mean + count`` reducer so that only
+    **one** ``reduceRegion`` call is issued per day.
 
-    Output columns:
-    - date (YYYY-MM-DD)
-    - value
-    - n_images
-    - valid_pixel_count
-    - total_pixel_count
-    - coverage_fraction
+    ``total_pixel_count`` and ``n_days`` are fetched eagerly
+    so they never add server-side aggregation pressure inside
+    the mapped function.
     """
     config = get_gas_config(gas_key)
     band = config.band
@@ -57,14 +74,12 @@ def build_daily_timeseries(
     start = to_ee_date(start_date)
     end = to_ee_date(end_date)
 
-    if reducer is None:
-        reducer = ee.Reducer.mean()
-
     collection = get_trace_gas_collection(
         gas_key, geometry, start_date, end_date,
     )
 
-    total_pixel_count = (
+    # ── Eager fetches (one getInfo each) ──────────────
+    total_px: int = (
         ee.Image.constant(1)
         .rename("ones")
         .clip(geometry)
@@ -76,24 +91,33 @@ def build_daily_timeseries(
             bestEffort=best_effort,
         )
         .get("ones")
-    )
+        .getInfo()
+    ) or 0
 
-    n_days = end.difference(start, "day").toInt()
-    day_offsets = ee.List(
-        ee.Algorithms.If(
-            n_days.gt(0),
-            ee.List.sequence(
-                0, n_days.subtract(1),
-            ),
-            ee.List([]),
-        )
+    n_days: int = (
+        end.difference(start, "day")
+        .toInt()
+        .getInfo()
     )
+    if not isinstance(n_days, int) or n_days <= 0:
+        return pd.DataFrame(columns=_RESULT_COLUMNS)
 
-    def build_day_feature(
+    # Combined reducer: one reduceRegion per day.
+    # Output keys: {band}_mean  and  {band}_count
+    combined = ee.Reducer.mean().combine(
+        reducer2=ee.Reducer.count(),
+        sharedInputs=True,
+    )
+    mean_key = f"{band}_mean"
+    count_key = f"{band}_count"
+
+    def _build_day_feature(
         day_offset: ee.Number,
     ) -> ee.Feature:
         day_offset = ee.Number(day_offset)
-        day_start = start.advance(day_offset, "day")
+        day_start = start.advance(
+            day_offset, "day",
+        )
         day_end = day_start.advance(1, "day")
         daily = collection.filterDate(
             day_start, day_end,
@@ -104,42 +128,22 @@ def build_daily_timeseries(
             img = ee.Image(
                 daily.mean(),
             ).select(band)
-            val = img.reduceRegion(
-                reducer=reducer,
+            stats = img.reduceRegion(
+                reducer=combined,
                 geometry=geometry,
                 scale=scale_meters,
                 maxPixels=max_pixels,
                 bestEffort=best_effort,
-            ).get(band)
-            valid = img.mask().reduceRegion(
-                reducer=ee.Reducer.sum(),
-                geometry=geometry,
-                scale=scale_meters,
-                maxPixels=max_pixels,
-                bestEffort=best_effort,
-            ).get(band)
-            cov = ee.Number(
-                ee.Algorithms.If(
-                    ee.Number(
-                        total_pixel_count,
-                    ).gt(0),
-                    ee.Number(valid).divide(
-                        ee.Number(total_pixel_count),
-                    ),
-                    0,
-                )
             )
             return ee.Dictionary({
                 "date": day_start.format(
                     "YYYY-MM-dd",
                 ),
-                "value": val,
+                "value": stats.get(mean_key),
                 "n_images": n_images,
-                "valid_pixel_count": valid,
-                "total_pixel_count": (
-                    total_pixel_count
+                "valid_pixel_count": stats.get(
+                    count_key,
                 ),
-                "coverage_fraction": cov,
             })
 
         def without_data() -> ee.Dictionary:
@@ -150,10 +154,6 @@ def build_daily_timeseries(
                 "value": None,
                 "n_images": 0,
                 "valid_pixel_count": 0,
-                "total_pixel_count": (
-                    total_pixel_count
-                ),
-                "coverage_fraction": 0,
             })
 
         properties = ee.Dictionary(
@@ -165,28 +165,35 @@ def build_daily_timeseries(
         )
         return ee.Feature(None, properties)
 
-    daily_fc = ee.FeatureCollection(
-        day_offsets.map(build_day_feature),
+    # ── Process in batches ────────────────────────────
+    all_rows: list[dict[str, Any]] = []
+    for batch_start in range(
+        0, n_days, batch_size,
+    ):
+        batch_end = min(
+            batch_start + batch_size, n_days,
+        )
+        offsets = ee.List(
+            list(range(batch_start, batch_end)),
+        )
+        batch_fc = ee.FeatureCollection(
+            offsets.map(_build_day_feature),
+        )
+        info = batch_fc.getInfo()
+        all_rows.extend(_rows_from_fc_info(info))
+
+    if not all_rows:
+        return pd.DataFrame(columns=_RESULT_COLUMNS)
+
+    # ── Build DataFrame, compute coverage client-side ─
+    df = pd.DataFrame(all_rows)
+    df["total_pixel_count"] = total_px
+    valid = pd.to_numeric(
+        df["valid_pixel_count"], errors="coerce",
+    ).fillna(0)
+    df["coverage_fraction"] = (
+        valid / total_px if total_px > 0 else 0.0
     )
-    info = daily_fc.getInfo()
-    if not isinstance(info, dict):
-        return pd.DataFrame(columns=_RESULT_COLUMNS)
-
-    raw_features = info.get("features")
-    if not isinstance(raw_features, list):
-        return pd.DataFrame(columns=_RESULT_COLUMNS)
-
-    rows: list[dict[str, Any]] = []
-    for feature in raw_features:
-        if not isinstance(feature, dict):
-            continue
-        properties = feature.get("properties")
-        if isinstance(properties, dict):
-            rows.append(properties)
-
-    df = pd.DataFrame(rows)
-    if df.empty:
-        return pd.DataFrame(columns=_RESULT_COLUMNS)
     return df.sort_values("date").reset_index(
         drop=True,
     )
