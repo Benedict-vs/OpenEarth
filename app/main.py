@@ -294,7 +294,7 @@ selected_gas = st.sidebar.selectbox(
     index=0,
 )
 
-st.sidebar.header("ROI (Bounding Box)")
+st.sidebar.header("ROI (Region of Interest)")
 selected_example = st.sidebar.selectbox(
     "Example regions",
     options=list(ROI_EXAMPLES.keys()),
@@ -369,13 +369,16 @@ if run:
 
     try:
         with st.spinner(
-            "Initializing Earth Engine and "
-            f"computing daily {gas_cfg.key}..."
+            "Initializing Earth Engine"
         ):
             initialize_ee(
                 project_id=project_id,
                 authenticate=authenticate_on_fail,
             )
+
+        with st.spinner(
+            f"Building {gas_cfg.key} time series..."
+        ):
             roi = ee.Geometry.BBox(
                 west, south, east, north,
             )
