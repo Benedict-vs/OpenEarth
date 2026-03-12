@@ -180,7 +180,7 @@ def _render_roi_draw_map(
             "rectangle": True,
         },
         edit_options={
-            "edit": False, "remove": True,
+            "edit": True, "remove": True,
         },
     ).add_to(fmap)
 
