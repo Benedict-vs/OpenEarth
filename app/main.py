@@ -369,7 +369,7 @@ if run:
 
     try:
         with st.spinner(
-            "Initializing Earth Engine"
+            "Initializing Earth Engine..."
         ):
             initialize_ee(
                 project_id=project_id,
