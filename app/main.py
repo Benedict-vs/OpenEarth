@@ -371,10 +371,18 @@ if run:
         with st.spinner(
             "Initializing Earth Engine..."
         ):
-            initialize_ee(
-                project_id=project_id,
-                authenticate=authenticate_on_fail,
-            )
+            try:
+                initialize_ee(
+                    project_id=project_id,
+                    authenticate=authenticate_on_fail,
+                )
+            except Exception:
+                st.error(
+                    "Initialisation failed. "
+                    "Possibly no Internet connection. Please reconnect"
+                    " and click **Run analysis** again."
+                )
+                st.stop()
 
         with st.spinner(
             f"Building {gas_cfg.key} time series..."
