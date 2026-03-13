@@ -16,7 +16,7 @@ from openearth.providers.gee_trace_gas import (
 
 DEFAULT_SCALE_METERS = 11_132
 DEFAULT_MAX_PIXELS = 1_000_000_000
-_BATCH_SIZE = 10
+BATCH_SIZE = 10
 
 _RESULT_COLUMNS = [
     "date",
@@ -55,7 +55,7 @@ def build_daily_timeseries(
     scale_meters: int = DEFAULT_SCALE_METERS,
     max_pixels: int = DEFAULT_MAX_PIXELS,
     best_effort: bool = True,
-    batch_size: int = _BATCH_SIZE,
+    batch_size: int = BATCH_SIZE,
 ) -> pd.DataFrame:
     """Compute daily statistics for *gas_key* over an ROI.
 
