@@ -378,9 +378,8 @@ if run:
                 )
             except Exception:
                 st.error(
-                    "Initialisation failed. "
-                    "Possibly no Internet connection. Please reconnect"
-                    " and click **Run analysis** again."
+                    "Initialisation failed. Possibly no Internet connection. "
+                    "Please reconnect and click **Run analysis** again."
                 )
                 st.stop()
 
