@@ -109,6 +109,8 @@ def build_daily_timeseries(
         reducer2=ee.Reducer.count(),
         sharedInputs=True,
     )
+
+    # Results of the combined Reducer are saved under the following key
     mean_key = f"{band}_mean"
     count_key = f"{band}_count"
 
