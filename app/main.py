@@ -17,6 +17,7 @@ from streamlit_folium import st_folium
 from openearth.analytics.smoothing import add_rolling_no2
 from openearth.analytics.trace_gas_daily import (
     build_daily_timeseries,
+    BATCH_SIZE
 )
 from openearth.providers.gas_registry import (
     GAS_REGISTRY,
@@ -369,7 +370,8 @@ if run:
 
     try:
         with st.spinner(
-            "Initializing Earth Engine..."
+            "Initializing Earth Engine...",
+            show_time=True
         ):
             try:
                 initialize_ee(
@@ -384,22 +386,38 @@ if run:
                 st.stop()
 
         with st.spinner(
-            f"Building {gas_cfg.key} time series..."
+            f"Building {gas_cfg.key} time series...",
+            show_time=True
         ):
             roi = ee.Geometry.BBox(
                 west, south, east, north,
             )
-            df = build_daily_timeseries(
-                gas_key=selected_gas,
-                geometry=roi,
-                start_date=start_date.isoformat(),
-                end_date=(
-                    end_date_exclusive.isoformat()
-                ),
-            )
-    except Exception as exc:
-        st.exception(exc)
+            while True:
+                try:
+                    df = build_daily_timeseries(
+                        gas_key=selected_gas,
+                        geometry=roi,
+                        start_date=start_date.isoformat(),
+                        end_date=(
+                            end_date_exclusive.isoformat()
+                        ),
+                        batch_size=BATCH_SIZE
+                    )
+                except Exception as e:
+                    if BATCH_SIZE >= 2:
+                        st.spinner("Adjusting batch size...")
+                        BATCH_SIZE = int(BATCH_SIZE/2)
+                    else:
+                        st.exception(e)
+                        st.stop()
+                else:
+                    break  # loop is left if no exception is thrown
+
+    except Exception as e:
+        st.exception(e)
         st.stop()
+
+    st.markdown(f"**Batch Size: {BATCH_SIZE}**")
 
     if df.empty:
         st.warning(
