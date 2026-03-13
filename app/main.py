@@ -438,7 +438,8 @@ if "analysis_df" not in st.session_state:
     tab_timeseries,
     tab_compare,
     tab_stats,
-    tab_export,
+    tab_animation,
+    tab_image,
 ) = st.tabs([
     "Spatial Map",
     "Time Series",
@@ -690,6 +691,11 @@ with tab_timeseries:
         st.dataframe(
             chart_df, use_container_width=True,
         )
+        st.button(
+            "Download CSV",
+            disabled=True,
+            key="exp_csv",
+        )
 
 # ── Tab 3: Compare (placeholder) ──────────────────────────────
 
@@ -739,25 +745,45 @@ with tab_stats:
 
 # ── Tab 5: Export (placeholder) ────────────────────────────────
 
-with tab_export:
-    st.subheader("Export")
+with tab_animation:
+    st.subheader("Animation")
     st.info(
-        "**Coming soon** – Download analysis "
-        "results and visualizations."
+        "**Coming soon** – Create and download an animated heatmap "
+        "visualising the atmospheric flow"
     )
 
     st.button(
-        "Download CSV",
-        disabled=True,
-        key="exp_csv",
-    )
-    st.button(
-        "Download GeoTIFF composite",
-        disabled=True,
-        key="exp_tiff",
-    )
-    st.button(
-        "Download image / animation",
+        "Download Animation",
         disabled=True,
         key="exp_anim",
     )
+
+with tab_image:
+    st.subheader("Create Image")
+    st.info(
+        "**Coming soon** - Download heatmaps as GeoTIFF "
+        "or other image file types"
+    )
+    ImgType = st.selectbox(
+        label="Select Image Type",
+        options=["PNG", "JPEG", "GeoTIFF"]
+        )
+
+    if ImgType == "GeoTIFF":
+        st.button(
+            "Download GeoTIFF composite",
+            disabled=True,
+            key="exp_tiff"
+        )
+    elif ImgType == "PNG":
+        st.button(
+            "Download PNG composite",
+            disabled=True,
+            key="exp_png",
+        )
+    elif ImgType == "JPEG":
+        st.button(
+            "Download JPEG composite",
+            disabled=True,
+            key="exp_jpeg",
+        )
