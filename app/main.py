@@ -34,15 +34,6 @@ from openearth.visualization.trace_gas_heatmap import (
 # ── Constants ──────────────────────────────────────────────────
 
 ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
-    # Cities
-    "Heidelberg (Germany)": (8.58, 49.35, 8.77, 49.46),
-    "London (UK)": (-0.51, 51.28, 0.33, 51.70),
-    "Berlin (Germany)": (13.09, 52.33, 13.76, 52.68),
-    "New York (USA)": (-74.26, 40.49, -73.69, 40.92),
-    "Merida (Mexico)": (-89.80, 20.85, -89.50, 21.10),
-    "Barranquilla (Colombia)": (
-        -74.93, 10.90, -74.70, 11.10,
-    ),
     # Continents
     "Europe": (-25.0, 34.0, 45.0, 72.0),
     "North America": (-170.0, 15.0, -50.0, 72.0),
@@ -51,8 +42,17 @@ ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
     "Asia": (25.0, -10.0, 180.0, 75.0),
     "Oceania": (110.0, -50.0, 180.0, 0.0),
     "Antarctica": (-180.0, -90.0, 180.0, -60.0),
+    # Cities
+    "Heidelberg (Germany)": (8.58, 49.35, 8.77, 49.46),
+    "London (UK)": (-0.51, 51.28, 0.33, 51.70),
+    "Berlin (Germany)": (13.09, 52.33, 13.76, 52.68),
+    "New York (USA)": (-74.26, 40.49, -73.69, 40.92),
+    "Merida (Mexico)": (-89.80, 20.85, -89.50, 21.10),
+    "Barranquilla (Colombia)": (
+        -74.93, 10.90, -74.70, 11.10,
+    )
 }
-DEFAULT_EXAMPLE = "Heidelberg (Germany)"
+DEFAULT_EXAMPLE = "Europe"
 
 TRACE_GASES: dict[str, str] = {
     k: cfg.name for k, cfg in GAS_REGISTRY.items()
@@ -380,7 +380,6 @@ if run:
     try:
         with st.spinner(
             "Initializing Earth Engine...",
-            show_time=True
         ):
             try:
                 initialize_ee(
@@ -396,7 +395,6 @@ if run:
 
         with st.spinner(
             f"Building {gas_cfg.key} time series...",
-            show_time=True
         ):
             roi = ee.Geometry.BBox(
                 west, south, east, north,
@@ -436,7 +434,7 @@ if run:
         st.exception(e)
         st.stop()
 
-    st.markdown(f"**Batch Size: {BATCH_SIZE}**")
+    # st.markdown(f"**Batch Size: {BATCH_SIZE}**")
 
     if df.empty:
         st.warning(
