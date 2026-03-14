@@ -727,9 +727,26 @@ with tab_timeseries:
         st.dataframe(
             chart_df, use_container_width=True,
         )
-        st.button(
+        export_df = chart_df.copy()
+        export_df["date"] = pd.to_datetime(
+            export_df["date"]
+        ).dt.strftime("%Y-%m-%d")
+        csv_data = export_df.to_csv(
+            index=False
+        ).encode("utf-8")
+
+        date_min = export_df["date"].min()
+        date_max = export_df["date"].max()
+        file_name = (
+            f"openearth_{selected_gas.lower()}_"
+            f"{date_min}_{date_max}.csv"
+        )
+
+        st.download_button(
             "Download CSV",
-            disabled=True,
+            data=csv_data,
+            file_name=file_name,
+            mime="text/csv",
             key="exp_csv",
         )
 
