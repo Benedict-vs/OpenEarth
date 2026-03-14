@@ -40,3 +40,6 @@ htmlcov/
 
 # Project-local scratch
 update.txt
+
+# LLMs
+.claude
