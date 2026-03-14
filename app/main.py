@@ -31,6 +31,10 @@ from openearth.visualization.trace_gas_heatmap import (
     create_heatmap_folium,
 )
 
+# TO DO
+# - dynamically adjust scale (NO2 up to 0.0005)
+
+
 # ── Constants ──────────────────────────────────────────────────
 
 ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
