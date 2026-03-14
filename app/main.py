@@ -17,7 +17,7 @@ from streamlit_folium import st_folium
 from openearth.analytics.smoothing import add_rolling_no2
 from openearth.analytics.trace_gas_daily import (
     build_daily_timeseries,
-    BATCH_SIZE
+    BATCH_SIZE  # is halved if ROI to big
 )
 from openearth.providers.gas_registry import (
     GAS_REGISTRY,
@@ -34,6 +34,7 @@ from openearth.visualization.trace_gas_heatmap import (
 # ── Constants ──────────────────────────────────────────────────
 
 ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
+    # Cities
     "Heidelberg (Germany)": (8.58, 49.35, 8.77, 49.46),
     "London (UK)": (-0.51, 51.28, 0.33, 51.70),
     "Berlin (Germany)": (13.09, 52.33, 13.76, 52.68),
@@ -42,6 +43,14 @@ ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
     "Barranquilla (Colombia)": (
         -74.93, 10.90, -74.70, 11.10,
     ),
+    # Continents
+    "Europe": (-25.0, 34.0, 45.0, 72.0),
+    "North America": (-170.0, 15.0, -50.0, 72.0),
+    "South America": (-82.0, -56.0, -34.0, 13.0),
+    "Africa": (-18.0, -35.0, 52.0, 37.0),
+    "Asia": (25.0, -10.0, 180.0, 75.0),
+    "Oceania": (110.0, -50.0, 180.0, 0.0),
+    "Antarctica": (-180.0, -90.0, 180.0, -60.0),
 }
 DEFAULT_EXAMPLE = "Heidelberg (Germany)"
 
@@ -392,26 +401,36 @@ if run:
             roi = ee.Geometry.BBox(
                 west, south, east, north,
             )
+
+            batch_sz = BATCH_SIZE
             while True:
                 try:
                     df = build_daily_timeseries(
                         gas_key=selected_gas,
                         geometry=roi,
-                        start_date=start_date.isoformat(),
-                        end_date=(
-                            end_date_exclusive.isoformat()
+                        start_date=(
+                            start_date.isoformat()
                         ),
-                        batch_size=BATCH_SIZE
+                        end_date=(
+                            end_date_exclusive
+                            .isoformat()
+                        ),
+                        batch_size=batch_sz,
                     )
                 except Exception as e:
-                    if BATCH_SIZE >= 2:
-                        st.spinner("Adjusting batch size...")
-                        BATCH_SIZE = int(BATCH_SIZE/2)
-                    else:
-                        st.exception(e)
-                        st.stop()
-                else:
-                    break  # loop is left if no exception is thrown
+                    is_agg_err = (
+                        "Too many concurrent"
+                        in str(e)
+                    )
+                    if is_agg_err and batch_sz >= 2:
+                        batch_sz = batch_sz // 2
+                        st.toast(
+                            "Reducing batch size "
+                            f"to {batch_sz}..."
+                        )
+                        continue
+                    raise
+                break
 
     except Exception as e:
         st.exception(e)
@@ -463,7 +482,8 @@ if "analysis_df" not in st.session_state:
     "Time Series",
     "Compare",
     "Statistics",
-    "Export",
+    "Animation",
+    "Image"
 ])
 
 chart_df = st.session_state["analysis_df"].copy()
