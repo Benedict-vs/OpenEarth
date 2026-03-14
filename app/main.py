@@ -277,6 +277,87 @@ def _heatmap_params(
     }
 
 
+def _classify_ee_error(
+    exc: Exception,
+) -> tuple[str, str]:
+    message = str(exc).lower()
+
+    auth_tokens = (
+        "auth",
+        "authenticate",
+        "credential",
+        "permission",
+        "not authorized",
+        "forbidden",
+        "access denied",
+        "401",
+        "403",
+        "token",
+    )
+    quota_tokens = (
+        "too many concurrent",
+        "quota",
+        "rate",
+        "limit exceeded",
+        "429",
+        "timed out",
+        "user memory limit exceeded",
+    )
+    empty_tokens = (
+        "collection is empty",
+        "no images",
+        "contains no images",
+        "empty collection",
+        "0 elements",
+        "no valid pixels",
+    )
+
+    if any(token in message for token in auth_tokens):
+        return (
+            "auth",
+            "Earth Engine authentication or permissions failed. "
+            "Check project access and sign in again.",
+        )
+    if any(token in message for token in quota_tokens):
+        return (
+            "quota",
+            "Earth Engine quota or concurrency limit reached. "
+            "Try a smaller ROI/date range or retry shortly.",
+        )
+    if any(token in message for token in empty_tokens):
+        return (
+            "empty",
+            "No satellite observations are available for this "
+            "gas, ROI, and time window.",
+        )
+
+    return (
+        "unknown",
+        "Unexpected Earth Engine error.",
+    )
+
+
+def _show_ee_error(
+    exc: Exception,
+    context: str,
+) -> None:
+    category, user_message = _classify_ee_error(exc)
+    full_message = f"{context} {user_message}"
+
+    if category == "auth":
+        st.error(full_message)
+        return
+    if category == "quota":
+        st.warning(full_message)
+        return
+    if category == "empty":
+        st.info(full_message)
+        return
+
+    st.error(full_message)
+    st.exception(exc)
+
+
 # ── Cached tile helpers ────────────────────────────────────────
 
 
@@ -466,10 +547,10 @@ if run:
                     project_id=project_id,
                     authenticate=authenticate_on_fail,
                 )
-            except Exception:
-                st.error(
-                    "Initialisation failed. Possibly no Internet connection. "
-                    "Please reconnect and click **Run analysis** again."
+            except Exception as exc:
+                _show_ee_error(
+                    exc,
+                    "Could not initialize Earth Engine."
                 )
                 st.stop()
 
@@ -505,16 +586,19 @@ if run:
                     raise
                 break
 
-    except Exception as e:
-        st.exception(e)
+    except Exception as exc:
+        _show_ee_error(
+            exc,
+            "Analysis failed."
+        )
         st.stop()
 
     # st.markdown(f"**Batch Size: {BATCH_SIZE}**")
 
     if df.empty:
-        st.warning(
-            "No rows returned for the "
-            "selected input."
+        st.info(
+            "No observations found for the selected "
+            "gas, ROI, and date range."
         )
         st.stop()
 
@@ -579,10 +663,17 @@ with tab_spatial:
         hp = st.session_state["heatmap_params"]
         gas_key = hp["gas_key"]
 
-        initialize_ee(
-            project_id=hp["project_id"],
-            authenticate=authenticate_on_fail,
-        )
+        try:
+            initialize_ee(
+                project_id=hp["project_id"],
+                authenticate=authenticate_on_fail,
+            )
+        except Exception as exc:
+            _show_ee_error(
+                exc,
+                "Could not initialize Earth Engine for map rendering."
+            )
+            st.stop()
 
         center_lat, center_lon = _map_center(
             hp["west"], hp["south"],
@@ -663,9 +754,9 @@ with tab_spatial:
                     use_container_width=True,
                 )
             except Exception as exc:
-                st.error(
-                    "Could not render date "
-                    f"heatmap: {exc}"
+                _show_ee_error(
+                    exc,
+                    "Could not render date heatmap."
                 )
 
             _render_color_legend(gas_key)
@@ -713,9 +804,9 @@ with tab_spatial:
                 use_container_width=True,
             )
         except Exception as exc:
-            st.error(
-                "Could not render mean "
-                f"heatmap: {exc}"
+            _show_ee_error(
+                exc,
+                "Could not render mean heatmap."
             )
 
         _render_color_legend(gas_key)
