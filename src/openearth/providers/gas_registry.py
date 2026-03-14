@@ -43,7 +43,7 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         collection_id="COPERNICUS/S5P/OFFL/L3_NO2",
         band="tropospheric_NO2_column_number_density",
         vis_min=0.0,
-        vis_max=0.0002,
+        vis_max=0.0003,
         display_unit="\u00b5mol/m\u00b2",
         display_scale=1e6,
     ),
@@ -83,10 +83,10 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         collection_id="COPERNICUS/S5P/OFFL/L3_CH4",
         band=(
             "CH4_column_volume_mixing_ratio"
-            "_dry_air"
+            "_dry_air_bias_corrected"
         ),
         vis_min=1750.0,
-        vis_max=1950.0,
+        vis_max=2000.0,
         display_unit="ppb",
         display_scale=1.0,
     ),
