@@ -233,6 +233,50 @@ def _render_roi_draw_map(
         st.rerun()
 
 
+def _analysis_cache_key(
+    gas_key: str,
+    start_date_iso: str,
+    end_date_iso: str,
+    west: float,
+    south: float,
+    east: float,
+    north: float,
+    project_id: str,
+) -> tuple[Any, ...]:
+    return (
+        gas_key,
+        start_date_iso,
+        end_date_iso,
+        round(west, 6),
+        round(south, 6),
+        round(east, 6),
+        round(north, 6),
+        project_id.strip(),
+    )
+
+
+def _heatmap_params(
+    gas_key: str,
+    start_date_iso: str,
+    end_date_iso: str,
+    west: float,
+    south: float,
+    east: float,
+    north: float,
+    project_id: str,
+) -> dict[str, Any]:
+    return {
+        "gas_key": gas_key,
+        "start_date": start_date_iso,
+        "end_date": end_date_iso,
+        "west": west,
+        "south": south,
+        "east": east,
+        "north": north,
+        "project_id": project_id,
+    }
+
+
 # ── Cached tile helpers ────────────────────────────────────────
 
 
@@ -374,6 +418,42 @@ if run:
     end_date_exclusive = (
         end_date_inclusive + timedelta(days=1)
     )
+    start_date_iso = start_date.isoformat()
+    end_date_iso = end_date_exclusive.isoformat()
+
+    cache_key = _analysis_cache_key(
+        gas_key=selected_gas,
+        start_date_iso=start_date_iso,
+        end_date_iso=end_date_iso,
+        west=west,
+        south=south,
+        east=east,
+        north=north,
+        project_id=project_id,
+    )
+    analysis_cache = st.session_state.setdefault(
+        "analysis_cache", {}
+    )
+
+    cached_entry = analysis_cache.get(cache_key)
+    if isinstance(cached_entry, dict):
+        cached_df = cached_entry.get("df")
+        if isinstance(cached_df, pd.DataFrame):
+            st.session_state["analysis_df"] = cached_df.copy()
+            st.session_state["heatmap_params"] = (
+                _heatmap_params(
+                    gas_key=selected_gas,
+                    start_date_iso=start_date_iso,
+                    end_date_iso=end_date_iso,
+                    west=west,
+                    south=south,
+                    east=east,
+                    north=north,
+                    project_id=project_id,
+                )
+            )
+            st.toast("Loaded cached analysis")
+            st.rerun()
 
     gas_cfg = get_gas_config(selected_gas)
 
@@ -406,13 +486,8 @@ if run:
                     df = build_daily_timeseries(
                         gas_key=selected_gas,
                         geometry=roi,
-                        start_date=(
-                            start_date.isoformat()
-                        ),
-                        end_date=(
-                            end_date_exclusive
-                            .isoformat()
-                        ),
+                        start_date=start_date_iso,
+                        end_date=end_date_iso,
                         batch_size=batch_sz,
                     )
                 except Exception as e:
@@ -444,18 +519,26 @@ if run:
         st.stop()
 
     st.session_state["analysis_df"] = df
-    st.session_state["heatmap_params"] = {
-        "gas_key": selected_gas,
-        "start_date": start_date.isoformat(),
-        "end_date": (
-            end_date_exclusive.isoformat()
-        ),
-        "west": west,
-        "south": south,
-        "east": east,
-        "north": north,
-        "project_id": project_id,
+    st.session_state["heatmap_params"] = (
+        _heatmap_params(
+            gas_key=selected_gas,
+            start_date_iso=start_date_iso,
+            end_date_iso=end_date_iso,
+            west=west,
+            south=south,
+            east=east,
+            north=north,
+            project_id=project_id,
+        )
+    )
+
+    analysis_cache[cache_key] = {
+        "df": df.copy()
     }
+    max_cache_entries = 5
+    if len(analysis_cache) > max_cache_entries:
+        oldest_key = next(iter(analysis_cache))
+        analysis_cache.pop(oldest_key, None)
 
 # ── Guard: stop if no results yet ─────────────────────────────
 
