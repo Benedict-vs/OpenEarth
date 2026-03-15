@@ -1,6 +1,18 @@
-"""OpenEarth Explorer – dashboard app."""
+"""OpenEarth Explorer – dashboard app.
+
+Run with:  streamlit run app/main.py   (from project root)
+"""
 
 from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Streamlit puts the script's *parent* dir (app/) on sys.path.
+# We need the *project root* so that `from app.…` imports work.
+_project_root = str(Path(__file__).resolve().parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 import pandas as pd
 import streamlit as st
