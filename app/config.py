@@ -22,6 +22,7 @@ ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
     "Asia": (25.0, -10.0, 180.0, 75.0),
     "Oceania": (110.0, -50.0, 180.0, 0.0),
     "Antarctica": (-180.0, -90.0, 180.0, -60.0),
+    "Entire Earth": (-180.0, -90.0, 180.0, 90.0),
     # Cities
     "Heidelberg (Germany)": (8.58, 49.35, 8.77, 49.46),
     "London (UK)": (-0.51, 51.28, 0.33, 51.70),
