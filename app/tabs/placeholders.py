@@ -5,10 +5,10 @@ from __future__ import annotations
 import streamlit as st
 
 
-def render_compare(selected_gas: str) -> None:
+def render_compare(selected_key: str) -> None:
     st.subheader("Compare")
     st.info(
-        "**Coming soon** – Compare two trace gases "
+        "**Coming soon** \u2013 Compare two variables "
         "or two regions side by side over the same "
         "time period."
     )
@@ -16,9 +16,9 @@ def render_compare(selected_gas: str) -> None:
     c1, c2 = st.columns(2)
     with c1:
         st.selectbox(
-            "Region / Gas A",
+            "Region / Variable A",
             options=[
-                f"Current ROI – {selected_gas}"
+                f"Current ROI \u2013 {selected_key}"
             ],
             disabled=True,
             key="cmp_a",
@@ -26,7 +26,7 @@ def render_compare(selected_gas: str) -> None:
         st.empty()
     with c2:
         st.selectbox(
-            "Region / Gas B",
+            "Region / Variable B",
             options=["Select..."],
             disabled=True,
             key="cmp_b",
