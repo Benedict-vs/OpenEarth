@@ -60,9 +60,15 @@ class S2IndexConfig:
     vis_min: float
     vis_max: float
     display_unit: str
+    display_scale: float = 1.0
     palette: list[str] = field(
         default_factory=lambda: list(VEGETATION_PALETTE),
     )
+
+    @property
+    def band(self) -> str:
+        """Output band name (compatible with GasConfig)."""
+        return self.key
 
 
 S2_REGISTRY: dict[str, S2IndexConfig] = {
