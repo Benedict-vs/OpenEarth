@@ -1,4 +1,4 @@
-"""OpenEarth Explorer – dashboard app.
+"""OpenEarth Explorer -- dashboard app.
 
 Run with:  streamlit run app/main.py   (from project root)
 """
@@ -10,7 +10,9 @@ from pathlib import Path
 
 # Streamlit puts the script's *parent* dir (app/) on sys.path.
 # We need the *project root* so that `from app.…` imports work.
-_project_root = str(Path(__file__).resolve().parent.parent)
+_project_root = str(
+    Path(__file__).resolve().parent.parent,
+)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
@@ -24,17 +26,18 @@ from app.roi import (
     render_roi_draw_map,
 )
 from app.analysis import run_analysis
-from app.tabs import spatial_map, time_series, statistics
+from app.tabs import (
+    spatial_map,
+    time_series,
+    statistics,
+)
 from app.tabs.placeholders import (
     render_compare,
     render_animation,
     render_image,
 )
 
-# TO DO
-# - dynamically adjust scale (NO2 up to 0.0005)
-
-# ── Page config ────────────────────────────────────────────────
+# ── Page config ──────────────────────────────────────
 
 st.set_page_config(
     page_title="OpenEarth Explorer",
@@ -42,27 +45,29 @@ st.set_page_config(
 )
 st.title("OpenEarth Explorer")
 st.caption(
-    "Satellite-based atmospheric analysis "
+    "Satellite-based environmental analysis "
     "for user-defined regions."
 )
 
 init_bbox_state()
 apply_pending_bbox()
 
-# ── Sidebar ───────────────────────────────────────────────────
+# ── Sidebar ──────────────────────────────────────────
 
 cfg = render_sidebar()
 
-# ── ROI map (always visible) ─────────────────────────────────
+# ── ROI map (always visible) ─────────────────────────
 
-render_roi_draw_map(cfg.west, cfg.south, cfg.east, cfg.north)
+render_roi_draw_map(
+    cfg.west, cfg.south, cfg.east, cfg.north,
+)
 
-# ── Run analysis ─────────────────────────────────────────────
+# ── Run analysis ─────────────────────────────────────
 
 if cfg.run:
     run_analysis(cfg)
 
-# ── Guard: stop if no results yet ────────────────────────────
+# ── Guard: stop if no results yet ────────────────────
 
 if "analysis_df" not in st.session_state:
     st.info(
@@ -71,7 +76,7 @@ if "analysis_df" not in st.session_state:
     )
     st.stop()
 
-# ── Tabs ─────────────────────────────────────────────────────
+# ── Tabs ─────────────────────────────────────────────
 
 (
     tab_spatial,
@@ -93,16 +98,24 @@ chart_df = st.session_state["analysis_df"].copy()
 chart_df["date"] = pd.to_datetime(chart_df["date"])
 
 with tab_spatial:
-    spatial_map.render(chart_df, cfg.authenticate_on_fail)
+    spatial_map.render(
+        chart_df, cfg.authenticate_on_fail,
+    )
 
 with tab_timeseries:
-    time_series.render(chart_df, cfg.selected_gas)
+    time_series.render(
+        chart_df, cfg.selected_key,
+    )
 
 with tab_compare:
-    render_compare(cfg.selected_gas)
+    render_compare(cfg.selected_key)
 
 with tab_stats:
-    statistics.render(chart_df, cfg.selected_gas)
+    statistics.render(
+        chart_df,
+        cfg.selected_key,
+        source=cfg.source,
+    )
 
 with tab_animation:
     render_animation()
