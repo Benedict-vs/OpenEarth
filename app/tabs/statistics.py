@@ -1,4 +1,5 @@
-"""Tab 4: Statistics – summary metrics, distribution, seasonality, anomalies."""
+"""Tab 4: Statistics – summary metrics, distribution, seasonality, anomalies.
+"""
 
 from __future__ import annotations
 
@@ -124,9 +125,9 @@ def render(
         .mark_boxplot(extent="min-max")
         .encode(
             x=alt.X("month_name:N", title="Month",
-                     sort=month_order),
+                    sort=month_order),
             y=alt.Y("display_value:Q",
-                     title=f"{selected_gas} ({cfg.display_unit})"),
+                    title=f"{selected_gas} ({cfg.display_unit})"),
         )
         .properties(height=300)
     )
@@ -161,7 +162,7 @@ def render(
             .encode(
                 x=alt.X("date:T", title="Date"),
                 y=alt.Y("display_value:Q",
-                         title=f"{selected_gas} ({cfg.display_unit})"),
+                        title=f"{selected_gas} ({cfg.display_unit})"),
             )
         )
         line = base.mark_line(color="#999999", strokeWidth=1)
@@ -210,9 +211,9 @@ def render(
             .mark_line(strokeWidth=1.5)
             .encode(
                 x=alt.X("day_of_year:Q", title="Day of Year",
-                         scale=alt.Scale(domain=[1, 366])),
+                        scale=alt.Scale(domain=[1, 366])),
                 y=alt.Y("display_value:Q",
-                         title=f"{selected_gas} ({cfg.display_unit})"),
+                        title=f"{selected_gas} ({cfg.display_unit})"),
                 color=alt.Color("year:N", title="Year"),
             )
             .properties(height=300)
