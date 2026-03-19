@@ -16,6 +16,25 @@ from openearth.providers.gee_trace_gas import (
 )
 
 
+def _is_global(geometry: ee.Geometry) -> bool:
+    """Return True if *geometry* covers (nearly) the whole Earth.
+
+    Comparing the bounding box to ±180/±90 avoids the
+    expensive server-side `.clip()` call that chokes Earth
+    Engine when the ROI is the entire planet.
+    """
+    coords = geometry.bounds().coordinates().getInfo()
+    ring = coords[0]  # exterior ring
+    lons = [float(p[0]) for p in ring]
+    lats = [float(p[1]) for p in ring]
+    return (
+        min(lons) <= -179
+        and max(lons) >= 179
+        and min(lats) <= -89
+        and max(lats) >= 89
+    )
+
+
 def get_vis_params(gas_key: str) -> dict[str, Any]:
     """Return EE visualization params for *gas_key*."""
     cfg = get_gas_config(gas_key)
@@ -37,11 +56,10 @@ def build_mean_composite(
     collection = get_trace_gas_collection(
         gas_key, geometry, start_date, end_date,
     )
-    return (
-        collection.mean()
-        .select(cfg.band)
-        .clip(geometry)
-    )
+    image = collection.mean().select(cfg.band)
+    if not _is_global(geometry):
+        image = image.clip(geometry)
+    return image
 
 
 def build_date_composite(
@@ -73,11 +91,10 @@ def build_date_composite(
         window_start.isoformat(),
         window_end.isoformat(),
     )
-    return (
-        collection.mean()
-        .select(cfg.band)
-        .clip(geometry)
-    )
+    image = collection.mean().select(cfg.band)
+    if not _is_global(geometry):
+        image = image.clip(geometry)
+    return image
 
 
 def get_tile_url(
@@ -94,6 +111,19 @@ def get_tile_url(
     return map_id_dict["tile_fetcher"].url_format
 
 
+def _bounds_are_global(
+    bounds: list[list[float]],
+) -> bool:
+    """True if the bounds cover (nearly) the full Earth."""
+    (south, west), (north, east) = bounds
+    return (
+        west <= -179
+        and east >= 179
+        and south <= -89
+        and north >= 89
+    )
+
+
 def create_heatmap_folium(
     tile_url: str,
     center_lat: float,
@@ -102,11 +132,18 @@ def create_heatmap_folium(
     layer_name: str = "Trace Gas Heatmap",
 ) -> folium.Map:
     """Build a folium Map with an EE tile overlay."""
+    is_global = (
+        isinstance(bounds, list)
+        and len(bounds) == 2
+        and _bounds_are_global(bounds)
+    )
+
     fmap = folium.Map(
         location=[center_lat, center_lon],
+        zoom_start=2 if is_global else None,
         tiles="CartoDB positron",
     )
-    if isinstance(bounds, list) and len(bounds) == 2:
+    if not is_global and isinstance(bounds, list) and len(bounds) == 2:
         fmap.fit_bounds(bounds)
 
     folium.TileLayer(
@@ -121,7 +158,9 @@ def create_heatmap_folium(
         opacity=0.7,
     ).add_to(fmap)
 
-    if bounds:
+    # Skip the ROI rectangle for global extents –
+    # a dashed box around the whole world adds nothing.
+    if bounds and not is_global:
         folium.Rectangle(
             bounds=bounds,
             color="#333333",
