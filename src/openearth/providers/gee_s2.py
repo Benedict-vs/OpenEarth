@@ -24,14 +24,25 @@ def _add_cloud_prob(
 
     The join key is ``system:index`` which is identical
     in both the S2 and cloud-probability collections
-    for the same granule.
+    for the same granule.  If no match is found a
+    zero-probability band is added so downstream
+    masking does not discard the entire image.
     """
-    cloud_img = cloud_prob_col.filter(
+    matched = cloud_prob_col.filter(
         ee.Filter.eq(
             "system:index",
             s2_img.get("system:index"),
         ),
-    ).first()
+    )
+    # Fallback: a constant 0 (clear sky) if the
+    # cloud-probability collection has no match.
+    cloud_img = ee.Image(
+        ee.Algorithms.If(
+            matched.size().gt(0),
+            matched.first(),
+            ee.Image.constant(0),
+        ),
+    )
     return s2_img.addBands(
         cloud_img.rename("cloud_prob"),
     )
@@ -88,7 +99,7 @@ def get_s2_collection(
     start_date: str | date | datetime,
     end_date: str | date | datetime,
     *,
-    cloud_max: int = 20,
+    cloud_max: int = 65,
     cloud_prob_thresh: int = DEFAULT_CLOUD_PROB_THRESH,
 ) -> ee.ImageCollection:
     """Return an S2 index ImageCollection filtered by ROI and dates.
@@ -111,6 +122,10 @@ def get_s2_collection(
         Maximum ``CLOUDY_PIXEL_PERCENTAGE`` metadata
         value (0-100).  Images above this threshold
         are dropped *before* per-pixel cloud masking.
+        Default is 65 — lenient, because the per-pixel
+        s2cloudless mask handles the actual cloudy
+        pixels.  Too-low values (e.g. 20) discard
+        most scenes over cloudy climates.
     cloud_prob_thresh:
         Per-pixel cloud probability threshold (0-100).
         Pixels above this value are masked.

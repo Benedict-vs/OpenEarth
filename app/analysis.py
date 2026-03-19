@@ -391,10 +391,20 @@ def run_analysis(cfg: SidebarConfig) -> None:
             st.stop()
 
     if df.empty:
-        st.info(
-            "No observations found for the selected "
-            "variable, ROI, and date range."
-        )
+        if cfg.source == "s2":
+            st.info(
+                "No clear-sky observations found. "
+                "Sentinel-2 has a ~5-day revisit and "
+                "cloud masking may remove all pixels. "
+                "Try a longer date range or a "
+                "larger ROI."
+            )
+        else:
+            st.info(
+                "No observations found for the "
+                "selected variable, ROI, and "
+                "date range."
+            )
         st.stop()
 
     st.session_state["analysis_df"] = df

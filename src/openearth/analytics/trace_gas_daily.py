@@ -238,6 +238,17 @@ def build_daily_timeseries(
     df["coverage_fraction"] = (
         valid / total_px if total_px > 0 else 0.0
     )
+
+    # Drop days with no observations (value is None).
+    # For S5P (daily global coverage) this is rare,
+    # but S2 (~5-day revisit + cloud filter) produces
+    # many empty days that would otherwise clutter the
+    # time series and break statistics.
+    df["value"] = pd.to_numeric(
+        df["value"], errors="coerce",
+    )
+    df = df.dropna(subset=["value"])
+
     return df.sort_values("date").reset_index(
         drop=True,
     )

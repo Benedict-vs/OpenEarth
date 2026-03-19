@@ -144,7 +144,12 @@ def render_sidebar() -> SidebarConfig:
     north = float(st.session_state["roi_north"])
 
     st.sidebar.header("Time Range")
-    default_start = date.today() - timedelta(days=365)
+    # S2 is much heavier per query (10 m resolution,
+    # cloud-prob join) so default to 90 days.
+    default_days = 90 if source == "s2" else 365
+    default_start = date.today() - timedelta(
+        days=default_days,
+    )
     default_end = date.today() - timedelta(days=1)
     start_date = st.sidebar.date_input(
         "Start date", value=default_start,
