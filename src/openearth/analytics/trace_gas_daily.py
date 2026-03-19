@@ -1,4 +1,4 @@
-"""Build daily trace-gas ROI time series from Earth Engine."""
+"""Build daily ROI time series from Earth Engine."""
 
 from __future__ import annotations
 
@@ -9,10 +9,14 @@ import ee
 import pandas as pd
 
 from openearth.analytics.conversions import to_ee_date
-from openearth.providers.s5p_registry import get_gas_config
+from openearth.providers.gee_s2 import get_s2_collection
 from openearth.providers.gee_s5p import (
     get_trace_gas_collection,
 )
+from openearth.providers.s2_registry import (
+    get_s2_index_config,
+)
+from openearth.providers.s5p_registry import get_gas_config
 
 DEFAULT_SCALE_METERS = 11_132
 DEFAULT_MAX_PIXELS = 1_000_000_000
@@ -28,10 +32,36 @@ _RESULT_COLUMNS = [
 ]
 
 
+def _get_config(data_key: str, source: str):
+    """Return the registry config for *data_key*."""
+    if source == "s2":
+        return get_s2_index_config(data_key)
+    return get_gas_config(data_key)
+
+
+def _get_collection(
+    data_key: str,
+    geometry: ee.Geometry,
+    start_date: str | date | datetime,
+    end_date: str | date | datetime,
+    source: str,
+) -> ee.ImageCollection:
+    """Return the ImageCollection for *source*."""
+    if source == "s2":
+        return get_s2_collection(
+            data_key, geometry,
+            start_date, end_date,
+        )
+    return get_trace_gas_collection(
+        data_key, geometry,
+        start_date, end_date,
+    )
+
+
 def _rows_from_fc_info(
     info: Any,
 ) -> list[dict[str, Any]]:
-    """Extract row dicts from a FeatureCollection info."""
+    """Extract row dicts from a FeatureCollection."""
     if not isinstance(info, dict):
         return []
     raw = info.get("features")
@@ -56,29 +86,37 @@ def build_daily_timeseries(
     max_pixels: int = DEFAULT_MAX_PIXELS,
     best_effort: bool = True,
     batch_size: int = BATCH_SIZE,
+    source: str = "s5p",
 ) -> pd.DataFrame:
-    """Compute daily statistics for *gas_key* over an ROI.
+    """Compute daily statistics over an ROI.
 
-    Days are processed in batches to stay within the Earth
-    Engine concurrent-aggregation limit.  Each day uses a
-    single combined ``mean + count`` reducer so that only
-    **one** ``reduceRegion`` call is issued per day.
+    Days are processed in batches to stay within the
+    Earth Engine concurrent-aggregation limit.  Each day
+    uses a single combined ``mean + count`` reducer so
+    that only **one** ``reduceRegion`` call is issued
+    per day.
 
-    ``total_pixel_count`` and ``n_days`` are fetched eagerly
-    so they never add server-side aggregation pressure inside
-    the mapped function.
+    Parameters
+    ----------
+    gas_key:
+        Registry key (e.g. ``"NO2"`` for S5P,
+        ``"NDVI"`` for S2).
+    source:
+        ``"s5p"`` for Sentinel-5P trace gases or
+        ``"s2"`` for Sentinel-2 spectral indices.
     """
-    config = get_gas_config(gas_key)
+    config = _get_config(gas_key, source)
     band = config.band
 
     start = to_ee_date(start_date)
     end = to_ee_date(end_date)
 
-    collection = get_trace_gas_collection(
-        gas_key, geometry, start_date, end_date,
+    collection = _get_collection(
+        gas_key, geometry,
+        start_date, end_date, source,
     )
 
-    # ── Eager fetches (one getInfo each) ──────────────
+    # ── Eager fetches (one getInfo each) ──────────
     total_px: int = (
         ee.Image.constant(1)
         .rename("ones")
@@ -99,7 +137,11 @@ def build_daily_timeseries(
         .toInt()
         .getInfo()
     )
-    n_days: int = int(n_days_raw) if n_days_raw is not None else 0
+    n_days: int = (
+        int(n_days_raw)
+        if n_days_raw is not None
+        else 0
+    )
     if n_days <= 0:
         return pd.DataFrame(columns=_RESULT_COLUMNS)
 
@@ -110,7 +152,6 @@ def build_daily_timeseries(
         sharedInputs=True,
     )
 
-    # Results of the combined Reducer are saved under the following key
     mean_key = f"{band}_mean"
     count_key = f"{band}_count"
 
@@ -168,7 +209,7 @@ def build_daily_timeseries(
         )
         return ee.Feature(None, properties)
 
-    # ── Process in batches ────────────────────────────
+    # ── Process in batches ────────────────────────
     all_rows: list[dict[str, Any]] = []
     for batch_start in range(
         0, n_days, batch_size,
@@ -188,7 +229,7 @@ def build_daily_timeseries(
     if not all_rows:
         return pd.DataFrame(columns=_RESULT_COLUMNS)
 
-    # ── Build DataFrame, compute coverage client-side ─
+    # ── Build DataFrame, compute coverage ─────────
     df = pd.DataFrame(all_rows)
     df["total_pixel_count"] = total_px
     valid = pd.to_numeric(
