@@ -9,8 +9,8 @@ import ee
 import pandas as pd
 
 from openearth.analytics.conversions import to_ee_date
-from openearth.providers.gas_registry import get_gas_config
-from openearth.providers.gee_trace_gas import (
+from openearth.providers.s5p_registry import get_gas_config
+from openearth.providers.gee_s5p import (
     get_trace_gas_collection,
 )
 

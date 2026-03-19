@@ -13,7 +13,7 @@ from openearth.analytics.trace_gas_daily import (
     build_daily_timeseries,
     BATCH_SIZE,
 )
-from openearth.providers.gas_registry import get_gas_config
+from openearth.providers.s5p_registry import get_gas_config
 from openearth.providers.gee_session import initialize_ee
 from openearth.visualization.trace_gas_heatmap import (
     build_mean_composite,

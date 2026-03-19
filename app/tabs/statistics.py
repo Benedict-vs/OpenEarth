@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from openearth.providers.gas_registry import get_gas_config
+from openearth.providers.s5p_registry import get_gas_config
 
 
 def _fmt(value: float, cfg) -> str:

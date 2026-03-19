@@ -1,4 +1,4 @@
-"""Generic Earth Engine provider for Sentinel-5P trace gases."""
+"""Earth Engine provider for Sentinel-5P trace gases."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import date, datetime
 import ee
 
 from openearth.analytics.conversions import to_ee_date
-from openearth.providers.gas_registry import get_gas_config
+from openearth.providers.s5p_registry import get_gas_config
 
 
 def get_trace_gas_collection(

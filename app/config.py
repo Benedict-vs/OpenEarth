@@ -8,7 +8,7 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from openearth.providers.gas_registry import GAS_REGISTRY
+from openearth.providers.s5p_registry import GAS_REGISTRY
 
 
 # ── Constants ──────────────────────────────────────────────────

@@ -8,10 +8,10 @@ from typing import Any
 import ee
 import folium
 
-from openearth.providers.gas_registry import (
+from openearth.providers.s5p_registry import (
     get_gas_config,
 )
-from openearth.providers.gee_trace_gas import (
+from openearth.providers.gee_s5p import (
     get_trace_gas_collection,
 )
 
