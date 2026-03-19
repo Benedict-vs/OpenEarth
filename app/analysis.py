@@ -13,8 +13,11 @@ from openearth.analytics.trace_gas_daily import (
     build_daily_timeseries,
     BATCH_SIZE,
 )
-from openearth.providers.s5p_registry import get_gas_config
 from openearth.providers.gee_session import initialize_ee
+from openearth.providers.s2_registry import (
+    get_s2_index_config,
+)
+from openearth.providers.s5p_registry import get_gas_config
 from openearth.visualization.trace_gas_heatmap import (
     build_mean_composite,
     build_date_composite,
@@ -24,12 +27,14 @@ from openearth.visualization.trace_gas_heatmap import (
 from app.config import SidebarConfig
 
 
-# ── EE error handling ─────────────────────────────────────────
+def _get_config(data_key: str, source: str):
+    """Return the registry config for *data_key*."""
+    if source == "s2":
+        return get_s2_index_config(data_key)
+    return get_gas_config(data_key)
 
-# Phrases matched against lowercased EE error messages.
-# Order matters: more specific phrases are checked first within
-# each category, and auth is checked before quota to avoid
-# ambiguity (e.g. "permission" should not match quota).
+
+# ── EE error handling ─────────────────────────────────────────
 
 _AUTH_PHRASES = (
     "not authorized",
@@ -72,22 +77,25 @@ def classify_ee_error(
 ) -> tuple[str, str]:
     """Classify an Earth Engine error by its message.
 
-    Returns (category, user_message) where category is one of:
-    "auth", "quota", "timeout", "empty", "unknown".
+    Returns (category, user_message) where category is
+    one of: "auth", "quota", "timeout", "empty",
+    "unknown".
     """
     message = str(exc).lower()
 
     if any(p in message for p in _AUTH_PHRASES):
         return (
             "auth",
-            "Earth Engine authentication or permissions failed. "
-            "Check project access and sign in again.",
+            "Earth Engine authentication or "
+            "permissions failed. Check project "
+            "access and sign in again.",
         )
     if any(p in message for p in _QUOTA_PHRASES):
         return (
             "quota",
-            "Earth Engine quota or concurrency limit reached. "
-            "Try a smaller ROI/date range or retry shortly.",
+            "Earth Engine quota or concurrency "
+            "limit reached. Try a smaller "
+            "ROI/date range or retry shortly.",
         )
     if any(p in message for p in _TIMEOUT_PHRASES):
         return (
@@ -98,8 +106,9 @@ def classify_ee_error(
     if any(p in message for p in _EMPTY_PHRASES):
         return (
             "empty",
-            "No satellite observations are available for this "
-            "gas, ROI, and time window.",
+            "No satellite observations are "
+            "available for this variable, ROI, "
+            "and time window.",
         )
 
     return (
@@ -112,9 +121,7 @@ def show_ee_error(
     exc: Exception,
     context: str,
 ) -> None:
-    """Display an EE error with the appropriate Streamlit severity."""
-    # Let non-EE exceptions (TypeError, KeyError, etc.) propagate
-    # so real bugs aren't silently swallowed.
+    """Display an EE error with Streamlit severity."""
     if not isinstance(exc, ee.EEException):
         raise exc
 
@@ -123,9 +130,7 @@ def show_ee_error(
 
     if category == "auth":
         st.error(full_message)
-    elif category == "quota":
-        st.warning(full_message)
-    elif category == "timeout":
+    elif category in ("quota", "timeout"):
         st.warning(full_message)
     elif category == "empty":
         st.info(full_message)
@@ -139,9 +144,12 @@ def show_ee_error(
 # ── Color legend ──────────────────────────────────────────────
 
 
-def render_color_legend(gas_key: str) -> None:
-    """Render an HTML color bar legend for *gas_key*."""
-    cfg = get_gas_config(gas_key)
+def render_color_legend(
+    data_key: str,
+    source: str = "s5p",
+) -> None:
+    """Render an HTML color bar legend."""
+    cfg = _get_config(data_key, source)
     gradient_css = ", ".join(cfg.palette)
     label_min = cfg.vis_min * cfg.display_scale
     label_max = cfg.vis_max * cfg.display_scale
@@ -176,39 +184,43 @@ def render_color_legend(gas_key: str) -> None:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def cached_mean_tile_url(
-    gas_key: str,
+    data_key: str,
     west: float, south: float,
     east: float, north: float,
     start_date: str, end_date: str,
+    source: str = "s5p",
 ) -> str:
     roi = ee.Geometry.BBox(west, south, east, north)
     image = build_mean_composite(
-        gas_key, roi, start_date, end_date,
+        data_key, roi, start_date, end_date,
+        source=source,
     )
-    return get_tile_url(image, gas_key)
+    return get_tile_url(image, data_key, source)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def cached_date_tile_url(
-    gas_key: str,
+    data_key: str,
     west: float, south: float,
     east: float, north: float,
     target_date: str,
     half_window_days: int,
+    source: str = "s5p",
 ) -> str:
     roi = ee.Geometry.BBox(west, south, east, north)
     image = build_date_composite(
-        gas_key, roi, target_date,
+        data_key, roi, target_date,
         half_window_days,
+        source=source,
     )
-    return get_tile_url(image, gas_key)
+    return get_tile_url(image, data_key, source)
 
 
 # ── Heatmap param helpers ────────────────────────────────────
 
 
 def heatmap_params(
-    gas_key: str,
+    data_key: str,
     start_date_iso: str,
     end_date_iso: str,
     west: float,
@@ -216,9 +228,10 @@ def heatmap_params(
     east: float,
     north: float,
     project_id: str,
+    source: str = "s5p",
 ) -> dict[str, Any]:
     return {
-        "gas_key": gas_key,
+        "data_key": data_key,
         "start_date": start_date_iso,
         "end_date": end_date_iso,
         "west": west,
@@ -226,11 +239,12 @@ def heatmap_params(
         "east": east,
         "north": north,
         "project_id": project_id,
+        "source": source,
     }
 
 
 def _analysis_cache_key(
-    gas_key: str,
+    data_key: str,
     start_date_iso: str,
     end_date_iso: str,
     west: float,
@@ -238,9 +252,11 @@ def _analysis_cache_key(
     east: float,
     north: float,
     project_id: str,
+    source: str = "s5p",
 ) -> tuple[Any, ...]:
     return (
-        gas_key,
+        source,
+        data_key,
         start_date_iso,
         end_date_iso,
         round(west, 6),
@@ -255,7 +271,7 @@ def _analysis_cache_key(
 
 
 def run_analysis(cfg: SidebarConfig) -> None:
-    """Validate inputs, fetch data, and store results in session state."""
+    """Validate inputs, fetch data, store results."""
     if not cfg.project_id.strip():
         st.error("Project ID is required.")
         st.stop()
@@ -279,7 +295,7 @@ def run_analysis(cfg: SidebarConfig) -> None:
     end_date_iso = end_date_exclusive.isoformat()
 
     cache_key = _analysis_cache_key(
-        gas_key=cfg.selected_gas,
+        data_key=cfg.selected_key,
         start_date_iso=start_date_iso,
         end_date_iso=end_date_iso,
         west=cfg.west,
@@ -287,6 +303,7 @@ def run_analysis(cfg: SidebarConfig) -> None:
         east=cfg.east,
         north=cfg.north,
         project_id=cfg.project_id,
+        source=cfg.source,
     )
     analysis_cache = st.session_state.setdefault(
         "analysis_cache", {}
@@ -296,10 +313,12 @@ def run_analysis(cfg: SidebarConfig) -> None:
     if isinstance(cached_entry, dict):
         cached_df = cached_entry.get("df")
         if isinstance(cached_df, pd.DataFrame):
-            st.session_state["analysis_df"] = cached_df.copy()
+            st.session_state["analysis_df"] = (
+                cached_df.copy()
+            )
             st.session_state["heatmap_params"] = (
                 heatmap_params(
-                    gas_key=cfg.selected_gas,
+                    data_key=cfg.selected_key,
                     start_date_iso=start_date_iso,
                     end_date_iso=end_date_iso,
                     west=cfg.west,
@@ -307,12 +326,15 @@ def run_analysis(cfg: SidebarConfig) -> None:
                     east=cfg.east,
                     north=cfg.north,
                     project_id=cfg.project_id,
+                    source=cfg.source,
                 )
             )
             st.toast("Loaded cached analysis")
             st.rerun()
 
-    gas_cfg = get_gas_config(cfg.selected_gas)
+    data_cfg = _get_config(
+        cfg.selected_key, cfg.source,
+    )
 
     with st.spinner("Initializing Earth Engine..."):
         try:
@@ -328,7 +350,7 @@ def run_analysis(cfg: SidebarConfig) -> None:
             st.stop()
 
     with st.spinner(
-        f"Building {gas_cfg.key} time series...",
+        f"Building {data_cfg.key} time series...",
     ):
         roi = ee.Geometry.BBox(
             cfg.west, cfg.south,
@@ -340,18 +362,22 @@ def run_analysis(cfg: SidebarConfig) -> None:
             while True:
                 try:
                     df = build_daily_timeseries(
-                        gas_key=cfg.selected_gas,
+                        gas_key=cfg.selected_key,
                         geometry=roi,
                         start_date=start_date_iso,
                         end_date=end_date_iso,
                         batch_size=batch_sz,
+                        source=cfg.source,
                     )
                 except ee.EEException as e:
                     is_concurrent = (
                         "too many concurrent"
                         in str(e).lower()
                     )
-                    if is_concurrent and batch_sz >= 2:
+                    if (
+                        is_concurrent
+                        and batch_sz >= 2
+                    ):
                         batch_sz = batch_sz // 2
                         st.toast(
                             "Reducing batch size "
@@ -367,14 +393,14 @@ def run_analysis(cfg: SidebarConfig) -> None:
     if df.empty:
         st.info(
             "No observations found for the selected "
-            "gas, ROI, and date range."
+            "variable, ROI, and date range."
         )
         st.stop()
 
     st.session_state["analysis_df"] = df
     st.session_state["heatmap_params"] = (
         heatmap_params(
-            gas_key=cfg.selected_gas,
+            data_key=cfg.selected_key,
             start_date_iso=start_date_iso,
             end_date_iso=end_date_iso,
             west=cfg.west,
@@ -382,6 +408,7 @@ def run_analysis(cfg: SidebarConfig) -> None:
             east=cfg.east,
             north=cfg.north,
             project_id=cfg.project_id,
+            source=cfg.source,
         )
     )
 
