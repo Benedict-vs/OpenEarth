@@ -1,4 +1,4 @@
-"""Tab 2: Time Series – smoothing, line chart, coverage, and CSV export."""
+"""Tab 2: Time Series -- smoothing, line chart, coverage, CSV."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from openearth.analytics.smoothing import add_rolling_no2
 
 def render(
     chart_df: pd.DataFrame,
-    selected_gas: str,
+    selected_key: str,
 ) -> None:
     ts_cfg, ts_plot = st.columns([1, 3])
 
@@ -66,7 +66,7 @@ def render(
 
     with ts_plot:
         st.subheader(
-            f"Daily {selected_gas} Time Series",
+            f"Daily {selected_key} Time Series",
         )
         if not plot_cols:
             st.warning(
@@ -110,7 +110,8 @@ def render(
         date_min = export_df["date"].min()
         date_max = export_df["date"].max()
         file_name = (
-            f"openearth_{selected_gas.lower()}_"
+            f"openearth_"
+            f"{selected_key.lower()}_"
             f"{date_min}_{date_max}.csv"
         )
 
