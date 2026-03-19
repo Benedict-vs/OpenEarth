@@ -16,34 +16,36 @@ S2_CLOUD_PROB_ID = "COPERNICUS/S2_CLOUD_PROBABILITY"
 DEFAULT_CLOUD_PROB_THRESH = 50
 
 
-def _add_cloud_prob(
-    s2_img: ee.Image,
-    cloud_prob_col: ee.ImageCollection,
-) -> ee.Image:
-    """Join matching cloud-probability band onto *s2_img*.
+def _join_cloud_prob(
+    s2: ee.ImageCollection,
+    cloud_prob: ee.ImageCollection,
+) -> ee.ImageCollection:
+    """Join cloud-probability images onto the S2 collection.
 
-    The join key is ``system:index`` which is identical
-    in both the S2 and cloud-probability collections
-    for the same granule.  If no match is found a
-    zero-probability band is added so downstream
-    masking does not discard the entire image.
+    Uses ``ee.Join.saveFirst`` keyed on ``system:index``
+    (identical in both collections for the same granule).
+    This is the recommended Earth Engine pattern — it
+    avoids nested aggregations inside ``.map()`` which
+    can silently break server-side computation.
     """
-    matched = cloud_prob_col.filter(
-        ee.Filter.eq(
-            "system:index",
-            s2_img.get("system:index"),
-        ),
+    join = ee.Join.saveFirst(
+        matchKey="cloud_prob_img",
     )
-    # Fallback: a constant 0 (clear sky) if the
-    # cloud-probability collection has no match.
+    filt = ee.Filter.equals(
+        leftField="system:index",
+        rightField="system:index",
+    )
+    return ee.ImageCollection(
+        join.apply(s2, cloud_prob, filt),
+    )
+
+
+def _add_cloud_band(image: ee.Image) -> ee.Image:
+    """Promote the joined cloud-prob image to a band."""
     cloud_img = ee.Image(
-        ee.Algorithms.If(
-            matched.size().gt(0),
-            matched.first(),
-            ee.Image.constant(0),
-        ),
+        image.get("cloud_prob_img"),
     )
-    return s2_img.addBands(
+    return image.addBands(
         cloud_img.rename("cloud_prob"),
     )
 
@@ -152,14 +154,14 @@ def get_s2_collection(
         .filterBounds(geometry)
     )
 
+    # Server-side join — no nested aggregations.
+    joined = _join_cloud_prob(s2, cloud_prob)
+
     thresh = cloud_prob_thresh
 
     return (
-        s2.map(
-            lambda img: _add_cloud_prob(
-                img, cloud_prob,
-            ),
-        )
+        joined
+        .map(_add_cloud_band)
         .map(lambda img: _mask_clouds(img, thresh))
         .map(_to_reflectance)
         .map(lambda img: _compute_index(img, config))
