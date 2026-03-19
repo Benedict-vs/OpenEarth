@@ -8,6 +8,7 @@ from datetime import date, timedelta
 
 import streamlit as st
 
+from openearth.providers.s2_registry import S2_REGISTRY
 from openearth.providers.s5p_registry import GAS_REGISTRY
 
 
@@ -26,17 +27,31 @@ ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
     # Cities
     "Heidelberg (Germany)": (8.58, 49.35, 8.77, 49.46),
     "London (UK)": (-0.51, 51.28, 0.33, 51.70),
-    "Berlin (Germany)": (13.09, 52.33, 13.76, 52.68),
-    "New York (USA)": (-74.26, 40.49, -73.69, 40.92),
-    "Merida (Mexico)": (-89.80, 20.85, -89.50, 21.10),
+    "Berlin (Germany)": (
+        13.09, 52.33, 13.76, 52.68,
+    ),
+    "New York (USA)": (
+        -74.26, 40.49, -73.69, 40.92,
+    ),
+    "Merida (Mexico)": (
+        -89.80, 20.85, -89.50, 21.10,
+    ),
     "Barranquilla (Colombia)": (
         -74.93, 10.90, -74.70, 11.10,
     ),
 }
 DEFAULT_EXAMPLE = "Europe"
 
+_SOURCE_LABELS = {
+    "Sentinel-5P (Trace Gases)": "s5p",
+    "Sentinel-2 (Spectral Indices)": "s2",
+}
+
 TRACE_GASES: dict[str, str] = {
     k: cfg.name for k, cfg in GAS_REGISTRY.items()
+}
+S2_INDICES: dict[str, str] = {
+    k: cfg.name for k, cfg in S2_REGISTRY.items()
 }
 
 
@@ -46,7 +61,8 @@ TRACE_GASES: dict[str, str] = {
 class SidebarConfig:
     project_id: str
     authenticate_on_fail: bool
-    selected_gas: str
+    source: str
+    selected_key: str
     west: float
     south: float
     east: float
@@ -73,12 +89,28 @@ def render_sidebar() -> SidebarConfig:
         value=True,
     )
 
-    st.sidebar.header("Trace Gas")
-    selected_gas = st.sidebar.selectbox(
-        "Variable",
-        options=list(TRACE_GASES.keys()),
-        format_func=lambda k: f"{k} – {TRACE_GASES[k]}",
+    st.sidebar.header("Data Source")
+    source_label = st.sidebar.radio(
+        "Satellite",
+        options=list(_SOURCE_LABELS.keys()),
         index=0,
+        key="source_radio",
+    )
+    source = _SOURCE_LABELS[source_label]
+
+    if source == "s2":
+        variables = S2_INDICES
+    else:
+        variables = TRACE_GASES
+
+    selected_key = st.sidebar.selectbox(
+        "Variable",
+        options=list(variables.keys()),
+        format_func=lambda k: (
+            f"{k} \u2013 {variables[k]}"
+        ),
+        index=0,
+        key="variable_select",
     )
 
     st.sidebar.header("ROI (Region of Interest)")
@@ -128,7 +160,8 @@ def render_sidebar() -> SidebarConfig:
     return SidebarConfig(
         project_id=project_id,
         authenticate_on_fail=authenticate_on_fail,
-        selected_gas=selected_gas,
+        source=source,
+        selected_key=selected_key,
         west=west,
         south=south,
         east=east,
