@@ -18,7 +18,8 @@ from openearth.providers.s2_registry import (
 )
 from openearth.providers.s5p_registry import get_gas_config
 
-DEFAULT_SCALE_METERS = 11_132
+DEFAULT_SCALE_METERS_S5P = 11_132
+DEFAULT_SCALE_METERS_S2 = 500
 DEFAULT_MAX_PIXELS = 1_000_000_000
 BATCH_SIZE = 10
 
@@ -82,7 +83,7 @@ def build_daily_timeseries(
     geometry: ee.Geometry,
     start_date: str | date | datetime,
     end_date: str | date | datetime,
-    scale_meters: int = DEFAULT_SCALE_METERS,
+    scale_meters: int | None = None,
     max_pixels: int = DEFAULT_MAX_PIXELS,
     best_effort: bool = True,
     batch_size: int = BATCH_SIZE,
@@ -107,6 +108,13 @@ def build_daily_timeseries(
     """
     config = _get_config(gas_key, source)
     band = config.band
+
+    if scale_meters is None:
+        scale_meters = (
+            DEFAULT_SCALE_METERS_S2
+            if source == "s2"
+            else DEFAULT_SCALE_METERS_S5P
+        )
 
     start = to_ee_date(start_date)
     end = to_ee_date(end_date)
