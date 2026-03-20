@@ -186,7 +186,7 @@ def create_heatmap_folium(
 
     fmap = folium.Map(
         location=[center_lat, center_lon],
-        zoom_start=2 if is_global else None,
+        zoom_start=2 if is_global else 10,
         tiles="CartoDB positron",
     )
     if (
