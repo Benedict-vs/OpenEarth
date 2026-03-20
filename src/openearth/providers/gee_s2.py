@@ -24,9 +24,6 @@ def _join_cloud_prob(
 
     Uses ``ee.Join.saveFirst`` keyed on ``system:index``
     (identical in both collections for the same granule).
-    This is the recommended Earth Engine pattern — it
-    avoids nested aggregations inside ``.map()`` which
-    can silently break server-side computation.
     """
     join = ee.Join.saveFirst(
         matchKey="cloud_prob_img",
@@ -40,36 +37,27 @@ def _join_cloud_prob(
     )
 
 
-def _add_cloud_band(image: ee.Image) -> ee.Image:
-    """Promote the joined cloud-prob image to a band."""
-    cloud_img = ee.Image(
-        image.get("cloud_prob_img"),
-    )
-    return image.addBands(
-        cloud_img.rename("cloud_prob"),
-    )
-
-
 def _mask_clouds(
     image: ee.Image,
     cloud_prob_thresh: int = DEFAULT_CLOUD_PROB_THRESH,
 ) -> ee.Image:
-    """Mask pixels whose cloud probability exceeds *cloud_prob_thresh*."""
-    mask = (
-        image.select("cloud_prob")
-        .lt(cloud_prob_thresh)
-    )
-    return image.updateMask(mask)
+    """Mask pixels whose cloud probability exceeds *cloud_prob_thresh*.
+
+    Follows the official GEE S2_CLOUD_PROBABILITY example:
+    select the ``probability`` band from the joined image
+    and mask pixels above the threshold.
+    """
+    clouds = ee.Image(
+        image.get("cloud_prob_img"),
+    ).select("probability")
+    is_clear = clouds.lt(cloud_prob_thresh)
+    return image.updateMask(is_clear)
 
 
 def _to_reflectance(
     image: ee.Image,
 ) -> ee.Image:
-    """Scale S2 L1C DN values to [0, 1] reflectance.
-
-    Only optical bands (prefixed ``B``) are divided;
-    the ``cloud_prob`` band is left untouched.
-    """
+    """Scale S2 L1C DN values to [0, 1] reflectance."""
     optical = image.select("B.*").divide(10_000)
     return image.addBands(optical, overwrite=True)
 
@@ -77,7 +65,11 @@ def _to_reflectance(
 def _compute_index(
     image: ee.Image, config,
 ) -> ee.Image:
-    """Compute a spectral index or select a raw band."""
+    """Compute a spectral index or select a raw band.
+
+    Preserves ``system:time_start`` so that downstream
+    ``filterDate`` calls still work.
+    """
     if config.expression is None:
         return (
             image.select(config.bands)
@@ -92,6 +84,9 @@ def _compute_index(
             config.expression, band_map,
         )
         .rename(config.key)
+        .copyProperties(
+            image, ["system:time_start"],
+        )
     )
 
 
@@ -161,7 +156,6 @@ def get_s2_collection(
 
     return (
         joined
-        .map(_add_cloud_band)
         .map(lambda img: _mask_clouds(img, thresh))
         .map(_to_reflectance)
         .map(lambda img: _compute_index(img, config))
