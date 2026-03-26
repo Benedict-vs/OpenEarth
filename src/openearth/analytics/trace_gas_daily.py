@@ -224,8 +224,6 @@ def build_daily_timeseries(
 
     # ── Process in batches ────────────────────────
     all_rows: list[dict[str, Any]] = []
-    total_batches = -(-n_days // batch_size)  # ceil
-    batch_idx = 0
     for batch_start in range(
         0, n_days, batch_size,
     ):
@@ -240,9 +238,8 @@ def build_daily_timeseries(
         )
         info = batch_fc.getInfo()
         all_rows.extend(_rows_from_fc_info(info))
-        batch_idx += 1
         if progress_callback is not None:
-            progress_callback(batch_idx, total_batches)
+            progress_callback(batch_end, n_days)
 
     if not all_rows:
         return pd.DataFrame(columns=_RESULT_COLUMNS)

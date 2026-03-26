@@ -220,7 +220,10 @@ def render(
             )
             st_folium(
                 date_map,
-                key="date_heatmap",
+                key=(
+                    f"date_heatmap"
+                    f"_{date_vmin}_{date_vmax}"
+                ),
                 height=500,
                 use_container_width=True,
             )
@@ -282,7 +285,10 @@ def render(
         )
         st_folium(
             mean_map,
-            key="mean_heatmap",
+            key=(
+                f"mean_heatmap"
+                f"_{mean_vmin}_{mean_vmax}"
+            ),
             height=500,
             use_container_width=True,
         )

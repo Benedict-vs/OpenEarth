@@ -397,13 +397,19 @@ def run_analysis(cfg: SidebarConfig) -> None:
         ),
     )
 
-    def _on_progress(done: int, total: int) -> None:
-        frac = done / total if total else 1.0
+    def _on_progress(
+        days_done: int, days_total: int,
+    ) -> None:
+        frac = (
+            days_done / days_total
+            if days_total
+            else 1.0
+        )
         progress_bar.progress(
             frac,
             text=(
                 f"Processing {data_cfg.key} — "
-                f"batch {done}/{total}"
+                f"day {days_done}/{days_total}"
             ),
         )
 
