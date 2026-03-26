@@ -384,46 +384,65 @@ def run_analysis(cfg: SidebarConfig) -> None:
             )
             st.stop()
 
-    with st.spinner(
-        f"Building {data_cfg.key} time series...",
-    ):
-        roi = ee.Geometry.BBox(
-            cfg.west, cfg.south,
-            cfg.east, cfg.north,
+    roi = ee.Geometry.BBox(
+        cfg.west, cfg.south,
+        cfg.east, cfg.north,
+    )
+
+    progress_bar = st.progress(
+        0,
+        text=(
+            f"Building {data_cfg.key} "
+            "time series..."
+        ),
+    )
+
+    def _on_progress(done: int, total: int) -> None:
+        frac = done / total if total else 1.0
+        progress_bar.progress(
+            frac,
+            text=(
+                f"Processing {data_cfg.key} — "
+                f"batch {done}/{total}"
+            ),
         )
 
-        batch_sz = BATCH_SIZE
-        try:
-            while True:
-                try:
-                    df = build_daily_timeseries(
-                        gas_key=cfg.selected_key,
-                        geometry=roi,
-                        start_date=start_date_iso,
-                        end_date=end_date_iso,
-                        batch_size=batch_sz,
-                        source=cfg.source,
+    batch_sz = BATCH_SIZE
+    try:
+        while True:
+            try:
+                df = build_daily_timeseries(
+                    gas_key=cfg.selected_key,
+                    geometry=roi,
+                    start_date=start_date_iso,
+                    end_date=end_date_iso,
+                    batch_size=batch_sz,
+                    source=cfg.source,
+                    progress_callback=_on_progress,
+                )
+            except ee.EEException as e:
+                is_concurrent = (
+                    "too many concurrent"
+                    in str(e).lower()
+                )
+                if (
+                    is_concurrent
+                    and batch_sz >= 2
+                ):
+                    batch_sz = batch_sz // 2
+                    st.toast(
+                        "Reducing batch size "
+                        f"to {batch_sz}..."
                     )
-                except ee.EEException as e:
-                    is_concurrent = (
-                        "too many concurrent"
-                        in str(e).lower()
-                    )
-                    if (
-                        is_concurrent
-                        and batch_sz >= 2
-                    ):
-                        batch_sz = batch_sz // 2
-                        st.toast(
-                            "Reducing batch size "
-                            f"to {batch_sz}..."
-                        )
-                        continue
-                    raise
-                break
-        except ee.EEException as exc:
-            show_ee_error(exc, "Analysis failed.")
-            st.stop()
+                    continue
+                raise
+            break
+    except ee.EEException as exc:
+        progress_bar.empty()
+        show_ee_error(exc, "Analysis failed.")
+        st.stop()
+
+    progress_bar.empty()
 
     if df.empty:
         if cfg.source == "s2":

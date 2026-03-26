@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
 
@@ -88,6 +89,10 @@ def build_daily_timeseries(
     best_effort: bool = True,
     batch_size: int = BATCH_SIZE,
     source: str = "s5p",
+    progress_callback: Callable[
+        [int, int], None
+    ]
+    | None = None,
 ) -> pd.DataFrame:
     """Compute daily statistics over an ROI.
 
@@ -219,6 +224,8 @@ def build_daily_timeseries(
 
     # ── Process in batches ────────────────────────
     all_rows: list[dict[str, Any]] = []
+    total_batches = -(-n_days // batch_size)  # ceil
+    batch_idx = 0
     for batch_start in range(
         0, n_days, batch_size,
     ):
@@ -233,6 +240,9 @@ def build_daily_timeseries(
         )
         info = batch_fc.getInfo()
         all_rows.extend(_rows_from_fc_info(info))
+        batch_idx += 1
+        if progress_callback is not None:
+            progress_callback(batch_idx, total_batches)
 
     if not all_rows:
         return pd.DataFrame(columns=_RESULT_COLUMNS)
