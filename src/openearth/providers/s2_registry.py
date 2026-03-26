@@ -59,6 +59,8 @@ class S2IndexConfig:
     expression: str | None
     vis_min: float
     vis_max: float
+    valid_min: float
+    valid_max: float
     display_unit: str
     display_scale: float = 1.0
     palette: list[str] = field(
@@ -79,6 +81,8 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
         expression="(B8 - B4) / (B8 + B4)",
         vis_min=-1.0,
         vis_max=1.0,
+        valid_min=-1.0,
+        valid_max=1.0,
         display_unit="index",
         palette=VEGETATION_PALETTE,
     ),
@@ -89,6 +93,8 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
         expression="(B3 - B8) / (B3 + B8)",
         vis_min=-1.0,
         vis_max=1.0,
+        valid_min=-1.0,
+        valid_max=1.0,
         display_unit="index",
         palette=WATER_PALETTE,
     ),
@@ -99,6 +105,8 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
         expression="2.5 * (B8 - B4) / (B8 + 6.0 * B4 - 7.5 * B2 + 1.0)",
         vis_min=-1.0,
         vis_max=1.0,
+        valid_min=-1.0,
+        valid_max=1.0,
         display_unit="index",
         palette=VEGETATION_PALETTE,
     ),
@@ -109,6 +117,8 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
         expression=None,
         vis_min=0.0,
         vis_max=0.5,
+        valid_min=0.0,
+        valid_max=1.0,
         display_unit="reflectance",
         palette=SWIR_PALETTE,
     ),
@@ -119,6 +129,8 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
         expression=None,
         vis_min=0.0,
         vis_max=0.5,
+        valid_min=0.0,
+        valid_max=1.0,
         display_unit="reflectance",
         palette=SWIR_PALETTE,
     ),

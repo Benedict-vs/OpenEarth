@@ -79,14 +79,66 @@ def _is_global(geometry: ee.Geometry) -> bool:
 def get_vis_params(
     data_key: str,
     source: str = "s5p",
+    vis_min: float | None = None,
+    vis_max: float | None = None,
 ) -> dict[str, Any]:
-    """Return EE visualization params."""
+    """Return EE visualization params.
+
+    When *vis_min* / *vis_max* are supplied they
+    override the registry defaults.
+    """
     cfg = _get_config(data_key, source)
     return {
-        "min": cfg.vis_min,
-        "max": cfg.vis_max,
+        "min": vis_min if vis_min is not None else cfg.vis_min,
+        "max": vis_max if vis_max is not None else cfg.vis_max,
         "palette": cfg.palette,
     }
+
+
+def compute_vis_range(
+    image: ee.Image,
+    data_key: str,
+    source: str = "s5p",
+    geometry: ee.Geometry | None = None,
+) -> tuple[float, float]:
+    """Compute 2nd/98th-percentile range from *image*.
+
+    Results are clamped to the physically plausible
+    ``valid_min`` / ``valid_max`` from the registry to
+    exclude sensor noise.
+    """
+    cfg = _get_config(data_key, source)
+    scale = 100 if source == "s2" else 1000
+
+    reducer = ee.Reducer.percentile([2, 98])
+    kwargs: dict[str, Any] = {
+        "reducer": reducer,
+        "scale": scale,
+        "bestEffort": True,
+        "maxPixels": 1e8,
+    }
+    if geometry is not None:
+        kwargs["geometry"] = geometry
+
+    stats = image.reduceRegion(**kwargs).getInfo()
+
+    band = cfg.band
+    p2_key = f"{band}_p2"
+    p98_key = f"{band}_p98"
+
+    p2 = stats.get(p2_key)
+    p98 = stats.get(p98_key)
+
+    if p2 is None or p98 is None:
+        return (cfg.vis_min, cfg.vis_max)
+
+    clamped_min = max(float(p2), cfg.valid_min)
+    clamped_max = min(float(p98), cfg.valid_max)
+
+    if clamped_min >= clamped_max:
+        return (cfg.vis_min, cfg.vis_max)
+
+    return (clamped_min, clamped_max)
 
 
 def build_mean_composite(
@@ -149,9 +201,14 @@ def get_tile_url(
     image: ee.Image,
     data_key: str,
     source: str = "s5p",
+    vis_min: float | None = None,
+    vis_max: float | None = None,
 ) -> str:
     """Return an XYZ tile URL template for *image*."""
-    params = get_vis_params(data_key, source)
+    params = get_vis_params(
+        data_key, source,
+        vis_min=vis_min, vis_max=vis_max,
+    )
     map_id_dict = image.getMapId(params)
     return map_id_dict["tile_fetcher"].url_format
 

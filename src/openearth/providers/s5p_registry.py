@@ -107,6 +107,8 @@ class GasConfig:
     band: str
     vis_min: float
     vis_max: float
+    valid_min: float
+    valid_max: float
     display_unit: str
     display_scale: float = 1.0
     palette: list[str] = field(
@@ -122,6 +124,8 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         band="tropospheric_NO2_column_number_density",
         vis_min=0.0,
         vis_max=0.0003,
+        valid_min=-0.0001,
+        valid_max=0.001,
         display_unit="\u00b5mol/m\u00b2",
         display_scale=1e6,
         palette=_PALETTE_NO2,
@@ -133,6 +137,8 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         band="SO2_column_number_density",
         vis_min=0.0,
         vis_max=0.0005,
+        valid_min=-0.001,
+        valid_max=0.01,
         display_unit="\u00b5mol/m\u00b2",
         display_scale=1e6,
         palette=_PALETTE_SO2,
@@ -144,6 +150,8 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         band="CO_column_number_density",
         vis_min=0.0,
         vis_max=0.05,
+        valid_min=0.0,
+        valid_max=0.1,
         display_unit="mmol/m\u00b2",
         display_scale=1e3,
         palette=_PALETTE_CO,
@@ -155,6 +163,8 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         band="O3_column_number_density",
         vis_min=0.07,
         vis_max=0.20,
+        valid_min=0.0,
+        valid_max=0.3,
         display_unit="mol/m\u00b2",
         display_scale=1.0,
         palette=_PALETTE_O3,
@@ -169,6 +179,8 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         ),
         vis_min=1750.0,
         vis_max=2000.0,
+        valid_min=1600.0,
+        valid_max=2200.0,
         display_unit="ppb",
         display_scale=1.0,
         palette=_PALETTE_CH4,
@@ -183,6 +195,8 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         ),
         vis_min=0.0,
         vis_max=0.0005,
+        valid_min=-0.0005,
+        valid_max=0.005,
         display_unit="\u00b5mol/m\u00b2",
         display_scale=1e6,
         palette=_PALETTE_HCHO,

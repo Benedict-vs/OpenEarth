@@ -21,6 +21,7 @@ from openearth.providers.s5p_registry import get_gas_config
 from openearth.visualization.trace_gas_heatmap import (
     build_mean_composite,
     build_date_composite,
+    compute_vis_range,
     get_tile_url,
 )
 
@@ -147,12 +148,16 @@ def show_ee_error(
 def render_color_legend(
     data_key: str,
     source: str = "s5p",
+    vis_min: float | None = None,
+    vis_max: float | None = None,
 ) -> None:
     """Render an HTML color bar legend."""
     cfg = _get_config(data_key, source)
     gradient_css = ", ".join(cfg.palette)
-    label_min = cfg.vis_min * cfg.display_scale
-    label_max = cfg.vis_max * cfg.display_scale
+    raw_min = vis_min if vis_min is not None else cfg.vis_min
+    raw_max = vis_max if vis_max is not None else cfg.vis_max
+    label_min = raw_min * cfg.display_scale
+    label_max = raw_max * cfg.display_scale
     unit = cfg.display_unit
     st.markdown(
         f"""
@@ -189,13 +194,18 @@ def cached_mean_tile_url(
     east: float, north: float,
     start_date: str, end_date: str,
     source: str = "s5p",
+    vis_min: float | None = None,
+    vis_max: float | None = None,
 ) -> str:
     roi = ee.Geometry.BBox(west, south, east, north)
     image = build_mean_composite(
         data_key, roi, start_date, end_date,
         source=source,
     )
-    return get_tile_url(image, data_key, source)
+    return get_tile_url(
+        image, data_key, source,
+        vis_min=vis_min, vis_max=vis_max,
+    )
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -206,6 +216,8 @@ def cached_date_tile_url(
     target_date: str,
     half_window_days: int,
     source: str = "s5p",
+    vis_min: float | None = None,
+    vis_max: float | None = None,
 ) -> str:
     roi = ee.Geometry.BBox(west, south, east, north)
     image = build_date_composite(
@@ -213,7 +225,30 @@ def cached_date_tile_url(
         half_window_days,
         source=source,
     )
-    return get_tile_url(image, data_key, source)
+    return get_tile_url(
+        image, data_key, source,
+        vis_min=vis_min, vis_max=vis_max,
+    )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_vis_range(
+    data_key: str,
+    west: float, south: float,
+    east: float, north: float,
+    start_date: str, end_date: str,
+    source: str = "s5p",
+) -> tuple[float, float]:
+    """Compute percentile-based vis range for the mean composite."""
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_mean_composite(
+        data_key, roi, start_date, end_date,
+        source=source,
+    )
+    return compute_vis_range(
+        image, data_key, source,
+        geometry=roi,
+    )
 
 
 # ── Heatmap param helpers ────────────────────────────────────
