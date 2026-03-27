@@ -44,4 +44,4 @@ update.txt
 # LLMs
 .claude
 
-debug_cloud_join
+debug_cloud_join.py
