@@ -59,6 +59,27 @@ def _scale_controls(
             key=f"{prefix}_auto_scale",
         )
 
+        # Detect toggle change and reset sliders
+        prev_key = f"{prefix}_prev_auto"
+        prev_auto = st.session_state.get(prev_key)
+        toggled = prev_auto is not None and auto != prev_auto
+        st.session_state[prev_key] = auto
+
+        if toggled:
+            # Clear slider keys so they pick up
+            # the new default values below.
+            st.session_state.pop(
+                f"{prefix}_vis_min", None,
+            )
+            st.session_state.pop(
+                f"{prefix}_vis_max", None,
+            )
+            # Clear cached auto range so a fresh
+            # compute happens next time auto is on.
+            st.session_state.pop(
+                f"{prefix}_auto_range", None,
+            )
+
         if auto:
             range_key = f"{prefix}_auto_range"
             if range_key not in st.session_state:
