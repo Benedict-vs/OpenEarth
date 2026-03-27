@@ -123,7 +123,7 @@ def render_roi_draw_map(
         fmap,
         key="roi_draw_map",
         height=430,
-        use_container_width=True,
+        width=None,
         returned_objects=["last_active_drawing"],
     )
     drawing = (

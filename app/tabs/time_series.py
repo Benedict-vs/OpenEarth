@@ -75,7 +75,7 @@ def render(
         else:
             st.line_chart(
                 ts_df.set_index("date")[plot_cols],
-                use_container_width=True,
+                width="stretch",
             )
 
     coverage_mean = pd.to_numeric(
@@ -88,7 +88,7 @@ def render(
             chart_df.set_index("date")[
                 ["coverage_fraction"]
             ],
-            use_container_width=True,
+            width="stretch",
         )
         st.caption(
             f"Rows: {len(chart_df)} | "
@@ -97,7 +97,7 @@ def render(
 
     with st.expander("Data", expanded=False):
         st.dataframe(
-            chart_df, use_container_width=True,
+            chart_df, width="stretch",
         )
         export_df = chart_df.copy()
         export_df["date"] = pd.to_datetime(

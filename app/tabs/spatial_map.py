@@ -246,7 +246,7 @@ def render(
                     f"_{date_vmin}_{date_vmax}"
                 ),
                 height=500,
-                use_container_width=True,
+                width=None,
             )
         except ee.EEException as exc:
             show_ee_error(
@@ -311,7 +311,7 @@ def render(
                 f"_{mean_vmin}_{mean_vmax}"
             ),
             height=500,
-            use_container_width=True,
+            width=None,
         )
     except Exception as exc:
         show_ee_error(

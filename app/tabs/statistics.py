@@ -149,7 +149,7 @@ def render(
     )
     st.altair_chart(
         hist_chart + rule_chart,
-        use_container_width=True,
+        width="stretch",
     )
 
     # ── 4. Monthly box plot (seasonal pattern) ────
@@ -183,7 +183,7 @@ def render(
         .properties(height=300)
     )
     st.altair_chart(
-        box_chart, use_container_width=True,
+        box_chart, width="stretch",
     )
 
     # ── 5. Anomaly detection (beyond 2 sigma) ────
@@ -257,7 +257,7 @@ def render(
             (band + line + points).properties(
                 height=250,
             ),
-            use_container_width=True,
+            width="stretch",
         )
 
         with st.expander(
@@ -276,7 +276,7 @@ def render(
             ]
             st.dataframe(
                 show_df,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -309,7 +309,7 @@ def render(
             .properties(height=300)
         )
         st.altair_chart(
-            yoy_chart, use_container_width=True,
+            yoy_chart, width="stretch",
         )
 
         yearly = (
@@ -332,7 +332,7 @@ def render(
         ]
         st.dataframe(
             yearly,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
