@@ -53,75 +53,80 @@ def _scale_controls(
     scale = cfg.display_scale
     unit = cfg.display_unit
 
+    min_key = f"{prefix}_vis_min"
+    max_key = f"{prefix}_vis_max"
+
+    # Initialise slider session state on first run.
+    if min_key not in st.session_state:
+        st.session_state[min_key] = (
+            cfg.vis_min * scale
+        )
+    if max_key not in st.session_state:
+        st.session_state[max_key] = (
+            cfg.vis_max * scale
+        )
+
     with st.expander("Scale settings"):
         auto = st.checkbox(
             "Auto-compute from data",
             key=f"{prefix}_auto_scale",
         )
 
-        # Detect toggle change and reset sliders
+        # Detect toggle change
         prev_key = f"{prefix}_prev_auto"
         prev_auto = st.session_state.get(prev_key)
-        toggled = prev_auto is not None and auto != prev_auto
+        toggled = auto != prev_auto
         st.session_state[prev_key] = auto
 
-        if toggled:
-            # Clear slider keys so they pick up
-            # the new default values below.
-            st.session_state.pop(
-                f"{prefix}_vis_min", None,
-            )
-            st.session_state.pop(
-                f"{prefix}_vis_max", None,
-            )
-            # Clear cached auto range so a fresh
-            # compute happens next time auto is on.
-            st.session_state.pop(
-                f"{prefix}_auto_range", None,
-            )
-
-        if auto:
-            range_key = f"{prefix}_auto_range"
-            if range_key not in st.session_state:
-                with st.spinner(
-                    "Computing data range..."
-                ):
-                    st.session_state[range_key] = (
-                        cached_vis_range(
-                            data_key,
-                            hp["west"],
-                            hp["south"],
-                            hp["east"],
-                            hp["north"],
-                            hp["start_date"],
-                            hp["end_date"],
-                            source=source,
-                        )
+        if auto and toggled:
+            # Just switched ON → compute and
+            # force sliders to the new range.
+            with st.spinner(
+                "Computing data range..."
+            ):
+                auto_min, auto_max = (
+                    cached_vis_range(
+                        data_key,
+                        hp["west"],
+                        hp["south"],
+                        hp["east"],
+                        hp["north"],
+                        hp["start_date"],
+                        hp["end_date"],
+                        source=source,
                     )
-            default_min, default_max = (
-                st.session_state[range_key]
+                )
+            st.session_state[min_key] = (
+                auto_min * scale
             )
-        else:
-            default_min = cfg.vis_min
-            default_max = cfg.vis_max
+            st.session_state[max_key] = (
+                auto_max * scale
+            )
 
-        slider_min = st.slider(
+        if not auto and toggled:
+            # Just switched OFF → reset to defaults.
+            st.session_state[min_key] = (
+                cfg.vis_min * scale
+            )
+            st.session_state[max_key] = (
+                cfg.vis_max * scale
+            )
+
+        st.slider(
             f"Min ({unit})",
             min_value=cfg.valid_min * scale,
             max_value=cfg.valid_max * scale,
-            value=default_min * scale,
-            key=f"{prefix}_vis_min",
+            key=min_key,
         )
-        slider_max = st.slider(
+        st.slider(
             f"Max ({unit})",
             min_value=cfg.valid_min * scale,
             max_value=cfg.valid_max * scale,
-            value=default_max * scale,
-            key=f"{prefix}_vis_max",
+            key=max_key,
         )
 
-        raw_min = slider_min / scale
-        raw_max = slider_max / scale
+    raw_min = st.session_state[min_key] / scale
+    raw_max = st.session_state[max_key] / scale
 
     uses_default = (
         abs(raw_min - cfg.vis_min) < 1e-12
