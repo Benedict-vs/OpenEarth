@@ -90,9 +90,8 @@ def render_image() -> None:
             key="img_dimensions",
         )
 
-    fmt_map = {"PNG": "png", "JPEG": "jpg"}
+        fmt_map = {"PNG": "png", "JPEG": "jpg"}
 
-    if img_type in ("PNG", "JPEG"):
         fmt = fmt_map[img_type]
         mime = (
             "image/png" if fmt == "png"
