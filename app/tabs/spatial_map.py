@@ -81,27 +81,38 @@ def _scale_controls(
         if auto and toggled:
             # Just switched ON → compute and
             # force sliders to the new range.
-            with st.spinner(
-                "Computing data range..."
-            ):
-                auto_min, auto_max = (
-                    cached_vis_range(
-                        data_key,
-                        hp["west"],
-                        hp["south"],
-                        hp["east"],
-                        hp["north"],
-                        hp["start_date"],
-                        hp["end_date"],
-                        source=source,
+            try:
+                with st.spinner(
+                    "Computing data range..."
+                ):
+                    auto_min, auto_max = (
+                        cached_vis_range(
+                            data_key,
+                            hp["west"],
+                            hp["south"],
+                            hp["east"],
+                            hp["north"],
+                            hp["start_date"],
+                            hp["end_date"],
+                            source=source,
+                        )
                     )
+                st.session_state[min_key] = (
+                    auto_min * scale
                 )
-            st.session_state[min_key] = (
-                auto_min * scale
-            )
-            st.session_state[max_key] = (
-                auto_max * scale
-            )
+                st.session_state[max_key] = (
+                    auto_max * scale
+                )
+            except ee.EEException:
+                st.warning(
+                    "Auto-scale computation failed "
+                    "(ROI may be too large). "
+                    "Using default range."
+                )
+                st.session_state[
+                    f"{prefix}_auto_scale"
+                ] = False
+                st.session_state[prev_key] = False
 
         if not auto and toggled:
             # Just switched OFF → reset to defaults.
