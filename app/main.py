@@ -39,7 +39,9 @@ from app.tabs.placeholders import (
 
 # TO DO: Create information of safe limits of trace gase according to xyz
 # and mask map according to safe/ unsafe limits
-
+# - create complex geometry options
+# - images
+# - animations
 
 # ── Page config ──────────────────────────────────────
 
