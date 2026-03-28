@@ -23,6 +23,8 @@ from openearth.visualization.trace_gas_heatmap import (
     build_date_composite,
     compute_vis_range,
     get_tile_url,
+    get_thumb_url,
+    get_download_url,
 )
 
 from app.config import SidebarConfig
@@ -248,6 +250,54 @@ def cached_vis_range(
     return compute_vis_range(
         image, data_key, source,
         geometry=roi,
+    )
+
+
+# ── Image export helpers ─────────────────────────────────────
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_thumb_url(
+    data_key: str,
+    west: float, south: float,
+    east: float, north: float,
+    start_date: str, end_date: str,
+    source: str = "s5p",
+    vis_min: float | None = None,
+    vis_max: float | None = None,
+    dimensions: int = 1024,
+    img_format: str = "png",
+) -> str:
+    """Return a thumbnail URL for the mean composite."""
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_mean_composite(
+        data_key, roi, start_date, end_date,
+        source=source,
+    )
+    return get_thumb_url(
+        image, data_key, roi, source,
+        vis_min=vis_min, vis_max=vis_max,
+        dimensions=dimensions,
+        img_format=img_format,
+    )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_download_url(
+    data_key: str,
+    west: float, south: float,
+    east: float, north: float,
+    start_date: str, end_date: str,
+    source: str = "s5p",
+) -> str:
+    """Return a GeoTIFF download URL for the mean composite."""
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_mean_composite(
+        data_key, roi, start_date, end_date,
+        source=source,
+    )
+    return get_download_url(
+        image, data_key, roi, source,
     )
 
 
