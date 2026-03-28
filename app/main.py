@@ -40,6 +40,7 @@ from app.tabs.placeholders import (
 # TO DO: Create information of safe limits of trace gase according to xyz
 # and mask map according to safe/ unsafe limits
 # - create complex geometry options
+# - dont calculate everthing at once (time series, heatmap x2, etc.)
 # - images
 # - animations
 
