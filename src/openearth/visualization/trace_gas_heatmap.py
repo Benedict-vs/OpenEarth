@@ -100,17 +100,20 @@ def compute_vis_range(
     data_key: str,
     source: str = "s5p",
     geometry: ee.Geometry | None = None,
+    headroom: float = 0.15,
 ) -> tuple[float, float]:
-    """Compute 2nd/98th-percentile range from *image*.
+    """Compute a data-adaptive vis range from *image*.
 
-    Results are clamped to the physically plausible
-    ``valid_min`` / ``valid_max`` from the registry to
-    exclude sensor noise.
+    Uses the 0.5th and 99.5th percentiles, then adds
+    *headroom* (default 15 %) on each side so that
+    extreme values are not fully clipped.  Results are
+    clamped to the physically plausible ``valid_min`` /
+    ``valid_max`` from the registry.
     """
     cfg = _get_config(data_key, source)
     scale = 100 if source == "s2" else 1000
 
-    reducer = ee.Reducer.percentile([2, 98])
+    reducer = ee.Reducer.percentile([0.5, 99.5])
     kwargs: dict[str, Any] = {
         "reducer": reducer,
         "scale": scale,
@@ -123,17 +126,27 @@ def compute_vis_range(
     stats = image.reduceRegion(**kwargs).getInfo()
 
     band = cfg.band
-    p2_key = f"{band}_p2"
-    p98_key = f"{band}_p98"
+    p_lo = stats.get(f"{band}_p0")
+    p_hi = stats.get(f"{band}_p100")
+    # EE names the keys after the integer part of
+    # the percentile: 0.5 → "p0", 99.5 → "p100".
+    # Fall back to explicit rounding variants.
+    if p_lo is None:
+        p_lo = stats.get(f"{band}_p1")
+    if p_hi is None:
+        p_hi = stats.get(f"{band}_p99")
 
-    p2 = stats.get(p2_key)
-    p98 = stats.get(p98_key)
-
-    if p2 is None or p98 is None:
+    if p_lo is None or p_hi is None:
         return (cfg.vis_min, cfg.vis_max)
 
-    clamped_min = max(float(p2), cfg.valid_min)
-    clamped_max = min(float(p98), cfg.valid_max)
+    lo = float(p_lo)
+    hi = float(p_hi)
+    span = hi - lo
+    lo = lo - span * headroom
+    hi = hi + span * headroom
+
+    clamped_min = max(lo, cfg.valid_min)
+    clamped_max = min(hi, cfg.valid_max)
 
     if clamped_min >= clamped_max:
         return (cfg.vis_min, cfg.vis_max)
