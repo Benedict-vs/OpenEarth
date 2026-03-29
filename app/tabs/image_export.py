@@ -1,4 +1,4 @@
-"""Placeholder tabs: Compare, Animation, and Image export."""
+"""Image export tab – PNG, JPEG, and GeoTIFF generation."""
 
 from __future__ import annotations
 
@@ -14,50 +14,7 @@ from app.analysis import (
 )
 
 
-def render_compare(selected_key: str) -> None:
-    st.subheader("Compare")
-    st.info(
-        "**Coming soon** \u2013 Compare two variables "
-        "or two regions side by side over the same "
-        "time period."
-    )
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.selectbox(
-            "Region / Variable A",
-            options=[
-                f"Current ROI \u2013 {selected_key}"
-            ],
-            disabled=True,
-            key="cmp_a",
-        )
-        st.empty()
-    with c2:
-        st.selectbox(
-            "Region / Variable B",
-            options=["Select..."],
-            disabled=True,
-            key="cmp_b",
-        )
-        st.empty()
-
-
-def render_animation() -> None:
-    st.subheader("Animation")
-    st.info(
-        "**Coming soon** – Create and download an animated heatmap "
-        "visualising the atmospheric flow"
-    )
-
-    st.button(
-        "Download Animation",
-        disabled=True,
-        key="exp_anim",
-    )
-
-
-def render_image() -> None:
+def render() -> None:
     """Render the Image export tab."""
     st.subheader("Create Image")
 

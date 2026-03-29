@@ -30,11 +30,9 @@ from app.tabs import (
     spatial_map,
     time_series,
     statistics,
-)
-from app.tabs.placeholders import (
-    render_compare,
-    render_animation,
-    render_image,
+    compare,
+    animation,
+    image_export,
 )
 
 # TO DO:
@@ -116,7 +114,7 @@ with tab_timeseries:
     )
 
 with tab_compare:
-    render_compare(cfg.selected_key)
+    compare.render(cfg.selected_key)
 
 with tab_stats:
     statistics.render(
@@ -126,7 +124,7 @@ with tab_stats:
     )
 
 with tab_animation:
-    render_animation()
+    animation.render()
 
 with tab_image:
-    render_image()
+    image_export.render()
