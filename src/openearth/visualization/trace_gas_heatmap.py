@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -237,6 +238,104 @@ def _bounds_are_global(
         and south <= -89
         and north >= 89
     )
+
+
+def _geo_dimensions(
+    geometry: ee.Geometry,
+    max_dim: int,
+) -> str:
+    """Compute ``"WIDTHxHEIGHT"`` preserving real-world aspect ratio.
+
+    Earth Engine's ``getThumbURL`` treats a single *dimensions*
+    value as the longest edge in the *geographic* bounding box,
+    which means 1° lon = 1° lat in pixels.  At higher latitudes
+    this stretches the image horizontally because 1° of longitude
+    is physically shorter than 1° of latitude.
+
+    This helper corrects for that by computing the real-world
+    width/height ratio (cosine correction) and returning an
+    explicit ``"WxH"`` string so EE renders undistorted output.
+    """
+    coords = geometry.bounds().coordinates().getInfo()
+    ring = coords[0]
+    lons = [p[0] for p in ring]
+    lats = [p[1] for p in ring]
+
+    west, east = min(lons), max(lons)
+    south, north = min(lats), max(lats)
+
+    mid_lat_rad = math.radians((south + north) / 2)
+    # Real-world extent in degrees, corrected
+    width_deg = (east - west) * math.cos(mid_lat_rad)
+    height_deg = north - south
+
+    if width_deg <= 0 or height_deg <= 0:
+        return str(max_dim)
+
+    aspect = width_deg / height_deg
+
+    if aspect >= 1:
+        w = max_dim
+        h = max(1, round(max_dim / aspect))
+    else:
+        h = max_dim
+        w = max(1, round(max_dim * aspect))
+
+    return f"{w}x{h}"
+
+
+def get_thumb_url(
+    image: ee.Image,
+    data_key: str,
+    geometry: ee.Geometry,
+    source: str = "s5p",
+    vis_min: float | None = None,
+    vis_max: float | None = None,
+    dimensions: int = 1024,
+    img_format: str = "png",
+) -> str:
+    """Return a thumbnail URL for *image* clipped to *geometry*.
+
+    The image is rendered server-side by Earth Engine.
+    Pixel dimensions are computed to preserve the real-world
+    aspect ratio of the ROI (cosine-corrected for latitude).
+    *img_format* must be ``"png"`` or ``"jpg"``.
+    """
+    params = get_vis_params(
+        data_key, source,
+        vis_min=vis_min, vis_max=vis_max,
+    )
+    params["region"] = geometry
+    params["dimensions"] = _geo_dimensions(
+        geometry, dimensions,
+    )
+    params["format"] = img_format
+    return image.getThumbURL(params)
+
+
+def get_download_url(
+    image: ee.Image,
+    data_key: str,
+    geometry: ee.Geometry,
+    source: str = "s5p",
+    scale: int | None = None,
+) -> str:
+    """Return a GeoTIFF download URL for *image*.
+
+    Uses a default *scale* of 1000 m for S5P and
+    100 m for S2 unless overridden.
+    """
+    cfg = _get_config(data_key, source)
+    if scale is None:
+        scale = 100 if source == "s2" else 1000
+    return image.getDownloadURL({
+        "name": f"{cfg.key}_composite",
+        "bands": [cfg.band],
+        "region": geometry,
+        "scale": scale,
+        "filePerBand": False,
+        "format": "GEO_TIFF",
+    })
 
 
 def create_heatmap_folium(
