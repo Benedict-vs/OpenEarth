@@ -310,17 +310,41 @@ def create_heatmap_folium(
     bounds: list[list[float]] | None = None,
     layer_name: str = "Heatmap",
     source: str = "s5p",
+    zoom: int | None = None,
+    center: dict | None = None,
 ) -> folium.Map:
-    """Build a folium Map with an EE tile overlay."""
+    """Build a folium Map with an EE tile overlay.
+
+    If *zoom* and/or *center* are provided (e.g. from a
+    previous ``st_folium`` interaction), they override the
+    default zoom/fit behaviour so the user's view persists.
+    """
     is_global = (
         isinstance(bounds, list)
         and len(bounds) == 2
         and _bounds_are_global(bounds)
     )
 
+    # Use saved view when available.
+    has_saved_view = (
+        zoom is not None or center is not None
+    )
+    location = (
+        [center["lat"], center["lng"]]
+        if isinstance(center, dict)
+        and "lat" in center
+        and "lng" in center
+        else [center_lat, center_lon]
+    )
+    zoom_start = (
+        zoom
+        if zoom is not None
+        else (2 if is_global else 10)
+    )
+
     fmap = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=2 if is_global else 10,
+        location=location,
+        zoom_start=zoom_start,
         tiles=None,
     )
     folium.TileLayer(
@@ -330,7 +354,8 @@ def create_heatmap_folium(
         control=True,
     ).add_to(fmap)
     if (
-        not is_global
+        not has_saved_view
+        and not is_global
         and isinstance(bounds, list)
         and len(bounds) == 2
     ):
