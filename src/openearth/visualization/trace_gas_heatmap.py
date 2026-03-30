@@ -14,9 +14,11 @@ from openearth.providers.gee_s5p import (
     get_trace_gas_collection,
 )
 from openearth.providers.s2_registry import (
+    S2IndexConfig,
     get_s2_index_config,
 )
 from openearth.providers.s5p_registry import (
+    GasConfig,
     get_gas_config,
 )
 
@@ -32,7 +34,7 @@ _ATTR = {
 }
 
 
-def _get_config(data_key: str, source: str):
+def _get_config(data_key: str, source: str) -> S2IndexConfig | GasConfig:
     """Return the registry config for *data_key*."""
     if source == "s2":
         return get_s2_index_config(data_key)

@@ -1,4 +1,4 @@
-"""Tab 1: Spatial Map -- date-slider heatmap and mean composite."""
+"""Tab 1: Spatial Map -- single heatmap with date/mean toggle."""
 
 from __future__ import annotations
 
@@ -42,7 +42,6 @@ def _scale_controls(
     data_key: str,
     source: str,
     hp: dict,
-    prefix: str,
 ) -> tuple[float | None, float | None]:
     """Render scale-adjustment controls.
 
@@ -53,8 +52,8 @@ def _scale_controls(
     scale = cfg.display_scale
     unit = cfg.display_unit
 
-    min_key = f"{prefix}_vis_min"
-    max_key = f"{prefix}_vis_max"
+    min_key = "vis_min"
+    max_key = "vis_max"
 
     # Initialise slider session state on first run.
     if min_key not in st.session_state:
@@ -69,18 +68,17 @@ def _scale_controls(
     with st.expander("Scale settings"):
         auto = st.checkbox(
             "Auto-compute from data",
-            key=f"{prefix}_auto_scale",
+            key="auto_scale",
         )
 
         # Detect toggle change
-        prev_key = f"{prefix}_prev_auto"
-        prev_auto = st.session_state.get(prev_key)
+        prev_auto = st.session_state.get(
+            "_prev_auto_scale",
+        )
         toggled = auto != prev_auto
-        st.session_state[prev_key] = auto
+        st.session_state["_prev_auto_scale"] = auto
 
         if auto and toggled:
-            # Just switched ON → compute and
-            # force sliders to the new range.
             try:
                 with st.spinner(
                     "Computing data range..."
@@ -109,13 +107,12 @@ def _scale_controls(
                     "(ROI may be too large). "
                     "Using default range."
                 )
+                st.session_state["auto_scale"] = False
                 st.session_state[
-                    f"{prefix}_auto_scale"
+                    "_prev_auto_scale"
                 ] = False
-                st.session_state[prev_key] = False
 
         if not auto and toggled:
-            # Just switched OFF → reset to defaults.
             st.session_state[min_key] = (
                 cfg.vis_min * scale
             )
@@ -183,13 +180,31 @@ def render(
         [hp["north"], hp["east"]],
     ]
 
-    # ── Date-slider heatmap ─────────────────────────
-    st.subheader("Explore by Date")
+    # ── Mode toggle ──────────────────────────────────
+    mode = st.radio(
+        "Composite type",
+        options=["Date composite", "Mean composite"],
+        horizontal=True,
+        key="heatmap_mode",
+    )
+
+    # ── Date controls (only for date mode) ───────────
+    selected_date = None
+    half_window = 0
+    window_label = ""
 
     available_dates = sorted(
         chart_df["date"].dt.date.unique(),
     )
-    if len(available_dates) >= 2:
+
+    if mode == "Date composite":
+        if len(available_dates) < 2:
+            st.info(
+                "Need at least 2 dates to "
+                "use the date composite."
+            )
+            return
+
         selected_date = cast(
             date,
             st.select_slider(
@@ -221,85 +236,45 @@ def render(
             )
         )
         st.caption(f"Showing: {window_label}")
-
-        date_vmin, date_vmax = _scale_controls(
-            data_key, source, hp,
-            prefix="date",
-        )
-
-        try:
-            with st.spinner(
-                "Loading date heatmap..."
-            ):
-                date_tile_url = (
-                    cached_date_tile_url(
-                        data_key,
-                        hp["west"],
-                        hp["south"],
-                        hp["east"],
-                        hp["north"],
-                        selected_date.isoformat(),
-                        half_window,
-                        source=source,
-                        vis_min=date_vmin,
-                        vis_max=date_vmax,
-                    )
-                )
-            date_map = create_heatmap_folium(
-                tile_url=date_tile_url,
-                center_lat=center_lat,
-                center_lon=center_lon,
-                bounds=bounds,
-                layer_name=(
-                    f"{data_key} {window_label}"
-                ),
-                source=source,
-            )
-            st_folium(
-                date_map,
-                key=(
-                    f"date_heatmap"
-                    f"_{date_vmin}_{date_vmax}"
-                ),
-                height=500,
-                width=None,
-            )
-        except ee.EEException as exc:
-            show_ee_error(
-                exc,
-                "Could not render date heatmap.",
-            )
-
-        render_color_legend(
-            data_key, source,
-            vis_min=date_vmin,
-            vis_max=date_vmax,
-        )
     else:
-        st.info(
-            "Need at least 2 dates to "
-            "use the date slider."
+        st.caption(
+            f"Composite mean of all {sat} passes "
+            f"from {hp['start_date']} to "
+            f"{hp['end_date']}"
         )
 
-    # ── Mean heatmap ────────────────────────────────
-    st.subheader("Mean Spatial Distribution")
-    st.caption(
-        f"Composite mean of all {sat} passes "
-        f"from {hp['start_date']} to "
-        f"{hp['end_date']}"
-    )
-
-    mean_vmin, mean_vmax = _scale_controls(
+    # ── Scale controls ───────────────────────────────
+    vis_min, vis_max = _scale_controls(
         data_key, source, hp,
-        prefix="mean",
     )
 
+    # ── Render heatmap ───────────────────────────────
     try:
-        with st.spinner(
-            "Loading mean heatmap..."
-        ):
-            mean_tile_url = (
-                cached_mean_tile_url(
+        if mode == "Date composite":
+            with st.spinner(
+                f"Loading {data_key} heatmap for "
+                f"{window_label}..."
+            ):
+                tile_url = cached_date_tile_url(
+                    data_key,
+                    hp["west"],
+                    hp["south"],
+                    hp["east"],
+                    hp["north"],
+                    selected_date.isoformat(),
+                    half_window,
+                    source=source,
+                    vis_min=vis_min,
+                    vis_max=vis_max,
+                )
+            layer_name = (
+                f"{data_key} {window_label}"
+            )
+        else:
+            with st.spinner(
+                f"Loading mean {data_key} heatmap..."
+            ):
+                tile_url = cached_mean_tile_url(
                     data_key,
                     hp["west"],
                     hp["south"],
@@ -308,35 +283,212 @@ def render(
                     hp["start_date"],
                     hp["end_date"],
                     source=source,
-                    vis_min=mean_vmin,
-                    vis_max=mean_vmax,
+                    vis_min=vis_min,
+                    vis_max=vis_max,
                 )
-            )
-        mean_map = create_heatmap_folium(
-            tile_url=mean_tile_url,
+            layer_name = f"Mean {data_key}"
+
+        heatmap = create_heatmap_folium(
+            tile_url=tile_url,
             center_lat=center_lat,
             center_lon=center_lon,
             bounds=bounds,
-            layer_name=f"Mean {data_key}",
+            layer_name=layer_name,
             source=source,
         )
         st_folium(
-            mean_map,
+            heatmap,
             key=(
-                f"mean_heatmap"
-                f"_{mean_vmin}_{mean_vmax}"
+                f"heatmap_{mode}"
+                f"_{vis_min}_{vis_max}"
             ),
             height=500,
             width=None,
         )
-    except Exception as exc:
+    except ee.EEException as exc:
         show_ee_error(
             exc,
-            "Could not render mean heatmap.",
+            "Could not render heatmap.",
         )
 
     render_color_legend(
         data_key, source,
-        vis_min=mean_vmin,
-        vis_max=mean_vmax,
+        vis_min=vis_min,
+        vis_max=vis_max,
     )
+
+    # ── Store current heatmap state for export ───────
+    st.session_state["current_heatmap"] = {
+        "mode": mode,
+        "selected_date": (
+            selected_date.isoformat()
+            if selected_date
+            else None
+        ),
+        "half_window": half_window,
+        "vis_min": vis_min,
+        "vis_max": vis_max,
+    }
+
+    # ── Image export ─────────────────────────────────
+    _render_image_export(hp, data_key, source)
+
+
+def _render_image_export(
+    hp: dict,
+    data_key: str,
+    source: str,
+) -> None:
+    """Render image export controls below the heatmap."""
+    import urllib.request
+
+    from app.analysis import (
+        cached_thumb_url,
+        cached_date_thumb_url,
+        cached_download_url,
+    )
+
+    hm = st.session_state.get("current_heatmap", {})
+    mode = hm.get("mode", "Mean composite")
+
+    with st.expander("Export Image"):
+        img_type = st.selectbox(
+            "Format",
+            options=["PNG", "JPEG", "GeoTIFF"],
+            key="export_format",
+        )
+
+        if img_type in ("PNG", "JPEG"):
+            dimensions = st.slider(
+                "Image size (longest edge, px)",
+                min_value=256,
+                max_value=4096,
+                value=1024,
+                step=256,
+                key="export_dimensions",
+                help=(
+                    "Controls the longest edge of "
+                    "the exported image in pixels."
+                ),
+            )
+
+            fmt_map = {"PNG": "png", "JPEG": "jpg"}
+            fmt = fmt_map[img_type]
+            mime = (
+                "image/png" if fmt == "png"
+                else "image/jpeg"
+            )
+            ext = "png" if fmt == "png" else "jpeg"
+
+            if st.button(
+                f"Generate {img_type}",
+                key=f"gen_{fmt}",
+            ):
+                try:
+                    with st.spinner(
+                        "Generating image..."
+                    ):
+                        if mode == "Date composite":
+                            thumb_url = (
+                                cached_date_thumb_url(
+                                    data_key,
+                                    hp["west"],
+                                    hp["south"],
+                                    hp["east"],
+                                    hp["north"],
+                                    hm["selected_date"],
+                                    hm["half_window"],
+                                    source=source,
+                                    vis_min=hm.get(
+                                        "vis_min",
+                                    ),
+                                    vis_max=hm.get(
+                                        "vis_max",
+                                    ),
+                                    dimensions=dimensions,
+                                    img_format=fmt,
+                                )
+                            )
+                        else:
+                            thumb_url = (
+                                cached_thumb_url(
+                                    data_key,
+                                    hp["west"],
+                                    hp["south"],
+                                    hp["east"],
+                                    hp["north"],
+                                    hp["start_date"],
+                                    hp["end_date"],
+                                    source=source,
+                                    vis_min=hm.get(
+                                        "vis_min",
+                                    ),
+                                    vis_max=hm.get(
+                                        "vis_max",
+                                    ),
+                                    dimensions=dimensions,
+                                    img_format=fmt,
+                                )
+                            )
+                        with urllib.request.urlopen(
+                            thumb_url, timeout=60,
+                        ) as resp:
+                            img_bytes = resp.read()
+
+                    st.image(
+                        img_bytes,
+                        caption=(
+                            f"{data_key} composite"
+                        ),
+                    )
+                    fname = (
+                        f"openearth_{data_key}"
+                        f"_{hp['start_date']}"
+                        f"_{hp['end_date']}"
+                        f".{ext}"
+                    )
+                    st.download_button(
+                        label=f"Download {img_type}",
+                        data=img_bytes,
+                        file_name=fname,
+                        mime=mime,
+                        key=f"dl_{fmt}",
+                    )
+                except ee.EEException as exc:
+                    show_ee_error(
+                        exc,
+                        "Could not generate image.",
+                    )
+
+        elif img_type == "GeoTIFF":
+            st.info(
+                "GeoTIFF exports the raw raster data "
+                "(single band) for use in GIS software "
+                "such as QGIS or ArcGIS."
+            )
+            if st.button(
+                "Generate GeoTIFF link",
+                key="gen_tiff",
+            ):
+                try:
+                    with st.spinner(
+                        "Preparing GeoTIFF..."
+                    ):
+                        dl_url = cached_download_url(
+                            data_key,
+                            hp["west"],
+                            hp["south"],
+                            hp["east"],
+                            hp["north"],
+                            hp["start_date"],
+                            hp["end_date"],
+                            source=source,
+                        )
+                    st.markdown(
+                        f"[Download GeoTIFF]({dl_url})"
+                    )
+                except ee.EEException as exc:
+                    show_ee_error(
+                        exc,
+                        "Could not generate GeoTIFF.",
+                    )

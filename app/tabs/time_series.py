@@ -12,7 +12,11 @@ def render(
     chart_df: pd.DataFrame,
     selected_key: str,
 ) -> None:
-    ts_cfg, ts_plot = st.columns([1, 3])
+    st.subheader(
+        f"Daily {selected_key} Time Series",
+    )
+
+    ts_cfg, ts_plot = st.columns([1, 2])
 
     with ts_cfg:
         st.markdown("**Smoothing**")
@@ -37,6 +41,7 @@ def render(
             key="ts_method",
         )
 
+        st.divider()
         st.markdown("**Series**")
         show_raw = st.checkbox(
             "Raw values", value=True,
@@ -65,9 +70,6 @@ def render(
         plot_cols.append("smoothed")
 
     with ts_plot:
-        st.subheader(
-            f"Daily {selected_key} Time Series",
-        )
         if not plot_cols:
             st.warning(
                 "Select at least one series."

@@ -87,7 +87,12 @@ def _bbox_from_geometry(
 def render_roi_draw_map(
     west: float, south: float,
     east: float, north: float,
-) -> None:
+) -> tuple[float, float, float, float] | None:
+    """Render the draw-map widget.
+
+    Returns the drawn bounding box ``(west, south, east, north)``
+    if the user has drawn a shape, otherwise *None*.
+    """
     st.subheader("Draw ROI on Map")
     center_lat, center_lon = map_center(
         west, south, east, north,
@@ -139,10 +144,10 @@ def render_roi_draw_map(
     drawn_bbox = _bbox_from_geometry(drawing_geom)
     if drawn_bbox is None:
         st.caption(
-            "Draw a rectangle or polygon, "
-            "then click `Use drawn ROI`."
+            "Draw a rectangle or polygon on the map, "
+            "then click **Use drawn ROI** in the sidebar."
         )
-        return
+        return None
 
     dw, ds, de, dn = drawn_bbox
     st.caption(
@@ -151,8 +156,4 @@ def render_roi_draw_map(
         f"E {de:.4f}, "
         f"N {dn:.4f}"
     )
-    if st.button("Use drawn ROI"):
-        st.session_state["pending_bbox"] = (
-            dw, ds, de, dn,
-        )
-        st.rerun()
+    return drawn_bbox

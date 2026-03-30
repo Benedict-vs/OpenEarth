@@ -30,18 +30,7 @@ from app.tabs import (
     spatial_map,
     time_series,
     statistics,
-    compare,
-    animation,
-    image_export,
 )
-
-# TO DO:
-# - Create information of safe limits of trace gase according to xyz
-#   and mask map according to safe/ unsafe limits
-# - create complex geometry options
-# - dont calculate everthing at once (time series, heatmap x2, etc.)
-# - images
-# - animations
 
 # ── Page config ──────────────────────────────────────
 
@@ -62,15 +51,30 @@ apply_pending_bbox()
 
 cfg = render_sidebar()
 
-# ── ROI map (always visible) ─────────────────────────
+# ── ROI map (collapsible) ─────────────────────────────
 
-render_roi_draw_map(
-    cfg.west, cfg.south, cfg.east, cfg.north,
+# Default: visible before first analysis, hidden after.
+has_results = "analysis_df" in st.session_state
+if "show_roi_map" not in st.session_state:
+    st.session_state["show_roi_map"] = not has_results
+
+st.checkbox(
+    "Show ROI map",
+    key="show_roi_map",
 )
+
+if st.session_state["show_roi_map"]:
+    drawn_bbox = render_roi_draw_map(
+        cfg.west, cfg.south, cfg.east, cfg.north,
+    )
+    st.session_state["drawn_bbox"] = drawn_bbox
+else:
+    st.session_state["drawn_bbox"] = None
 
 # ── Run analysis ─────────────────────────────────────
 
 if cfg.run:
+    st.session_state["show_roi_map"] = False
     run_analysis(cfg)
 
 # ── Guard: stop if no results yet ────────────────────
@@ -87,17 +91,11 @@ if "analysis_df" not in st.session_state:
 (
     tab_spatial,
     tab_timeseries,
-    tab_compare,
     tab_stats,
-    tab_animation,
-    tab_image,
 ) = st.tabs([
     "Spatial Map",
     "Time Series",
-    "Compare",
     "Statistics",
-    "Animation",
-    "Image",
 ])
 
 chart_df = st.session_state["analysis_df"].copy()
@@ -113,18 +111,9 @@ with tab_timeseries:
         chart_df, cfg.selected_key,
     )
 
-with tab_compare:
-    compare.render(cfg.selected_key)
-
 with tab_stats:
     statistics.render(
         chart_df,
         cfg.selected_key,
         source=cfg.source,
     )
-
-with tab_animation:
-    animation.render()
-
-with tab_image:
-    image_export.render()

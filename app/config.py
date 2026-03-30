@@ -114,6 +114,9 @@ def render_sidebar() -> SidebarConfig:
     )
 
     st.sidebar.header("ROI (Region of Interest)")
+
+    # Quick-start: load a predefined region
+    st.sidebar.caption("Quick start:")
     selected_example = st.sidebar.selectbox(
         "Example regions",
         options=list(ROI_EXAMPLES.keys()),
@@ -125,18 +128,44 @@ def render_sidebar() -> SidebarConfig:
         set_bbox(*ROI_EXAMPLES[selected_example])
         st.rerun()
 
-    st.sidebar.number_input(
-        "West (lon)", key="roi_west", format="%.4f",
-    )
-    st.sidebar.number_input(
-        "South (lat)", key="roi_south", format="%.4f",
-    )
-    st.sidebar.number_input(
-        "East (lon)", key="roi_east", format="%.4f",
-    )
-    st.sidebar.number_input(
-        "North (lat)", key="roi_north", format="%.4f",
-    )
+    # Manual coordinate inputs in 2×2 grid
+    roi_row1 = st.sidebar.columns(2)
+    with roi_row1[0]:
+        st.number_input(
+            "West (lon)", key="roi_west",
+            format="%.4f",
+            help="Longitude: -180 to 180",
+        )
+    with roi_row1[1]:
+        st.number_input(
+            "East (lon)", key="roi_east",
+            format="%.4f",
+            help="Longitude: -180 to 180",
+        )
+    roi_row2 = st.sidebar.columns(2)
+    with roi_row2[0]:
+        st.number_input(
+            "South (lat)", key="roi_south",
+            format="%.4f",
+            help="Latitude: -90 to 90",
+        )
+    with roi_row2[1]:
+        st.number_input(
+            "North (lat)", key="roi_north",
+            format="%.4f",
+            help="Latitude: -90 to 90",
+        )
+
+    # "Use drawn ROI" — reads from the draw-map widget
+    drawn_bbox = st.session_state.get("drawn_bbox")
+    if drawn_bbox is not None:
+        if st.sidebar.button("Use drawn ROI"):
+            st.session_state["pending_bbox"] = drawn_bbox
+            st.rerun()
+    else:
+        st.sidebar.caption(
+            "Or draw a region on the map above.",
+        )
 
     west = float(st.session_state["roi_west"])
     south = float(st.session_state["roi_south"])

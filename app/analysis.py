@@ -283,6 +283,34 @@ def cached_thumb_url(
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def cached_date_thumb_url(
+    data_key: str,
+    west: float, south: float,
+    east: float, north: float,
+    target_date: str,
+    half_window_days: int,
+    source: str = "s5p",
+    vis_min: float | None = None,
+    vis_max: float | None = None,
+    dimensions: int = 1024,
+    img_format: str = "png",
+) -> str:
+    """Return a thumbnail URL for a date composite."""
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_date_composite(
+        data_key, roi, target_date,
+        half_window_days,
+        source=source,
+    )
+    return get_thumb_url(
+        image, data_key, roi, source,
+        vis_min=vis_min, vis_max=vis_max,
+        dimensions=dimensions,
+        img_format=img_format,
+    )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def cached_download_url(
     data_key: str,
     west: float, south: float,
