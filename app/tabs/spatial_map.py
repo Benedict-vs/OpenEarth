@@ -281,6 +281,10 @@ def render(
                 )
             layer_name = f"Mean {data_key}"
 
+        saved_zoom = st.session_state.get("map_zoom")
+        saved_center = st.session_state.get(
+            "map_center",
+        )
         heatmap = create_heatmap_folium(
             tile_url=tile_url,
             center_lat=center_lat,
@@ -288,16 +292,24 @@ def render(
             bounds=bounds,
             layer_name=layer_name,
             source=source,
+            zoom=saved_zoom,
+            center=saved_center,
         )
-        st_folium(
+        map_state = st_folium(
             heatmap,
-            key=(
-                f"heatmap_{mode}"
-                f"_{vis_min}_{vis_max}"
-            ),
+            key="heatmap_main",
             height=500,
             width=None,
         )
+        if isinstance(map_state, dict):
+            if map_state.get("zoom") is not None:
+                st.session_state["map_zoom"] = (
+                    map_state["zoom"]
+                )
+            if map_state.get("center") is not None:
+                st.session_state["map_center"] = (
+                    map_state["center"]
+                )
     except ee.EEException as exc:
         show_ee_error(
             exc,
@@ -324,26 +336,61 @@ def render(
     }
 
     # ── Image export ─────────────────────────────────
-    _render_image_export(hp, data_key, source)
+    _render_image_export(
+        hp, data_key, source, available_dates,
+    )
+
+
+def _export_fingerprint(
+    hp: dict,
+    data_key: str,
+    source: str,
+    hm: dict,
+) -> str:
+    """Build a fingerprint to detect stale exports."""
+    return (
+        f"{data_key}|{source}"
+        f"|{hm.get('mode')}"
+        f"|{hm.get('selected_date')}"
+        f"|{hm.get('half_window')}"
+        f"|{hm.get('vis_min')}"
+        f"|{hm.get('vis_max')}"
+        f"|{hp.get('start_date')}"
+        f"|{hp.get('end_date')}"
+    )
 
 
 def _render_image_export(
     hp: dict,
     data_key: str,
     source: str,
+    available_dates: list[date] | None = None,
 ) -> None:
     """Render image export controls below the heatmap."""
+    import io
+    import itertools
     import urllib.request
+    import zipfile
 
     from app.analysis import (
         cached_thumb_url,
         cached_date_thumb_url,
         cached_download_url,
     )
-    from app.errors import show_ee_error
+    from app.config import TRACE_GASES, S2_INDICES
+    from app.errors import show_ee_error, show_image_error
 
     hm = st.session_state.get("current_heatmap", {})
     mode = hm.get("mode", "Mean composite")
+
+    # Clear stale exports when heatmap params change.
+    fp = _export_fingerprint(hp, data_key, source, hm)
+    if st.session_state.get("_export_fp") != fp:
+        st.session_state["_export_fp"] = fp
+        st.session_state.pop("export_img_bytes", None)
+        st.session_state.pop("export_img_meta", None)
+        st.session_state.pop("export_tiff_url", None)
+        st.session_state.pop("batch_results", None)
 
     with st.expander("Export Image"):
         img_type = st.selectbox(
@@ -429,30 +476,52 @@ def _render_image_export(
                         ) as resp:
                             img_bytes = resp.read()
 
-                    st.image(
-                        img_bytes,
-                        caption=(
-                            f"{data_key} composite"
-                        ),
-                    )
                     fname = (
                         f"openearth_{data_key}"
                         f"_{hp['start_date']}"
                         f"_{hp['end_date']}"
                         f".{ext}"
                     )
-                    st.download_button(
-                        label=f"Download {img_type}",
-                        data=img_bytes,
-                        file_name=fname,
-                        mime=mime,
-                        key=f"dl_{fmt}",
-                    )
-                except ee.EEException as exc:
-                    show_ee_error(
+                    st.session_state[
+                        "export_img_bytes"
+                    ] = img_bytes
+                    st.session_state[
+                        "export_img_meta"
+                    ] = {
+                        "format": img_type,
+                        "mime": mime,
+                        "fname": fname,
+                        "caption": (
+                            f"{data_key} composite"
+                        ),
+                    }
+                except Exception as exc:
+                    show_image_error(
                         exc,
                         "Could not generate image.",
                     )
+
+            # Show persisted image outside button block.
+            stored = st.session_state.get(
+                "export_img_bytes",
+            )
+            meta = st.session_state.get(
+                "export_img_meta",
+            )
+            if stored and meta:
+                st.image(
+                    stored,
+                    caption=meta["caption"],
+                )
+                st.download_button(
+                    label=(
+                        f"Download {meta['format']}"
+                    ),
+                    data=stored,
+                    file_name=meta["fname"],
+                    mime=meta["mime"],
+                    key="dl_export",
+                )
 
         elif img_type == "GeoTIFF":
             st.info(
@@ -478,11 +547,205 @@ def _render_image_export(
                             hp["end_date"],
                             source=source,
                         )
-                    st.markdown(
-                        f"[Download GeoTIFF]({dl_url})"
-                    )
-                except ee.EEException as exc:
-                    show_ee_error(
+                    st.session_state[
+                        "export_tiff_url"
+                    ] = dl_url
+                except Exception as exc:
+                    show_image_error(
                         exc,
                         "Could not generate GeoTIFF.",
                     )
+
+            # Show persisted GeoTIFF link.
+            stored_tiff = st.session_state.get(
+                "export_tiff_url",
+            )
+            if stored_tiff:
+                st.markdown(
+                    f"[Download GeoTIFF]"
+                    f"({stored_tiff})"
+                )
+
+        # ── Batch Export ──────────────────────────────
+        st.divider()
+        st.subheader("Batch Export")
+
+        variables = (
+            S2_INDICES if source == "s2"
+            else TRACE_GASES
+        )
+        batch_dates = st.multiselect(
+            "Dates",
+            options=available_dates or [],
+            default=[],
+            key="batch_dates",
+            help="Select dates to export.",
+        )
+        batch_vars = st.multiselect(
+            "Variables",
+            options=list(variables.keys()),
+            format_func=lambda k: variables[k],
+            default=[data_key],
+            key="batch_vars",
+            help="Select variables to export.",
+        )
+
+        batch_fmt = st.selectbox(
+            "Batch format",
+            options=["PNG", "JPEG"],
+            key="batch_format",
+        )
+        batch_dims = st.slider(
+            "Batch image size (longest edge, px)",
+            min_value=256,
+            max_value=4096,
+            value=1024,
+            step=256,
+            key="batch_dimensions",
+        )
+
+        b_fmt_map = {"PNG": "png", "JPEG": "jpg"}
+        b_fmt = b_fmt_map[batch_fmt]
+        b_mime = (
+            "image/png" if b_fmt == "png"
+            else "image/jpeg"
+        )
+        b_ext = "png" if b_fmt == "png" else "jpeg"
+
+        combos = list(
+            itertools.product(batch_dates, batch_vars),
+        )
+        _MAX_BATCH = 20
+        if len(combos) > _MAX_BATCH:
+            st.warning(
+                f"Batch limited to {_MAX_BATCH} "
+                f"combinations (selected {len(combos)}). "
+                "Reduce dates or variables."
+            )
+            combos = combos[:_MAX_BATCH]
+
+        can_generate = len(combos) > 0
+        if can_generate:
+            st.caption(
+                f"{len(combos)} image(s) will be "
+                "generated."
+            )
+
+        if st.button(
+            "Generate Batch",
+            key="gen_batch",
+            disabled=not can_generate,
+        ):
+            results: list[dict] = []
+            progress = st.progress(
+                0, text="Generating batch...",
+            )
+            for i, (d, var) in enumerate(combos):
+                try:
+                    thumb_url = cached_date_thumb_url(
+                        var,
+                        hp["west"],
+                        hp["south"],
+                        hp["east"],
+                        hp["north"],
+                        d.isoformat(),
+                        hm.get("half_window", 7),
+                        source=source,
+                        vis_min=(
+                            hm.get("vis_min")
+                            if var == data_key
+                            else None
+                        ),
+                        vis_max=(
+                            hm.get("vis_max")
+                            if var == data_key
+                            else None
+                        ),
+                        dimensions=batch_dims,
+                        img_format=b_fmt,
+                    )
+                    with urllib.request.urlopen(
+                        thumb_url, timeout=60,
+                    ) as resp:
+                        img_bytes = resp.read()
+                    results.append({
+                        "date": str(d),
+                        "var": var,
+                        "bytes": img_bytes,
+                        "fname": (
+                            f"openearth_{var}"
+                            f"_{d}.{b_ext}"
+                        ),
+                        "error": None,
+                    })
+                except Exception as exc:
+                    results.append({
+                        "date": str(d),
+                        "var": var,
+                        "bytes": None,
+                        "fname": None,
+                        "error": str(exc),
+                    })
+                progress.progress(
+                    (i + 1) / len(combos),
+                )
+            progress.empty()
+            st.session_state["batch_results"] = results
+
+        # Show persisted batch results.
+        batch = st.session_state.get("batch_results")
+        if batch:
+            ok = [r for r in batch if r["bytes"]]
+            fail = [r for r in batch if r["error"]]
+
+            if fail:
+                st.warning(
+                    f"{len(fail)} image(s) failed.",
+                )
+                for r in fail:
+                    st.caption(
+                        f"{r['var']} @ {r['date']}: "
+                        f"{r['error']}"
+                    )
+
+            for r in ok:
+                st.image(
+                    r["bytes"],
+                    caption=(
+                        f"{r['var']} — {r['date']}"
+                    ),
+                )
+                st.download_button(
+                    label=f"Download {r['fname']}",
+                    data=r["bytes"],
+                    file_name=r["fname"],
+                    mime=b_mime,
+                    key=(
+                        f"dl_batch"
+                        f"_{r['var']}_{r['date']}"
+                    ),
+                )
+
+            if len(ok) > 1:
+                zip_buf = io.BytesIO()
+                with zipfile.ZipFile(
+                    zip_buf, "w",
+                    zipfile.ZIP_DEFLATED,
+                ) as zf:
+                    for r in ok:
+                        zf.writestr(
+                            r["fname"], r["bytes"],
+                        )
+                zip_buf.seek(0)
+                st.download_button(
+                    "Download All (ZIP)",
+                    data=zip_buf.getvalue(),
+                    file_name=(
+                        f"openearth_batch"
+                        f"_{hp['start_date']}"
+                        f"_{hp['end_date']}"
+                        f".zip"
+                    ),
+                    mime="application/zip",
+                    key="dl_batch_zip",
+                )
