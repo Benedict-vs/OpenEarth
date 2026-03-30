@@ -281,10 +281,6 @@ def render(
                 )
             layer_name = f"Mean {data_key}"
 
-        saved_zoom = st.session_state.get("map_zoom")
-        saved_center = st.session_state.get(
-            "map_center",
-        )
         heatmap = create_heatmap_folium(
             tile_url=tile_url,
             center_lat=center_lat,
@@ -292,24 +288,16 @@ def render(
             bounds=bounds,
             layer_name=layer_name,
             source=source,
-            zoom=saved_zoom,
-            center=saved_center,
         )
-        map_state = st_folium(
+        st_folium(
             heatmap,
-            key="heatmap_main",
+            key=(
+                f"heatmap_{mode}"
+                f"_{vis_min}_{vis_max}"
+            ),
             height=500,
             width=None,
         )
-        if isinstance(map_state, dict):
-            if map_state.get("zoom") is not None:
-                st.session_state["map_zoom"] = (
-                    map_state["zoom"]
-                )
-            if map_state.get("center") is not None:
-                st.session_state["map_center"] = (
-                    map_state["center"]
-                )
     except ee.EEException as exc:
         show_ee_error(
             exc,
