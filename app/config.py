@@ -161,10 +161,11 @@ def render_sidebar() -> SidebarConfig:
     if drawn_bbox is not None:
         if st.sidebar.button("Use drawn ROI"):
             st.session_state["pending_bbox"] = drawn_bbox
+            st.session_state.pop("drawn_bbox", None)
             st.rerun()
     else:
         st.sidebar.caption(
-            "Or draw a region on the map above.",
+            "Or draw a region on the map.",
         )
 
     west = float(st.session_state["roi_west"])

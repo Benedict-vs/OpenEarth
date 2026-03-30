@@ -58,6 +58,10 @@ has_results = "analysis_df" in st.session_state
 if "show_roi_map" not in st.session_state:
     st.session_state["show_roi_map"] = not has_results
 
+# Hide map on analysis run (must happen before widget).
+if cfg.run:
+    st.session_state["show_roi_map"] = False
+
 st.checkbox(
     "Show ROI map",
     key="show_roi_map",
@@ -67,14 +71,15 @@ if st.session_state["show_roi_map"]:
     drawn_bbox = render_roi_draw_map(
         cfg.west, cfg.south, cfg.east, cfg.north,
     )
-    st.session_state["drawn_bbox"] = drawn_bbox
-else:
-    st.session_state["drawn_bbox"] = None
+    if drawn_bbox is not None:
+        prev = st.session_state.get("drawn_bbox")
+        st.session_state["drawn_bbox"] = drawn_bbox
+        if prev != drawn_bbox:
+            st.rerun()
 
 # ── Run analysis ─────────────────────────────────────
 
 if cfg.run:
-    st.session_state["show_roi_map"] = False
     run_analysis(cfg)
 
 # ── Guard: stop if no results yet ────────────────────
