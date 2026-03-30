@@ -9,18 +9,7 @@ from typing import Any
 import ee
 import folium
 
-from openearth.providers.gee_s2 import get_s2_collection
-from openearth.providers.gee_s5p import (
-    get_trace_gas_collection,
-)
-from openearth.providers.s2_registry import (
-    S2IndexConfig,
-    get_s2_index_config,
-)
-from openearth.providers.s5p_registry import (
-    GasConfig,
-    get_gas_config,
-)
+from openearth.providers import get_collection, get_config
 
 _ATTR = {
     "s5p": (
@@ -32,32 +21,6 @@ _ATTR = {
         "Copernicus Sentinel-2"
     ),
 }
-
-
-def _get_config(data_key: str, source: str) -> S2IndexConfig | GasConfig:
-    """Return the registry config for *data_key*."""
-    if source == "s2":
-        return get_s2_index_config(data_key)
-    return get_gas_config(data_key)
-
-
-def _get_collection(
-    data_key: str,
-    geometry: ee.Geometry,
-    start_date: str | date | datetime,
-    end_date: str | date | datetime,
-    source: str,
-) -> ee.ImageCollection:
-    """Return the ImageCollection for *source*."""
-    if source == "s2":
-        return get_s2_collection(
-            data_key, geometry,
-            start_date, end_date,
-        )
-    return get_trace_gas_collection(
-        data_key, geometry,
-        start_date, end_date,
-    )
 
 
 def _is_global(geometry: ee.Geometry) -> bool:
@@ -90,7 +53,7 @@ def get_vis_params(
     When *vis_min* / *vis_max* are supplied they
     override the registry defaults.
     """
-    cfg = _get_config(data_key, source)
+    cfg = get_config(data_key, source)
     return {
         "min": vis_min if vis_min is not None else cfg.vis_min,
         "max": vis_max if vis_max is not None else cfg.vis_max,
@@ -113,7 +76,7 @@ def compute_vis_range(
     clamped to the physically plausible ``valid_min`` /
     ``valid_max`` from the registry.
     """
-    cfg = _get_config(data_key, source)
+    cfg = get_config(data_key, source)
     scale = 100 if source == "s2" else 1000
 
     reducer = ee.Reducer.percentile([0.5, 99.5])
@@ -158,16 +121,16 @@ def compute_vis_range(
 
 
 def build_mean_composite(
-    gas_key: str,
+    data_key: str,
     geometry: ee.Geometry,
     start_date: str | date | datetime,
     end_date: str | date | datetime,
     source: str = "s5p",
 ) -> ee.Image:
     """Pixel-wise mean image over the full date range."""
-    cfg = _get_config(gas_key, source)
-    collection = _get_collection(
-        gas_key, geometry,
+    cfg = get_config(data_key, source)
+    collection = get_collection(
+        data_key, geometry,
         start_date, end_date, source,
     )
     image = collection.mean().select(cfg.band)
@@ -177,14 +140,14 @@ def build_mean_composite(
 
 
 def build_date_composite(
-    gas_key: str,
+    data_key: str,
     geometry: ee.Geometry,
     target_date: str | date | datetime,
     half_window_days: int = 3,
     source: str = "s5p",
 ) -> ee.Image:
     """Short-window mean composite centred on *target_date*."""
-    cfg = _get_config(gas_key, source)
+    cfg = get_config(data_key, source)
 
     if isinstance(target_date, str):
         target_date = date.fromisoformat(
@@ -200,8 +163,8 @@ def build_date_composite(
         days=half_window_days + 1,
     )
 
-    collection = _get_collection(
-        gas_key,
+    collection = get_collection(
+        data_key,
         geometry,
         window_start.isoformat(),
         window_end.isoformat(),
@@ -327,7 +290,7 @@ def get_download_url(
     Uses a default *scale* of 1000 m for S5P and
     100 m for S2 unless overridden.
     """
-    cfg = _get_config(data_key, source)
+    cfg = get_config(data_key, source)
     if scale is None:
         scale = 100 if source == "s2" else 1000
     return image.getDownloadURL({
@@ -358,8 +321,14 @@ def create_heatmap_folium(
     fmap = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=2 if is_global else 10,
-        tiles="CartoDB positron",
+        tiles=None,
     )
+    folium.TileLayer(
+        tiles="CartoDB positron",
+        name="Background map",
+        overlay=True,
+        control=True,
+    ).add_to(fmap)
     if (
         not is_global
         and isinstance(bounds, list)
@@ -373,7 +342,7 @@ def create_heatmap_folium(
         name=layer_name,
         overlay=True,
         control=True,
-        opacity=0.7,
+        opacity=0.75,
     ).add_to(fmap)
 
     if bounds and not is_global:

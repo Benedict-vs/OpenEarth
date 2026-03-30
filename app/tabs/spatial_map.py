@@ -10,10 +10,9 @@ import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
 
+from openearth.providers import get_config
 from openearth.providers.gee_session import initialize_ee
-from openearth.providers.s2_registry import get_s2_index_config
-from openearth.providers.s5p_registry import get_gas_config
-from openearth.visualization.trace_gas_heatmap import (
+from openearth.visualization.heatmap import (
     create_heatmap_folium,
 )
 
@@ -22,20 +21,14 @@ from app.analysis import (
     cached_mean_tile_url,
     cached_vis_range,
     render_color_legend,
-    show_ee_error,
 )
+from app.errors import show_ee_error
 from app.roi import map_center
 
 _SAT_LABEL = {
     "s5p": "Sentinel-5P",
     "s2": "Sentinel-2",
 }
-
-
-def _get_cfg(data_key: str, source: str):
-    if source == "s2":
-        return get_s2_index_config(data_key)
-    return get_gas_config(data_key)
 
 
 def _scale_controls(
@@ -48,7 +41,7 @@ def _scale_controls(
     Returns ``(vis_min, vis_max)`` — both *None*
     when the user keeps the default scale.
     """
-    cfg = _get_cfg(data_key, source)
+    cfg = get_config(data_key, source)
     scale = cfg.display_scale
     unit = cfg.display_unit
 
@@ -347,6 +340,7 @@ def _render_image_export(
         cached_date_thumb_url,
         cached_download_url,
     )
+    from app.errors import show_ee_error
 
     hm = st.session_state.get("current_heatmap", {})
     mode = hm.get("mode", "Mean composite")

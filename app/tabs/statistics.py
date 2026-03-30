@@ -7,17 +7,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from openearth.providers.s2_registry import (
-    get_s2_index_config,
-)
-from openearth.providers.s5p_registry import get_gas_config
-
-
-def _get_config(data_key: str, source: str):
-    """Return the registry config for *data_key*."""
-    if source == "s2":
-        return get_s2_index_config(data_key)
-    return get_gas_config(data_key)
+from openearth.providers import get_config
 
 
 def _fmt(value: float, cfg) -> str:
@@ -34,7 +24,7 @@ def render(
     source: str = "s5p",
 ) -> None:
     st.subheader("Statistics")
-    cfg = _get_config(selected_key, source)
+    cfg = get_config(selected_key, source)
 
     # ── Prepare clean series ──────────────────────
     df = chart_df.copy()

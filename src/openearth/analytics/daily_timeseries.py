@@ -10,14 +10,7 @@ import ee
 import pandas as pd
 
 from openearth.analytics.conversions import to_ee_date
-from openearth.providers.gee_s2 import get_s2_collection
-from openearth.providers.gee_s5p import (
-    get_trace_gas_collection,
-)
-from openearth.providers.s2_registry import (
-    get_s2_index_config,
-)
-from openearth.providers.s5p_registry import get_gas_config
+from openearth.providers import get_collection, get_config
 
 DEFAULT_SCALE_METERS_S5P = 11_132
 DEFAULT_SCALE_METERS_S2 = 500
@@ -32,32 +25,6 @@ _RESULT_COLUMNS = [
     "total_pixel_count",
     "coverage_fraction",
 ]
-
-
-def _get_config(data_key: str, source: str):
-    """Return the registry config for *data_key*."""
-    if source == "s2":
-        return get_s2_index_config(data_key)
-    return get_gas_config(data_key)
-
-
-def _get_collection(
-    data_key: str,
-    geometry: ee.Geometry,
-    start_date: str | date | datetime,
-    end_date: str | date | datetime,
-    source: str,
-) -> ee.ImageCollection:
-    """Return the ImageCollection for *source*."""
-    if source == "s2":
-        return get_s2_collection(
-            data_key, geometry,
-            start_date, end_date,
-        )
-    return get_trace_gas_collection(
-        data_key, geometry,
-        start_date, end_date,
-    )
 
 
 def _rows_from_fc_info(
@@ -80,7 +47,7 @@ def _rows_from_fc_info(
 
 
 def build_daily_timeseries(
-    gas_key: str,
+    data_key: str,
     geometry: ee.Geometry,
     start_date: str | date | datetime,
     end_date: str | date | datetime,
@@ -104,14 +71,14 @@ def build_daily_timeseries(
 
     Parameters
     ----------
-    gas_key:
+    data_key:
         Registry key (e.g. ``"NO2"`` for S5P,
         ``"NDVI"`` for S2).
     source:
         ``"s5p"`` for Sentinel-5P trace gases or
         ``"s2"`` for Sentinel-2 spectral indices.
     """
-    config = _get_config(gas_key, source)
+    config = get_config(data_key, source)
     band = config.band
 
     if scale_meters is None:
@@ -124,8 +91,8 @@ def build_daily_timeseries(
     start = to_ee_date(start_date)
     end = to_ee_date(end_date)
 
-    collection = _get_collection(
-        gas_key, geometry,
+    collection = get_collection(
+        data_key, geometry,
         start_date, end_date, source,
     )
 

@@ -1,23 +1,23 @@
-"""Time-series smoothing utilities for NO2 analytics."""
+"""Time-series smoothing utilities."""
 
 from __future__ import annotations
 
 import pandas as pd
 
 
-def add_rolling_no2(
+def add_rolling_smooth(
     df: pd.DataFrame,
-    value_col: str = "no2_value",
+    value_col: str = "value",
     window_days: int = 14,
     min_periods: int = 4,
     method: str = "mean",
     output_col: str | None = None,
 ) -> pd.DataFrame:
-    """Return a copy of df with a rolling-smoothed NO2 column.
+    """Return a copy of *df* with a rolling-smoothed column.
 
     Expected input includes:
-    - `date` column (datetime-like or parseable)
-    - `value_col` column with NO2 values
+    - ``date`` column (datetime-like or parseable)
+    - *value_col* column with numeric values
     """
     if "date" not in df.columns:
         raise ValueError("Input DataFrame must contain a `date` column.")

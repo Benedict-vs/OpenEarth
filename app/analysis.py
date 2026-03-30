@@ -1,4 +1,4 @@
-"""Earth Engine error handling, cached tiles, and analysis orchestration."""
+"""Cached tile helpers and analysis orchestration."""
 
 from __future__ import annotations
 
@@ -9,16 +9,13 @@ import ee
 import pandas as pd
 import streamlit as st
 
-from openearth.analytics.trace_gas_daily import (
+from openearth.analytics.daily_timeseries import (
     build_daily_timeseries,
     BATCH_SIZE,
 )
+from openearth.providers import get_config
 from openearth.providers.gee_session import initialize_ee
-from openearth.providers.s2_registry import (
-    get_s2_index_config,
-)
-from openearth.providers.s5p_registry import get_gas_config
-from openearth.visualization.trace_gas_heatmap import (
+from openearth.visualization.heatmap import (
     build_mean_composite,
     build_date_composite,
     compute_vis_range,
@@ -28,120 +25,7 @@ from openearth.visualization.trace_gas_heatmap import (
 )
 
 from app.config import SidebarConfig
-
-
-def _get_config(data_key: str, source: str):
-    """Return the registry config for *data_key*."""
-    if source == "s2":
-        return get_s2_index_config(data_key)
-    return get_gas_config(data_key)
-
-
-# ── EE error handling ─────────────────────────────────────────
-
-_AUTH_PHRASES = (
-    "not authorized",
-    "access denied",
-    "permission denied",
-    "authenticate",
-    "credentials",
-    "forbidden",
-    " 401",
-    " 403",
-)
-
-_QUOTA_PHRASES = (
-    "too many concurrent",
-    "quota exceeded",
-    "rate limit",
-    "limit exceeded",
-    " 429",
-    "user memory limit exceeded",
-)
-
-_TIMEOUT_PHRASES = (
-    "timed out",
-    "timeout",
-    "deadline exceeded",
-)
-
-_EMPTY_PHRASES = (
-    "collection is empty",
-    "no images",
-    "contains no images",
-    "empty collection",
-    "0 elements",
-    "no valid pixels",
-)
-
-
-def classify_ee_error(
-    exc: Exception,
-) -> tuple[str, str]:
-    """Classify an Earth Engine error by its message.
-
-    Returns (category, user_message) where category is
-    one of: "auth", "quota", "timeout", "empty",
-    "unknown".
-    """
-    message = str(exc).lower()
-
-    if any(p in message for p in _AUTH_PHRASES):
-        return (
-            "auth",
-            "Earth Engine authentication or "
-            "permissions failed. Check project "
-            "access and sign in again.",
-        )
-    if any(p in message for p in _QUOTA_PHRASES):
-        return (
-            "quota",
-            "Earth Engine quota or concurrency "
-            "limit reached. Try a smaller "
-            "ROI/date range or retry shortly.",
-        )
-    if any(p in message for p in _TIMEOUT_PHRASES):
-        return (
-            "timeout",
-            "Earth Engine request timed out. "
-            "Try a smaller ROI or date range.",
-        )
-    if any(p in message for p in _EMPTY_PHRASES):
-        return (
-            "empty",
-            "No satellite observations are "
-            "available for this variable, ROI, "
-            "and time window.",
-        )
-
-    return (
-        "unknown",
-        "Unexpected Earth Engine error.",
-    )
-
-
-def show_ee_error(
-    exc: Exception,
-    context: str,
-) -> None:
-    """Display an EE error with Streamlit severity."""
-    if not isinstance(exc, ee.EEException):
-        raise exc
-
-    category, user_message = classify_ee_error(exc)
-    full_message = f"{context} {user_message}"
-
-    if category == "auth":
-        st.error(full_message)
-    elif category in ("quota", "timeout"):
-        st.warning(full_message)
-    elif category == "empty":
-        st.info(full_message)
-    else:
-        st.error(full_message)
-
-    with st.expander("Error details", expanded=False):
-        st.exception(exc)
+from app.errors import show_ee_error
 
 
 # ── Color legend ──────────────────────────────────────────────
@@ -154,7 +38,7 @@ def render_color_legend(
     vis_max: float | None = None,
 ) -> None:
     """Render an HTML color bar legend."""
-    cfg = _get_config(data_key, source)
+    cfg = get_config(data_key, source)
     gradient_css = ", ".join(cfg.palette)
     raw_min = vis_min if vis_min is not None else cfg.vis_min
     raw_max = vis_max if vis_max is not None else cfg.vis_max
@@ -445,7 +329,7 @@ def run_analysis(cfg: SidebarConfig) -> None:
             st.toast("Loaded cached analysis")
             st.rerun()
 
-    data_cfg = _get_config(
+    data_cfg = get_config(
         cfg.selected_key, cfg.source,
     )
 
@@ -496,7 +380,7 @@ def run_analysis(cfg: SidebarConfig) -> None:
         while True:
             try:
                 df = build_daily_timeseries(
-                    gas_key=cfg.selected_key,
+                    data_key=cfg.selected_key,
                     geometry=roi,
                     start_date=start_date_iso,
                     end_date=end_date_iso,

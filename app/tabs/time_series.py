@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from openearth.analytics.smoothing import add_rolling_no2
+from openearth.analytics.smoothing import add_rolling_smooth
 
 
 def render(
@@ -54,7 +54,7 @@ def render(
 
     ts_df = chart_df.copy()
     if show_smooth:
-        ts_df = add_rolling_no2(
+        ts_df = add_rolling_smooth(
             ts_df,
             value_col="value",
             window_days=window_days,

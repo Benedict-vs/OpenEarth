@@ -1,1 +1,1 @@
-"""Analytics modules for atmospheric trace-gas time series and smoothing."""
+"""Analytics modules for time-series processing and smoothing."""
