@@ -189,7 +189,7 @@ def render_sidebar() -> SidebarConfig:
     )
 
     run = st.sidebar.button(
-        "Run analysis", type="primary",
+        "Load Map", type="primary",
     )
 
     return SidebarConfig(

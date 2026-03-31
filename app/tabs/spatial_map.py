@@ -7,7 +7,6 @@ from typing import cast
 
 import ee
 import folium
-import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
 
@@ -48,6 +47,19 @@ def _scale_controls(
 
     min_key = "vis_min"
     max_key = "vis_max"
+
+    # Reset sliders when the variable or source changes.
+    _scale_id = f"{data_key}|{source}"
+    if st.session_state.get("_scale_var_id") != _scale_id:
+        st.session_state["_scale_var_id"] = _scale_id
+        st.session_state[min_key] = (
+            cfg.vis_min * scale
+        )
+        st.session_state[max_key] = (
+            cfg.vis_max * scale
+        )
+        st.session_state.pop("auto_scale", None)
+        st.session_state.pop("_prev_auto_scale", None)
 
     # Initialise slider session state on first run.
     if min_key not in st.session_state:
@@ -140,7 +152,6 @@ def _scale_controls(
 
 
 def render(
-    chart_df: pd.DataFrame,
     authenticate_on_fail: bool,
 ) -> None:
     if "heatmap_params" not in st.session_state:
@@ -187,9 +198,14 @@ def render(
     half_window = 0
     window_label = ""
 
-    available_dates = sorted(
-        chart_df["date"].dt.date.unique(),
-    )
+    from datetime import timedelta as _td
+
+    _start = date.fromisoformat(hp["start_date"])
+    _end = date.fromisoformat(hp["end_date"])
+    available_dates = [
+        _start + _td(days=i)
+        for i in range((_end - _start).days)
+    ]
 
     if mode == "Date composite":
         if len(available_dates) < 2:

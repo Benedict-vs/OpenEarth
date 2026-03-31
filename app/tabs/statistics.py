@@ -19,11 +19,31 @@ def _fmt(value: float, cfg) -> str:
 
 
 def render(
-    chart_df: pd.DataFrame,
     selected_key: str,
     source: str = "s5p",
 ) -> None:
     st.subheader("Statistics")
+
+    if "analysis_df" not in st.session_state:
+        st.info(
+            "Time series data has not been "
+            "loaded yet."
+        )
+        if st.button(
+            "Load time series data",
+            key="stats_load_btn",
+        ):
+            from app.analysis import ensure_timeseries
+
+            ensure_timeseries()
+            st.rerun()
+        return
+
+    chart_df = st.session_state["analysis_df"].copy()
+    chart_df["date"] = pd.to_datetime(
+        chart_df["date"],
+    )
+
     cfg = get_config(selected_key, source)
 
     # ── Prepare clean series ──────────────────────

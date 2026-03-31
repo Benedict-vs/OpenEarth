@@ -9,11 +9,31 @@ from openearth.analytics.smoothing import add_rolling_smooth
 
 
 def render(
-    chart_df: pd.DataFrame,
     selected_key: str,
+    source: str = "s5p",
 ) -> None:
     st.subheader(
         f"Daily {selected_key} Time Series",
+    )
+
+    if "analysis_df" not in st.session_state:
+        st.info(
+            "Time series data has not been "
+            "loaded yet."
+        )
+        if st.button(
+            "Load time series data",
+            key="ts_load_btn",
+        ):
+            from app.analysis import ensure_timeseries
+
+            ensure_timeseries()
+            st.rerun()
+        return
+
+    chart_df = st.session_state["analysis_df"].copy()
+    chart_df["date"] = pd.to_datetime(
+        chart_df["date"],
     )
 
     ts_cfg, ts_plot = st.columns([1, 2])

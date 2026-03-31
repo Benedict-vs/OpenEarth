@@ -264,11 +264,15 @@ def _analysis_cache_key(
     )
 
 
-# ── Run analysis ─────────────────────────────────────────────
+# ── Session init (fast — no time series) ─────────────────────
 
 
-def run_analysis(cfg: SidebarConfig) -> None:
-    """Validate inputs, fetch data, store results."""
+def init_session(cfg: SidebarConfig) -> None:
+    """Validate inputs, init EE, set heatmap_params.
+
+    This is the fast path triggered by "Load Map".
+    It does NOT build the daily time series.
+    """
     if not cfg.project_id.strip():
         st.error("Project ID is required.")
         st.stop()
@@ -291,48 +295,6 @@ def run_analysis(cfg: SidebarConfig) -> None:
     start_date_iso = cfg.start_date.isoformat()
     end_date_iso = end_date_exclusive.isoformat()
 
-    cache_key = _analysis_cache_key(
-        data_key=cfg.selected_key,
-        start_date_iso=start_date_iso,
-        end_date_iso=end_date_iso,
-        west=cfg.west,
-        south=cfg.south,
-        east=cfg.east,
-        north=cfg.north,
-        project_id=cfg.project_id,
-        source=cfg.source,
-    )
-    analysis_cache = st.session_state.setdefault(
-        "analysis_cache", {}
-    )
-
-    cached_entry = analysis_cache.get(cache_key)
-    if isinstance(cached_entry, dict):
-        cached_df = cached_entry.get("df")
-        if isinstance(cached_df, pd.DataFrame):
-            st.session_state["analysis_df"] = (
-                cached_df.copy()
-            )
-            st.session_state["heatmap_params"] = (
-                heatmap_params(
-                    data_key=cfg.selected_key,
-                    start_date_iso=start_date_iso,
-                    end_date_iso=end_date_iso,
-                    west=cfg.west,
-                    south=cfg.south,
-                    east=cfg.east,
-                    north=cfg.north,
-                    project_id=cfg.project_id,
-                    source=cfg.source,
-                )
-            )
-            st.toast("Loaded cached analysis")
-            st.rerun()
-
-    data_cfg = get_config(
-        cfg.selected_key, cfg.source,
-    )
-
     with st.spinner("Initializing Earth Engine..."):
         try:
             initialize_ee(
@@ -346,9 +308,82 @@ def run_analysis(cfg: SidebarConfig) -> None:
             )
             st.stop()
 
+    st.session_state["heatmap_params"] = (
+        heatmap_params(
+            data_key=cfg.selected_key,
+            start_date_iso=start_date_iso,
+            end_date_iso=end_date_iso,
+            west=cfg.west,
+            south=cfg.south,
+            east=cfg.east,
+            north=cfg.north,
+            project_id=cfg.project_id,
+            source=cfg.source,
+        )
+    )
+    # Clear stale time series when params change.
+    st.session_state.pop("analysis_df", None)
+
+
+# ── Lazy time series loading ─────────────────────────────────
+
+
+def ensure_timeseries() -> None:
+    """Build the daily time series if not already cached.
+
+    Reads parameters from ``st.session_state["heatmap_params"]``.
+    """
+    hp = st.session_state.get("heatmap_params")
+    if hp is None:
+        st.error("Load the map first.")
+        st.stop()
+
+    data_key = hp["data_key"]
+    source = hp.get("source", "s5p")
+    start_date_iso = hp["start_date"]
+    end_date_iso = hp["end_date"]
+
+    cache_key = _analysis_cache_key(
+        data_key=data_key,
+        start_date_iso=start_date_iso,
+        end_date_iso=end_date_iso,
+        west=hp["west"],
+        south=hp["south"],
+        east=hp["east"],
+        north=hp["north"],
+        project_id=hp["project_id"],
+        source=source,
+    )
+    analysis_cache = st.session_state.setdefault(
+        "analysis_cache", {}
+    )
+
+    cached_entry = analysis_cache.get(cache_key)
+    if isinstance(cached_entry, dict):
+        cached_df = cached_entry.get("df")
+        if isinstance(cached_df, pd.DataFrame):
+            st.session_state["analysis_df"] = (
+                cached_df.copy()
+            )
+            st.toast("Loaded cached time series")
+            return
+
+    data_cfg = get_config(data_key, source)
+
+    try:
+        initialize_ee(
+            project_id=hp["project_id"],
+        )
+    except ee.EEException as exc:
+        show_ee_error(
+            exc,
+            "Could not initialize Earth Engine.",
+        )
+        st.stop()
+
     roi = ee.Geometry.BBox(
-        cfg.west, cfg.south,
-        cfg.east, cfg.north,
+        hp["west"], hp["south"],
+        hp["east"], hp["north"],
     )
 
     progress_bar = st.progress(
@@ -380,12 +415,12 @@ def run_analysis(cfg: SidebarConfig) -> None:
         while True:
             try:
                 df = build_daily_timeseries(
-                    data_key=cfg.selected_key,
+                    data_key=data_key,
                     geometry=roi,
                     start_date=start_date_iso,
                     end_date=end_date_iso,
                     batch_size=batch_sz,
-                    source=cfg.source,
+                    source=source,
                     progress_callback=_on_progress,
                 )
             except ee.EEException as e:
@@ -413,7 +448,7 @@ def run_analysis(cfg: SidebarConfig) -> None:
     progress_bar.empty()
 
     if df.empty:
-        if cfg.source == "s2":
+        if source == "s2":
             st.info(
                 "No clear-sky observations found. "
                 "Sentinel-2 has a ~5-day revisit and "
@@ -427,22 +462,9 @@ def run_analysis(cfg: SidebarConfig) -> None:
                 "selected variable, ROI, and "
                 "date range."
             )
-        st.stop()
+        return
 
     st.session_state["analysis_df"] = df
-    st.session_state["heatmap_params"] = (
-        heatmap_params(
-            data_key=cfg.selected_key,
-            start_date_iso=start_date_iso,
-            end_date_iso=end_date_iso,
-            west=cfg.west,
-            south=cfg.south,
-            east=cfg.east,
-            north=cfg.north,
-            project_id=cfg.project_id,
-            source=cfg.source,
-        )
-    )
 
     analysis_cache[cache_key] = {
         "df": df.copy()

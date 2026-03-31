@@ -16,7 +16,6 @@ _project_root = str(
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-import pandas as pd
 import streamlit as st
 
 from app.config import render_sidebar
@@ -25,7 +24,7 @@ from app.roi import (
     apply_pending_bbox,
     render_roi_draw_map,
 )
-from app.analysis import run_analysis
+from app.analysis import init_session
 from app.tabs import (
     spatial_map,
     time_series,
@@ -54,7 +53,7 @@ cfg = render_sidebar()
 # ── ROI map (collapsible) ─────────────────────────────
 
 # Default: visible before first analysis, hidden after.
-has_results = "analysis_df" in st.session_state
+has_results = "heatmap_params" in st.session_state
 if "show_roi_map" not in st.session_state:
     st.session_state["show_roi_map"] = not has_results
 
@@ -77,21 +76,21 @@ if st.session_state["show_roi_map"]:
         if prev != drawn_bbox:
             st.rerun()
 
-# ── Run analysis ─────────────────────────────────────
+# ── Initialize session (fast) ────────────────────────
 
 if cfg.run:
-    run_analysis(cfg)
+    init_session(cfg)
 
-# ── Guard: stop if no results yet ────────────────────
+# ── Guard: stop if map not loaded yet ────────────────
 
-if "analysis_df" not in st.session_state:
+if "heatmap_params" not in st.session_state:
     st.info(
         "Configure inputs in the sidebar "
-        "and click **Run analysis**."
+        "and click **Load Map**."
     )
     st.stop()
 
-# ── Tabs ─────────────────────────────────────────────
+# ── Tabs ──────────────────────���──────────────────────
 
 (
     tab_spatial,
@@ -103,22 +102,19 @@ if "analysis_df" not in st.session_state:
     "Statistics",
 ])
 
-chart_df = st.session_state["analysis_df"].copy()
-chart_df["date"] = pd.to_datetime(chart_df["date"])
-
 with tab_spatial:
     spatial_map.render(
-        chart_df, cfg.authenticate_on_fail,
+        cfg.authenticate_on_fail,
     )
 
 with tab_timeseries:
     time_series.render(
-        chart_df, cfg.selected_key,
+        cfg.selected_key,
+        source=cfg.source,
     )
 
 with tab_stats:
     statistics.render(
-        chart_df,
         cfg.selected_key,
         source=cfg.source,
     )
