@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date
 from typing import cast
 
@@ -29,6 +30,30 @@ _SAT_LABEL = {
     "s5p": "Sentinel-5P",
     "s2": "Sentinel-2",
 }
+
+
+def _ee_fetch_timeout(
+    dimensions: int,
+    west: float,
+    south: float,
+    east: float,
+    north: float,
+) -> int:
+    """Dynamic timeout for Earth Engine thumbnail fetch.
+
+    Scales with image dimensions and ROI area (degree²,
+    cosine-corrected for latitude).
+    """
+    mid_lat = math.radians((south + north) / 2)
+    area_deg2 = (
+        abs(east - west)
+        * math.cos(mid_lat)
+        * abs(north - south)
+    )
+    dim_factor = dimensions / 512
+    area_factor = max(1.0, area_deg2 / 25)
+    timeout = int(120 * dim_factor * area_factor)
+    return min(timeout, 600)
 
 
 def _scale_controls(
@@ -375,6 +400,7 @@ def _render_image_export(
     """Render image export controls below the heatmap."""
     import io
     import itertools
+    import traceback
     import urllib.request
     import zipfile
 
@@ -477,8 +503,15 @@ def _render_image_export(
                                     img_format=fmt,
                                 )
                             )
+                        _timeout = _ee_fetch_timeout(
+                            dimensions,
+                            hp["west"],
+                            hp["south"],
+                            hp["east"],
+                            hp["north"],
+                        )
                         with urllib.request.urlopen(
-                            thumb_url, timeout=60,
+                            thumb_url, timeout=_timeout,
                         ) as resp:
                             img_bytes = resp.read()
 
@@ -797,6 +830,9 @@ def _render_image_export(
                             "bytes": None,
                             "fname": None,
                             "error": str(exc),
+                            "traceback": (
+                                traceback.format_exc()
+                            ),
                         })
                         progress.progress(
                             (i + 1) / len(combos),
@@ -856,6 +892,9 @@ def _render_image_export(
                             "bytes": None,
                             "fname": None,
                             "error": str(exc),
+                            "traceback": (
+                                traceback.format_exc()
+                            ),
                         })
                         progress.progress(
                             (i + 1) / len(combos),
@@ -868,8 +907,15 @@ def _render_image_export(
                         continue
 
                 try:
+                    _timeout = _ee_fetch_timeout(
+                        batch_dims,
+                        hp["west"],
+                        hp["south"],
+                        hp["east"],
+                        hp["north"],
+                    )
                     with urllib.request.urlopen(
-                        thumb_url, timeout=60,
+                        thumb_url, timeout=_timeout,
                     ) as resp:
                         img_bytes = resp.read()
                     results.append({
@@ -886,6 +932,9 @@ def _render_image_export(
                         "bytes": None,
                         "fname": None,
                         "error": str(exc),
+                        "traceback": (
+                            traceback.format_exc()
+                        ),
                     })
                 progress.progress(
                     (i + 1) / len(combos),
@@ -912,6 +961,15 @@ def _render_image_export(
                         f"{r['var']} @ {r['date']}: "
                         f"{r['error']}"
                     )
+                    tb = r.get("traceback")
+                    if tb:
+                        with st.expander(
+                            "Error details",
+                            expanded=False,
+                        ):
+                            st.code(
+                                tb, language="text",
+                            )
 
             for r in ok:
                 st.image(
