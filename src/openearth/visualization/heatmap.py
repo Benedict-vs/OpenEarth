@@ -223,8 +223,8 @@ def _geo_dimensions(
     """
     coords = geometry.bounds().coordinates().getInfo()
     ring = coords[0]
-    lons = [p[0] for p in ring]
-    lats = [p[1] for p in ring]
+    lons = [float(p[0]) for p in ring]
+    lats = [float(p[1]) for p in ring]
 
     west, east = min(lons), max(lons)
     south, north = min(lats), max(lats)
@@ -234,10 +234,17 @@ def _geo_dimensions(
     width_deg = (east - west) * math.cos(mid_lat_rad)
     height_deg = north - south
 
-    if width_deg <= 0 or height_deg <= 0:
+    if (
+        width_deg <= 0
+        or height_deg <= 0
+        or not math.isfinite(width_deg)
+        or not math.isfinite(height_deg)
+    ):
         return str(max_dim)
 
     aspect = width_deg / height_deg
+    if not math.isfinite(aspect):
+        return str(max_dim)
 
     if aspect >= 1:
         w = max_dim
