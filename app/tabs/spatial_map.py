@@ -6,6 +6,7 @@ from datetime import date
 from typing import cast
 
 import ee
+import folium
 import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
@@ -281,7 +282,7 @@ def render(
                 )
             layer_name = f"Mean {data_key}"
 
-        heatmap = create_heatmap_folium(
+        base_map, fg = create_heatmap_folium(
             tile_url=tile_url,
             center_lat=center_lat,
             center_lon=center_lon,
@@ -290,14 +291,15 @@ def render(
             source=source,
         )
         st_folium(
-            heatmap,
-            key=(
-                f"heatmap_{mode}"
-                f"_{vis_min}_{vis_max}"
-            ),
+            base_map,
+            key="heatmap",
+            feature_group_to_add=fg,
+            layer_control=folium.LayerControl(),
             height=500,
             width=None,
+            returned_objects=[],
         )
+
     except ee.EEException as exc:
         show_ee_error(
             exc,
@@ -562,13 +564,82 @@ def _render_image_export(
             S2_INDICES if source == "s2"
             else TRACE_GASES
         )
-        batch_dates = st.multiselect(
-            "Dates",
-            options=available_dates or [],
-            default=[],
-            key="batch_dates",
-            help="Select dates to export.",
+
+        batch_mode = st.radio(
+            "Mode",
+            ["Single dates", "Period averages"],
+            horizontal=True,
+            key="batch_mode",
         )
+
+        if batch_mode == "Single dates":
+            batch_dates = st.multiselect(
+                "Dates",
+                options=available_dates or [],
+                default=[],
+                key="batch_dates",
+                help="Select dates to export.",
+            )
+
+        else:
+            _PERIOD_OPTIONS = {
+                "1 month": 1,
+                "2 months": 2,
+                "3 months": 3,
+                "6 months": 6,
+                "1 year": 12,
+            }
+            period_label = st.selectbox(
+                "Period length",
+                options=list(_PERIOD_OPTIONS.keys()),
+                key="batch_period_length",
+            )
+            period_months = _PERIOD_OPTIONS[period_label]
+
+            from datetime import date as _date
+
+            sidebar_start = _date.fromisoformat(
+                hp["start_date"],
+            )
+            sidebar_end = _date.fromisoformat(
+                hp["end_date"],
+            )
+            pcol1, pcol2 = st.columns(2)
+            with pcol1:
+                range_start = st.date_input(
+                    "Range start",
+                    value=sidebar_start,
+                    key="batch_range_start",
+                )
+            with pcol2:
+                range_end = st.date_input(
+                    "Range end",
+                    value=sidebar_end,
+                    key="batch_range_end",
+                )
+
+            def _period_windows(start, end, months):
+                """Generate (start, end) for each period."""
+                windows = []
+                cur = start
+                while cur < end:
+                    y = cur.year + (
+                        (cur.month - 1 + months) // 12
+                    )
+                    m = (cur.month - 1 + months) % 12 + 1
+                    nxt = cur.replace(
+                        year=y, month=m, day=1,
+                    )
+                    if nxt > end:
+                        nxt = end
+                    windows.append((cur, nxt))
+                    cur = nxt
+                return windows
+
+            period_windows = _period_windows(
+                range_start, range_end, period_months,
+            )
+
         batch_vars = st.multiselect(
             "Variables",
             options=list(variables.keys()),
@@ -600,24 +671,52 @@ def _render_image_export(
         )
         b_ext = "png" if b_fmt == "png" else "jpeg"
 
-        combos = list(
-            itertools.product(batch_dates, batch_vars),
-        )
         _MAX_BATCH = 20
-        if len(combos) > _MAX_BATCH:
-            st.warning(
-                f"Batch limited to {_MAX_BATCH} "
-                f"combinations (selected {len(combos)}). "
-                "Reduce dates or variables."
+
+        if batch_mode == "Single dates":
+            combos = list(
+                itertools.product(
+                    batch_dates, batch_vars,
+                ),
             )
-            combos = combos[:_MAX_BATCH]
+            if len(combos) > _MAX_BATCH:
+                st.warning(
+                    f"Batch limited to {_MAX_BATCH} "
+                    f"combinations "
+                    f"(selected {len(combos)}). "
+                    "Reduce dates or variables."
+                )
+                combos = combos[:_MAX_BATCH]
+        else:
+            combos = list(
+                itertools.product(
+                    period_windows, batch_vars,
+                ),
+            )
+            if len(combos) > _MAX_BATCH:
+                st.warning(
+                    f"Batch limited to {_MAX_BATCH} "
+                    f"combinations "
+                    f"(selected {len(combos)}). "
+                    "Reduce period range or variables."
+                )
+                combos = combos[:_MAX_BATCH]
 
         can_generate = len(combos) > 0
         if can_generate:
-            st.caption(
-                f"{len(combos)} image(s) will be "
-                "generated."
-            )
+            if batch_mode == "Period averages":
+                n_periods = len(period_windows)
+                st.caption(
+                    f"{n_periods} period(s) x "
+                    f"{len(batch_vars)} variable(s) = "
+                    f"{len(combos)} image(s) "
+                    "will be generated."
+                )
+            else:
+                st.caption(
+                    f"{len(combos)} image(s) will be "
+                    "generated."
+                )
 
         if st.button(
             "Generate Batch",
@@ -626,49 +725,147 @@ def _render_image_export(
         ):
             results: list[dict] = []
             progress = st.progress(
-                0, text="Generating batch...",
+                0,
+                text=(
+                    f"Generating batch "
+                    f"(0/{len(combos)})..."
+                ),
             )
-            for i, (d, var) in enumerate(combos):
-                try:
-                    thumb_url = cached_date_thumb_url(
-                        var,
-                        hp["west"],
-                        hp["south"],
-                        hp["east"],
-                        hp["north"],
-                        d.isoformat(),
-                        hm.get("half_window", 7),
-                        source=source,
-                        vis_min=(
-                            hm.get("vis_min")
-                            if var == data_key
-                            else None
+            for i, combo in enumerate(combos):
+                if batch_mode == "Single dates":
+                    d, var = combo
+                    label = str(d)
+                    progress.progress(
+                        i / len(combos),
+                        text=(
+                            f"Generating {var} @ "
+                            f"{label} "
+                            f"({i + 1}/{len(combos)})..."
                         ),
-                        vis_max=(
-                            hm.get("vis_max")
-                            if var == data_key
-                            else None
-                        ),
-                        dimensions=batch_dims,
-                        img_format=b_fmt,
                     )
+                    try:
+                        thumb_url = (
+                            cached_date_thumb_url(
+                                var,
+                                hp["west"],
+                                hp["south"],
+                                hp["east"],
+                                hp["north"],
+                                d.isoformat(),
+                                hm.get(
+                                    "half_window", 7,
+                                ),
+                                source=source,
+                                vis_min=(
+                                    hm.get("vis_min")
+                                    if var == data_key
+                                    else None
+                                ),
+                                vis_max=(
+                                    hm.get("vis_max")
+                                    if var == data_key
+                                    else None
+                                ),
+                                dimensions=batch_dims,
+                                img_format=b_fmt,
+                            )
+                        )
+                        fname = (
+                            f"openearth_{var}"
+                            f"_{d}.{b_ext}"
+                        )
+                    except Exception as exc:
+                        results.append({
+                            "date": label,
+                            "var": var,
+                            "bytes": None,
+                            "fname": None,
+                            "error": str(exc),
+                        })
+                        progress.progress(
+                            (i + 1) / len(combos),
+                            text=(
+                                f"Failed {var} @ "
+                                f"{label} "
+                                f"({i + 1}/{len(combos)})"
+                            ),
+                        )
+                        continue
+                else:
+                    (p_start, p_end), var = combo
+                    label = (
+                        f"{p_start.isoformat()} to "
+                        f"{p_end.isoformat()}"
+                    )
+                    progress.progress(
+                        i / len(combos),
+                        text=(
+                            f"Generating {var} "
+                            f"mean {label} "
+                            f"({i + 1}/{len(combos)})..."
+                        ),
+                    )
+                    try:
+                        thumb_url = cached_thumb_url(
+                            var,
+                            hp["west"],
+                            hp["south"],
+                            hp["east"],
+                            hp["north"],
+                            p_start.isoformat(),
+                            p_end.isoformat(),
+                            source=source,
+                            vis_min=(
+                                hm.get("vis_min")
+                                if var == data_key
+                                else None
+                            ),
+                            vis_max=(
+                                hm.get("vis_max")
+                                if var == data_key
+                                else None
+                            ),
+                            dimensions=batch_dims,
+                            img_format=b_fmt,
+                        )
+                        fname = (
+                            f"openearth_{var}"
+                            f"_{p_start}_{p_end}"
+                            f".{b_ext}"
+                        )
+                    except Exception as exc:
+                        results.append({
+                            "date": label,
+                            "var": var,
+                            "bytes": None,
+                            "fname": None,
+                            "error": str(exc),
+                        })
+                        progress.progress(
+                            (i + 1) / len(combos),
+                            text=(
+                                f"Failed {var} @ "
+                                f"{label} "
+                                f"({i + 1}/{len(combos)})"
+                            ),
+                        )
+                        continue
+
+                try:
                     with urllib.request.urlopen(
                         thumb_url, timeout=60,
                     ) as resp:
                         img_bytes = resp.read()
                     results.append({
-                        "date": str(d),
+                        "date": label,
                         "var": var,
                         "bytes": img_bytes,
-                        "fname": (
-                            f"openearth_{var}"
-                            f"_{d}.{b_ext}"
-                        ),
+                        "fname": fname,
                         "error": None,
                     })
                 except Exception as exc:
                     results.append({
-                        "date": str(d),
+                        "date": label,
                         "var": var,
                         "bytes": None,
                         "fname": None,
@@ -676,6 +873,10 @@ def _render_image_export(
                     })
                 progress.progress(
                     (i + 1) / len(combos),
+                    text=(
+                        f"Done {var} @ {label} "
+                        f"({i + 1}/{len(combos)})"
+                    ),
                 )
             progress.empty()
             st.session_state["batch_results"] = results
