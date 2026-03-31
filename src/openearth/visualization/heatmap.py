@@ -310,8 +310,13 @@ def create_heatmap_folium(
     bounds: list[list[float]] | None = None,
     layer_name: str = "Heatmap",
     source: str = "s5p",
-) -> folium.Map:
+) -> tuple[folium.Map, folium.FeatureGroup]:
     """Build a folium Map with an EE tile overlay.
+
+    Returns a stable base map and a dynamic FeatureGroup containing the
+    data tile layer and ROI rectangle.  The caller should pass the
+    FeatureGroup via ``st_folium(feature_group_to_add=...)`` so that
+    layer changes do not remount the component (preserving zoom/pan).
     """
     is_global = (
         isinstance(bounds, list)
@@ -337,6 +342,7 @@ def create_heatmap_folium(
     ):
         fmap.fit_bounds(bounds)
 
+    fg = folium.FeatureGroup(name=layer_name)
     folium.TileLayer(
         tiles=tile_url,
         attr=_ATTR.get(source, _ATTR["s5p"]),
@@ -344,7 +350,7 @@ def create_heatmap_folium(
         overlay=True,
         control=True,
         opacity=0.75,
-    ).add_to(fmap)
+    ).add_to(fg)
 
     if bounds and not is_global:
         folium.Rectangle(
@@ -354,7 +360,6 @@ def create_heatmap_folium(
             fill=False,
             dash_array="6",
             tooltip="Analysis ROI",
-        ).add_to(fmap)
+        ).add_to(fg)
 
-    folium.LayerControl().add_to(fmap)
-    return fmap
+    return fmap, fg
