@@ -16,6 +16,7 @@ from openearth.providers.s5p_registry import GAS_REGISTRY
 
 ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
     # Continents
+    "Entire Earth": (-180.0, -90.0, 180.0, 90.0),
     "Europe": (-25.0, 34.0, 45.0, 72.0),
     "North America": (-170.0, 15.0, -50.0, 72.0),
     "South America": (-82.0, -56.0, -34.0, 13.0),
@@ -23,7 +24,6 @@ ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
     "Asia": (25.0, -10.0, 180.0, 75.0),
     "Oceania": (110.0, -50.0, 180.0, 0.0),
     "Antarctica": (-180.0, -90.0, 180.0, -60.0),
-    "Entire Earth": (-180.0, -90.0, 180.0, 90.0),
     # Cities
     "Heidelberg (Germany)": (8.58, 49.35, 8.77, 49.46),
     "London (UK)": (-0.51, 51.28, 0.33, 51.70),
