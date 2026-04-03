@@ -97,10 +97,13 @@ def _scale_controls(
             cfg.vis_max * scale
         )
 
+    is_rgb = getattr(cfg, "is_rgb", False)
+
     with st.expander("Scale settings"):
         auto = st.checkbox(
             "Auto-compute from data",
             key="auto_scale",
+            disabled=is_rgb,
         )
 
         # Detect toggle change
@@ -416,6 +419,44 @@ def render(
             "Typical methane plumes appear as "
             "localized negative anomalies in the "
             "range \u22120.01 to \u22120.05."
+        )
+    elif data_key == "MBSP":
+        st.caption(
+            "**Reading the MBSP scale:** "
+            "The Multi-Band Single-Pass (MBSP) index "
+            "highlights methane by computing "
+            "B12 \u2212 B11 (SWIR2 minus SWIR1). "
+            "**More negative values** indicate "
+            "stronger absorption in B12 relative to "
+            "B11 \u2014 consistent with methane "
+            "absorbing in the 2190 nm SWIR2 band. "
+            "**Values near zero** suggest no "
+            "differential absorption (no plume). "
+            "**Positive values** indicate B12 is "
+            "brighter than B11 (typical of bare "
+            "soil or mineral surfaces). "
+            "Look for localized dark patches "
+            "(negative values) against a uniform "
+            "background."
+        )
+    elif data_key == "B12_B11":
+        st.caption(
+            "**Reading the B12/B11 ratio scale:** "
+            "This shows the ratio of SWIR2 (B12, "
+            "2190 nm) to SWIR1 (B11, 1610 nm) "
+            "reflectance. "
+            "**Lower ratio values** indicate that "
+            "B12 is darker relative to B11 \u2014 "
+            "consistent with methane absorption "
+            "reducing the B12 signal. "
+            "**Values near 1.0** indicate similar "
+            "reflectance in both bands (no "
+            "differential absorption). "
+            "**Values above 1.0** indicate B12 is "
+            "brighter than B11. "
+            "Methane plumes appear as localized "
+            "dips in the ratio compared to the "
+            "surrounding area."
         )
 
     # ── Store current heatmap state for export ───────

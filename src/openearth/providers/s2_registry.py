@@ -61,6 +61,7 @@ SWIR_PALETTE: list[str] = [
 ]
 
 S2_COLLECTION_ID = "COPERNICUS/S2_HARMONIZED"
+S2_SR_COLLECTION_ID = "COPERNICUS/S2_SR_HARMONIZED"
 
 
 @dataclass(frozen=True)
@@ -80,6 +81,8 @@ class S2IndexConfig:
     palette: list[str] = field(
         default_factory=lambda: list(VEGETATION_PALETTE),
     )
+    is_rgb: bool = False
+    collection_id: str | None = None
 
     @property
     def band(self) -> str:
@@ -88,6 +91,19 @@ class S2IndexConfig:
 
 
 S2_REGISTRY: dict[str, S2IndexConfig] = {
+    "RGB": S2IndexConfig(
+        key="RGB",
+        name="True Colour (B4/B3/B2)",
+        bands=["B4", "B3", "B2"],
+        expression=None,
+        vis_min=0.0,
+        vis_max=0.3,
+        valid_min=0.0,
+        valid_max=1.0,
+        display_unit="reflectance",
+        is_rgb=True,
+        collection_id=S2_SR_COLLECTION_ID,
+    ),
     "NDVI": S2IndexConfig(
         key="NDVI",
         name="Normalized Difference Vegetation Index",

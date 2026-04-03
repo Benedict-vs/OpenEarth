@@ -70,6 +70,9 @@ def _compute_index(
     Preserves ``system:time_start`` so that downstream
     ``filterDate`` calls still work.
     """
+    if getattr(config, "is_rgb", False):
+        return image.select(config.bands)
+
     if config.expression is None:
         return (
             image.select(config.bands)
@@ -97,6 +100,7 @@ def _get_s2_base_collection(
     *,
     cloud_max: int = 65,
     cloud_prob_thresh: int = DEFAULT_CLOUD_PROB_THRESH,
+    collection_id: str | None = None,
 ) -> ee.ImageCollection:
     """Return cloud-masked, reflectance-scaled S2 collection (all bands).
 
@@ -107,8 +111,9 @@ def _get_s2_base_collection(
     start = to_ee_date(start_date)
     end = to_ee_date(end_date)
 
+    cid = collection_id or S2_COLLECTION_ID
     s2 = (
-        ee.ImageCollection(S2_COLLECTION_ID)
+        ee.ImageCollection(cid)
         .filterDate(start, end)
         .filterBounds(geometry)
         .filter(
@@ -177,6 +182,9 @@ def get_s2_collection(
         geometry, start_date, end_date,
         cloud_max=cloud_max,
         cloud_prob_thresh=cloud_prob_thresh,
+        collection_id=getattr(
+            config, "collection_id", None,
+        ),
     )
     return base.map(
         lambda img: _compute_index(img, config),

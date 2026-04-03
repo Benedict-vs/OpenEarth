@@ -55,6 +55,12 @@ def get_vis_params(
     override the registry defaults.
     """
     cfg = get_config(data_key, source)
+    if getattr(cfg, "is_rgb", False):
+        return {
+            "bands": cfg.bands,
+            "min": vis_min if vis_min is not None else cfg.vis_min,
+            "max": vis_max if vis_max is not None else cfg.vis_max,
+        }
     return {
         "min": vis_min if vis_min is not None else cfg.vis_min,
         "max": vis_max if vis_max is not None else cfg.vis_max,
@@ -78,6 +84,9 @@ def compute_vis_range(
     ``valid_max`` from the registry.
     """
     cfg = get_config(data_key, source)
+    if getattr(cfg, "is_rgb", False):
+        return (cfg.vis_min, cfg.vis_max)
+
     scale = 100 if source == "s2" else 1000
 
     reducer = ee.Reducer.percentile([0.5, 99.5])
@@ -134,7 +143,10 @@ def build_mean_composite(
         data_key, geometry,
         start_date, end_date, source,
     )
-    image = collection.mean().select(cfg.band)
+    if getattr(cfg, "is_rgb", False):
+        image = collection.mean()
+    else:
+        image = collection.mean().select(cfg.band)
     if not _is_global(geometry):
         image = image.clip(geometry)
     return image
@@ -171,7 +183,10 @@ def build_date_composite(
         window_end.isoformat(),
         source,
     )
-    image = collection.mean().select(cfg.band)
+    if getattr(cfg, "is_rgb", False):
+        image = collection.mean()
+    else:
+        image = collection.mean().select(cfg.band)
     if not _is_global(geometry):
         image = image.clip(geometry)
     return image
@@ -321,9 +336,13 @@ def get_download_url(
     cfg = get_config(data_key, source)
     if scale is None:
         scale = 100 if source == "s2" else 1000
+    bands = (
+        cfg.bands if getattr(cfg, "is_rgb", False)
+        else [cfg.band]
+    )
     return image.getDownloadURL({
         "name": f"{cfg.key}_composite",
-        "bands": [cfg.band],
+        "bands": bands,
         "region": geometry,
         "scale": scale,
         "filePerBand": False,

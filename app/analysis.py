@@ -41,6 +41,9 @@ def render_color_legend(
 ) -> None:
     """Render an HTML color bar legend."""
     cfg = get_config(data_key, source)
+    if getattr(cfg, "is_rgb", False):
+        st.caption("True colour composite (B4 / B3 / B2)")
+        return
     gradient_css = ", ".join(cfg.palette)
     raw_min = vis_min if vis_min is not None else cfg.vis_min
     raw_max = vis_max if vis_max is not None else cfg.vis_max
