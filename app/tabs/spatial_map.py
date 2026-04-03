@@ -20,6 +20,7 @@ from openearth.visualization.heatmap import (
 from app.analysis import (
     cached_date_tile_url,
     cached_mean_tile_url,
+    cached_methane_anomaly_tile_url,
     cached_vis_range,
     render_color_legend,
 )
@@ -210,15 +211,28 @@ def render(
         [hp["north"], hp["east"]],
     ]
 
-    # ── Mode toggle ──────────────────────────────────
-    mode = st.radio(
-        "Composite type",
-        options=["Date composite", "Mean composite"],
-        horizontal=True,
-        key="heatmap_mode",
-    )
+    is_ch4_anomaly = data_key == "CH4_ANOMALY"
 
-    # ── Date controls (only for date mode) ───────────
+    # ── Mode toggle ──────────────────────────────────
+    if is_ch4_anomaly:
+        mode = "Anomaly"
+        st.info(
+            "Methane anomaly mode: the date range "
+            "is used as the baseline reference. "
+            "Select a target date to compare against it."
+        )
+    else:
+        mode = st.radio(
+            "Composite type",
+            options=[
+                "Date composite",
+                "Mean composite",
+            ],
+            horizontal=True,
+            key="heatmap_mode",
+        )
+
+    # ── Date controls (only for date / anomaly mode) ─
     selected_date = None
     half_window = 0
     window_label = ""
@@ -232,7 +246,7 @@ def render(
         for i in range((_end - _start).days)
     ]
 
-    if mode == "Date composite":
+    if mode in ("Date composite", "Anomaly"):
         if len(available_dates) < 2:
             st.info(
                 "Need at least 2 dates to "
@@ -243,7 +257,9 @@ def render(
         selected_date = cast(
             date,
             st.select_slider(
-                "Select date",
+                "Select target date"
+                if is_ch4_anomaly
+                else "Select date",
                 options=available_dates,
                 value=available_dates[
                     len(available_dates) // 2
@@ -270,7 +286,14 @@ def render(
                 f"+/- {half_window} days"
             )
         )
-        st.caption(f"Showing: {window_label}")
+        if is_ch4_anomaly:
+            st.caption(
+                f"Target: {window_label} — "
+                f"Reference: {hp['start_date']} "
+                f"to {hp['end_date']}"
+            )
+        else:
+            st.caption(f"Showing: {window_label}")
     else:
         st.caption(
             f"Composite mean of all {sat} passes "
@@ -285,7 +308,29 @@ def render(
 
     # ── Render heatmap ───────────────────────────────
     try:
-        if mode == "Date composite":
+        if mode == "Anomaly":
+            with st.spinner(
+                f"Computing CH₄ anomaly for "
+                f"{window_label}..."
+            ):
+                tile_url = (
+                    cached_methane_anomaly_tile_url(
+                        hp["west"],
+                        hp["south"],
+                        hp["east"],
+                        hp["north"],
+                        selected_date.isoformat(),
+                        half_window,
+                        hp["start_date"],
+                        hp["end_date"],
+                        vis_min=vis_min,
+                        vis_max=vis_max,
+                    )
+                )
+            layer_name = (
+                f"CH₄ anomaly {window_label}"
+            )
+        elif mode == "Date composite":
             with st.spinner(
                 f"Loading {data_key} heatmap for "
                 f"{window_label}..."
@@ -352,6 +397,26 @@ def render(
         vis_min=vis_min,
         vis_max=vis_max,
     )
+
+    if is_ch4_anomaly:
+        st.caption(
+            "**Reading the CH\u2084 anomaly scale:** "
+            "Values show the change in the B12/B11 "
+            "reflectance ratio relative to the "
+            "baseline period mean. "
+            "**Negative values** (blue) indicate "
+            "stronger SWIR absorption at the target "
+            "date \u2014 consistent with a methane "
+            "plume absorbing in Band 12. "
+            "**Values near zero** (white/yellow) "
+            "indicate no change from the baseline. "
+            "**Positive values** (red) indicate "
+            "higher B12/B11 ratio than the baseline "
+            "(surface change, not methane). "
+            "Typical methane plumes appear as "
+            "localized negative anomalies in the "
+            "range \u22120.01 to \u22120.05."
+        )
 
     # ── Store current heatmap state for export ───────
     st.session_state["current_heatmap"] = {

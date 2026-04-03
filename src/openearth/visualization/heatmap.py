@@ -10,6 +10,7 @@ import ee
 import folium
 
 from openearth.providers import get_collection, get_config
+from openearth.providers.gee_s2 import compute_methane_anomaly
 
 _ATTR = {
     "s5p": (
@@ -171,6 +172,26 @@ def build_date_composite(
         source,
     )
     image = collection.mean().select(cfg.band)
+    if not _is_global(geometry):
+        image = image.clip(geometry)
+    return image
+
+
+def build_methane_anomaly_composite(
+    geometry: ee.Geometry,
+    target_date: str | date | datetime,
+    half_window_days: int,
+    ref_start: str | date | datetime,
+    ref_end: str | date | datetime,
+) -> ee.Image:
+    """Methane anomaly: target B12/B11 minus reference B12/B11.
+
+    Returns a single-band ``ee.Image`` clipped to *geometry*.
+    """
+    image = compute_methane_anomaly(
+        geometry, target_date, half_window_days,
+        ref_start, ref_end,
+    )
     if not _is_global(geometry):
         image = image.clip(geometry)
     return image

@@ -18,10 +18,12 @@ from openearth.providers.gee_session import initialize_ee
 from openearth.visualization.heatmap import (
     build_mean_composite,
     build_date_composite,
+    build_methane_anomaly_composite,
     compute_vis_range,
     get_tile_url,
     get_thumb_url,
     get_download_url,
+    get_vis_params,
 )
 
 from app.config import SidebarConfig
@@ -115,6 +117,30 @@ def cached_date_tile_url(
         image, data_key, source,
         vis_min=vis_min, vis_max=vis_max,
     )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_methane_anomaly_tile_url(
+    west: float, south: float,
+    east: float, north: float,
+    target_date: str,
+    half_window_days: int,
+    ref_start: str, ref_end: str,
+    vis_min: float | None = None,
+    vis_max: float | None = None,
+) -> str:
+    """Return a tile URL for the CH4 anomaly map."""
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_methane_anomaly_composite(
+        roi, target_date, half_window_days,
+        ref_start, ref_end,
+    )
+    params = get_vis_params(
+        "CH4_ANOMALY", "s2",
+        vis_min=vis_min, vis_max=vis_max,
+    )
+    map_id_dict = image.getMapId(params)
+    return map_id_dict["tile_fetcher"].url_format
 
 
 @st.cache_data(ttl=3600, show_spinner=False)

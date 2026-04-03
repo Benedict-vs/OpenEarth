@@ -32,6 +32,20 @@ WATER_PALETTE: list[str] = [
     "#00008b",
 ]
 
+# Diverging blue → white → red palette for methane proxies.
+METHANE_PALETTE: list[str] = [
+    "#313695",
+    "#4575b4",
+    "#74add1",
+    "#abd9e9",
+    "#e0f3f8",
+    "#ffffbf",
+    "#fee090",
+    "#fdae61",
+    "#f46d43",
+    "#d73027",
+]
+
 # Grey → white reflectance palette (for raw SWIR bands).
 SWIR_PALETTE: list[str] = [
     "#000004",
@@ -133,6 +147,42 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
         valid_max=1.0,
         display_unit="reflectance",
         palette=SWIR_PALETTE,
+    ),
+    "MBSP": S2IndexConfig(
+        key="MBSP",
+        name="Multi-Band Single-Pass CH₄ proxy",
+        bands=["B12", "B11"],
+        expression="(B12 - B11) / B11",
+        vis_min=-0.5,
+        vis_max=0.1,
+        valid_min=-1.0,
+        valid_max=1.0,
+        display_unit="ratio",
+        palette=METHANE_PALETTE,
+    ),
+    "B12_B11": S2IndexConfig(
+        key="B12_B11",
+        name="SWIR Band Ratio (B12/B11, CH₄ proxy)",
+        bands=["B12", "B11"],
+        expression="B12 / B11",
+        vis_min=0.3,
+        vis_max=0.9,
+        valid_min=0.0,
+        valid_max=2.0,
+        display_unit="ratio",
+        palette=METHANE_PALETTE,
+    ),
+    "CH4_ANOMALY": S2IndexConfig(
+        key="CH4_ANOMALY",
+        name="Methane Enhancement (B12/B11 anomaly)",
+        bands=["B12", "B11"],
+        expression="B12 / B11",
+        vis_min=-0.08,
+        vis_max=0.02,
+        valid_min=-1.0,
+        valid_max=1.0,
+        display_unit="delta ratio",
+        palette=METHANE_PALETTE,
     ),
 }
 

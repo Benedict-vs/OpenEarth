@@ -39,8 +39,57 @@ ROI_EXAMPLES: dict[str, tuple[float, float, float, float]] = {
     "Barranquilla (Colombia)": (
         -74.93, 10.90, -74.70, 11.10,
     ),
+    # Methane emission sites
+    "CH4: Korpezhe, Turkmenistan": (
+        53.7, 38.2, 54.7, 38.8,
+    ),
+    "CH4: Galkynysh, Turkmenistan": (
+        61.8, 36.9, 62.9, 37.7,
+    ),
+    "CH4: Permian Basin (USA)": (
+        -104.5, 31.0, -103.0, 32.5,
+    ),
+    "CH4: Hassi Messaoud, Algeria": (
+        5.4, 31.2, 6.4, 32.0,
+    ),
+    "CH4: Basra oil fields, Iraq": (
+        46.9, 30.0, 47.8, 31.0,
+    ),
+    "CH4: Four Corners (USA)": (
+        -109.6, 36.5, -108.5, 37.5,
+    ),
+    "CH4: Upper Silesia, Poland": (
+        18.5, 50.0, 19.5, 50.5,
+    ),
 }
 DEFAULT_EXAMPLE = "Entire Earth"
+
+# Suggested date ranges for methane sites.
+# Maps ROI example name → (start, end) ISO strings.
+# These are loaded when the user picks a CH4 example.
+CH4_DATE_HINTS: dict[str, tuple[str, str]] = {
+    "CH4: Korpezhe, Turkmenistan": (
+        "2024-06-01", "2024-12-01",
+    ),
+    "CH4: Galkynysh, Turkmenistan": (
+        "2024-06-01", "2024-12-01",
+    ),
+    "CH4: Permian Basin (USA)": (
+        "2024-03-01", "2024-09-01",
+    ),
+    "CH4: Hassi Messaoud, Algeria": (
+        "2024-04-01", "2024-10-01",
+    ),
+    "CH4: Basra oil fields, Iraq": (
+        "2024-05-01", "2024-11-01",
+    ),
+    "CH4: Four Corners (USA)": (
+        "2024-03-01", "2024-09-01",
+    ),
+    "CH4: Upper Silesia, Poland": (
+        "2024-04-01", "2024-10-01",
+    ),
+}
 
 _SOURCE_LABELS = {
     "Sentinel-5P (Trace Gases)": "s5p",
@@ -126,6 +175,14 @@ def render_sidebar() -> SidebarConfig:
     )
     if st.sidebar.button("Load example ROI"):
         set_bbox(*ROI_EXAMPLES[selected_example])
+        hint = CH4_DATE_HINTS.get(selected_example)
+        if hint:
+            st.session_state["date_start"] = (
+                date.fromisoformat(hint[0])
+            )
+            st.session_state["date_end"] = (
+                date.fromisoformat(hint[1])
+            )
         st.rerun()
 
     # Manual coordinate inputs in 2×2 grid
@@ -181,11 +238,16 @@ def render_sidebar() -> SidebarConfig:
         days=default_days,
     )
     default_end = date.today() - timedelta(days=1)
+
     start_date = st.sidebar.date_input(
-        "Start date", value=default_start,
+        "Start date",
+        value=default_start,
+        key="date_start",
     )
     end_date_inclusive = st.sidebar.date_input(
-        "End date (inclusive)", value=default_end,
+        "End date (inclusive)",
+        value=default_end,
+        key="date_end",
     )
 
     run = st.sidebar.button(
