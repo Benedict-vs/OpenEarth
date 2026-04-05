@@ -165,7 +165,6 @@ def render_sidebar() -> SidebarConfig:
         format_func=lambda k: (
             f"{k} \u2013 {variables[k]}"
         ),
-        default=[list(variables.keys())[0]],
         key="variable_select",
     )
     if not selected_keys:
