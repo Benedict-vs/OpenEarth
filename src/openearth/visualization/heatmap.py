@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -410,3 +411,85 @@ def create_heatmap_folium(
         ).add_to(fg)
 
     return fmap, fg
+
+
+@dataclass
+class LayerSpec:
+    """Specification for a single tile layer on the map."""
+    tile_url: str
+    layer_name: str
+    source: str
+    opacity: float = 0.75
+
+
+def create_multilayer_heatmap_folium(
+    layers: list[LayerSpec],
+    center_lat: float,
+    center_lon: float,
+    bounds: list[list[float]] | None = None,
+) -> tuple[folium.Map, list[folium.FeatureGroup]]:
+    """Build a folium Map with multiple EE tile overlays.
+
+    Each tile layer is wrapped in its own FeatureGroup so
+    that ``st_folium``'s ``feature_group_to_add`` can
+    update them dynamically (preserving zoom/pan) while
+    Folium's LayerControl still shows individual toggles.
+
+    Returns ``(base_map, feature_groups)`` where
+    *feature_groups* is a list to pass straight to
+    ``st_folium(feature_group_to_add=...)``.
+    """
+    is_global = (
+        isinstance(bounds, list)
+        and len(bounds) == 2
+        and _bounds_are_global(bounds)
+    )
+
+    fmap = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=2 if is_global else 10,
+        tiles=None,
+    )
+    folium.TileLayer(
+        tiles="CartoDB positron",
+        name="Background map",
+        overlay=True,
+        control=True,
+    ).add_to(fmap)
+    if (
+        not is_global
+        and isinstance(bounds, list)
+        and len(bounds) == 2
+    ):
+        fmap.fit_bounds(bounds)
+
+    fgs: list[folium.FeatureGroup] = []
+    for layer in layers:
+        fg = folium.FeatureGroup(
+            name=layer.layer_name,
+        )
+        folium.TileLayer(
+            tiles=layer.tile_url,
+            attr=_ATTR.get(
+                layer.source, _ATTR["s5p"],
+            ),
+            name=layer.layer_name,
+            overlay=True,
+            control=True,
+            opacity=layer.opacity,
+        ).add_to(fg)
+        fgs.append(fg)
+
+    roi_fg = folium.FeatureGroup(name="ROI")
+    if bounds and not is_global:
+        folium.Rectangle(
+            bounds=bounds,
+            color="#333333",
+            weight=2,
+            fill=False,
+            dash_array="6",
+            tooltip="Analysis ROI",
+        ).add_to(roi_fg)
+    fgs.append(roi_fg)
+
+    return fmap, fgs

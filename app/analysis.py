@@ -246,7 +246,7 @@ def cached_download_url(
 
 
 def heatmap_params(
-    data_key: str,
+    data_keys: list[str],
     start_date_iso: str,
     end_date_iso: str,
     west: float,
@@ -257,7 +257,8 @@ def heatmap_params(
     source: str = "s5p",
 ) -> dict[str, Any]:
     return {
-        "data_key": data_key,
+        "data_key": data_keys[0],
+        "data_keys": list(data_keys),
         "start_date": start_date_iso,
         "end_date": end_date_iso,
         "west": west,
@@ -339,7 +340,7 @@ def init_session(cfg: SidebarConfig) -> None:
 
     st.session_state["heatmap_params"] = (
         heatmap_params(
-            data_key=cfg.selected_key,
+            data_keys=cfg.selected_keys,
             start_date_iso=start_date_iso,
             end_date_iso=end_date_iso,
             west=cfg.west,
@@ -350,8 +351,9 @@ def init_session(cfg: SidebarConfig) -> None:
             source=cfg.source,
         )
     )
-    # Clear stale time series when params change.
+    # Clear stale time series and map view when params change.
     st.session_state.pop("analysis_df", None)
+    st.session_state.pop("_map_view", None)
 
 
 # ── Lazy time series loading ─────────────────────────────────

@@ -14,6 +14,7 @@ from openearth.providers import get_collection, get_config
 
 DEFAULT_SCALE_METERS_S5P = 11_132
 DEFAULT_SCALE_METERS_S2 = 500
+DEFAULT_SCALE_METERS_S1 = 100
 DEFAULT_MAX_PIXELS = 1_000_000_000
 BATCH_SIZE = 10
 
@@ -82,11 +83,12 @@ def build_daily_timeseries(
     band = config.band
 
     if scale_meters is None:
-        scale_meters = (
-            DEFAULT_SCALE_METERS_S2
-            if source == "s2"
-            else DEFAULT_SCALE_METERS_S5P
-        )
+        if source == "s2":
+            scale_meters = DEFAULT_SCALE_METERS_S2
+        elif source == "s1":
+            scale_meters = DEFAULT_SCALE_METERS_S1
+        else:
+            scale_meters = DEFAULT_SCALE_METERS_S5P
 
     start = to_ee_date(start_date)
     end = to_ee_date(end_date)

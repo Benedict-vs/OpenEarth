@@ -1,4 +1,4 @@
-"""Tab 1: Spatial Map -- single heatmap with date/mean toggle."""
+"""Tab 1: Spatial Map -- multi-layer heatmap with date/mean toggle."""
 
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ from streamlit_folium import st_folium
 from openearth.providers import get_config
 from openearth.providers.gee_session import initialize_ee
 from openearth.visualization.heatmap import (
-    create_heatmap_folium,
+    LayerSpec,
+    create_multilayer_heatmap_folium,
 )
 
 from app.analysis import (
@@ -180,6 +181,105 @@ def _scale_controls(
     return (raw_min, raw_max)
 
 
+def _get_variable_caption(data_key: str) -> str | None:
+    """Return explanatory caption for special variables."""
+    if data_key == "CH4_ANOMALY":
+        return (
+            "**Reading the CH\u2084 anomaly scale:** "
+            "Values show the change in the B12/B11 "
+            "reflectance ratio relative to the "
+            "baseline period mean. "
+            "**Negative values** (blue) indicate "
+            "stronger SWIR absorption at the target "
+            "date \u2014 consistent with a methane "
+            "plume absorbing in Band 12. "
+            "**Values near zero** (white/yellow) "
+            "indicate no change from the baseline. "
+            "**Positive values** (red) indicate "
+            "higher B12/B11 ratio than the baseline "
+            "(surface change, not methane). "
+            "Typical methane plumes appear as "
+            "localized negative anomalies in the "
+            "range \u22120.01 to \u22120.05."
+        )
+    if data_key == "MBSP":
+        return (
+            "**Reading the MBSP scale:** "
+            "The Multi-Band Single-Pass (MBSP) index "
+            "highlights methane by computing "
+            "B12 \u2212 B11 (SWIR2 minus SWIR1). "
+            "**More negative values** indicate "
+            "stronger absorption in B12 relative to "
+            "B11 \u2014 consistent with methane "
+            "absorbing in the 2190 nm SWIR2 band. "
+            "**Values near zero** suggest no "
+            "differential absorption (no plume). "
+            "**Positive values** indicate B12 is "
+            "brighter than B11 (typical of bare "
+            "soil or mineral surfaces). "
+            "Look for localized dark patches "
+            "(negative values) against a uniform "
+            "background."
+        )
+    if data_key == "B12_B11":
+        return (
+            "**Reading the B12/B11 ratio scale:** "
+            "This shows the ratio of SWIR2 (B12, "
+            "2190 nm) to SWIR1 (B11, 1610 nm) "
+            "reflectance. "
+            "**Lower ratio values** indicate that "
+            "B12 is darker relative to B11 \u2014 "
+            "consistent with methane absorption "
+            "reducing the B12 signal. "
+            "**Values near 1.0** indicate similar "
+            "reflectance in both bands (no "
+            "differential absorption). "
+            "**Values above 1.0** indicate B12 is "
+            "brighter than B11. "
+            "Methane plumes appear as localized "
+            "dips in the ratio compared to the "
+            "surrounding area."
+        )
+    if data_key == "VV_VH_RATIO":
+        return (
+            "**Reading the VV/VH ratio scale:** "
+            "This shows the difference VV \u2212 VH "
+            "in dB, equivalent to the log of the "
+            "linear power ratio VV\u2097\u1d35\u2099 / "
+            "VH\u2097\u1d35\u2099. "
+            "**High values (red)** indicate VV "
+            "dominates \u2014 typical of calm water, "
+            "bare soil, or urban structures with "
+            "strong specular or double-bounce "
+            "returns. "
+            "**Low values (blue)** indicate VH is "
+            "relatively stronger \u2014 typical of "
+            "dense vegetation with significant "
+            "volume scattering. "
+            "Useful for land-cover discrimination "
+            "independent of absolute backscatter "
+            "intensity."
+        )
+    if data_key == "RVI":
+        return (
+            "**Reading the Radar Vegetation Index:** "
+            "RVI = 4 \u00b7 VH\u2097\u1d35\u2099 / "
+            "(VV\u2097\u1d35\u2099 + VH\u2097\u1d35\u2099), "
+            "where linear power is derived from the "
+            "dB backscatter. "
+            "**Values near 0** indicate bare soil, "
+            "open water, or built surfaces where "
+            "VH cross-polarisation is weak. "
+            "**Values near 1** indicate dense "
+            "vegetation canopies that strongly "
+            "depolarise the radar signal. "
+            "Unlike optical vegetation indices, "
+            "RVI is unaffected by clouds or smoke "
+            "and works in all weather conditions."
+        )
+    return None
+
+
 def render(
     authenticate_on_fail: bool,
 ) -> None:
@@ -189,6 +289,7 @@ def render(
 
     hp = st.session_state["heatmap_params"]
     data_key = hp["data_key"]
+    data_keys = hp.get("data_keys", [data_key])
     source = hp.get("source", "s5p")
     sat = _SAT_LABEL.get(source, "Sentinel-5P")
 
@@ -214,10 +315,10 @@ def render(
         [hp["north"], hp["east"]],
     ]
 
-    is_ch4_anomaly = data_key == "CH4_ANOMALY"
+    has_ch4_anomaly = "CH4_ANOMALY" in data_keys
 
     # ── Mode toggle ──────────────────────────────────
-    if is_ch4_anomaly:
+    if has_ch4_anomaly and len(data_keys) == 1:
         mode = "Anomaly"
         st.info(
             "Methane anomaly mode: the date range "
@@ -261,7 +362,7 @@ def render(
             date,
             st.select_slider(
                 "Select target date"
-                if is_ch4_anomaly
+                if mode == "Anomaly"
                 else "Select date",
                 options=available_dates,
                 value=available_dates[
@@ -289,7 +390,7 @@ def render(
                 f"+/- {half_window} days"
             )
         )
-        if is_ch4_anomaly:
+        if mode == "Anomaly":
             st.caption(
                 f"Target: {window_label} — "
                 f"Reference: {hp['start_date']} "
@@ -304,85 +405,124 @@ def render(
             f"{hp['end_date']}"
         )
 
-    # ── Scale controls ───────────────────────────────
+    # ── Scale controls (primary variable only) ───────
     vis_min, vis_max = _scale_controls(
         data_key, source, hp,
     )
 
-    # ── Render heatmap ───────────────────────────────
+    # ── Layer settings (opacity per variable) ────────
+    opacities: dict[str, float] = {}
+    if len(data_keys) > 1:
+        with st.expander("Layer settings"):
+            for dk in data_keys:
+                opacities[dk] = st.slider(
+                    f"{dk} opacity",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.75,
+                    step=0.05,
+                    key=f"opacity_{dk}",
+                )
+    else:
+        opacities[data_keys[0]] = 0.75
+
+    # ── Build tile layers ────────────────────────────
+    layer_specs: list[LayerSpec] = []
     try:
-        if mode == "Anomaly":
-            with st.spinner(
-                f"Computing CH₄ anomaly for "
-                f"{window_label}..."
-            ):
-                tile_url = (
-                    cached_methane_anomaly_tile_url(
+        for dk in data_keys:
+            # Primary variable uses custom scale;
+            # others use registry defaults.
+            dk_vis_min = (
+                vis_min if dk == data_key else None
+            )
+            dk_vis_max = (
+                vis_max if dk == data_key else None
+            )
+
+            if dk == "CH4_ANOMALY":
+                if selected_date is None:
+                    st.caption(
+                        "CH\u2084 anomaly requires a "
+                        "target date — skipped in "
+                        "mean composite mode."
+                    )
+                    continue
+                with st.spinner(
+                    f"Computing CH\u2084 anomaly for "
+                    f"{window_label}..."
+                ):
+                    tile_url = (
+                        cached_methane_anomaly_tile_url(
+                            hp["west"],
+                            hp["south"],
+                            hp["east"],
+                            hp["north"],
+                            selected_date.isoformat(),
+                            half_window,
+                            hp["start_date"],
+                            hp["end_date"],
+                            vis_min=dk_vis_min,
+                            vis_max=dk_vis_max,
+                        )
+                    )
+                layer_name = (
+                    f"CH\u2084 anomaly {window_label}"
+                )
+            elif mode == "Date composite":
+                with st.spinner(
+                    f"Loading {dk} heatmap for "
+                    f"{window_label}..."
+                ):
+                    tile_url = cached_date_tile_url(
+                        dk,
                         hp["west"],
                         hp["south"],
                         hp["east"],
                         hp["north"],
                         selected_date.isoformat(),
                         half_window,
+                        source=source,
+                        vis_min=dk_vis_min,
+                        vis_max=dk_vis_max,
+                    )
+                layer_name = (
+                    f"{dk} {window_label}"
+                )
+            else:
+                with st.spinner(
+                    f"Loading mean {dk} heatmap..."
+                ):
+                    tile_url = cached_mean_tile_url(
+                        dk,
+                        hp["west"],
+                        hp["south"],
+                        hp["east"],
+                        hp["north"],
                         hp["start_date"],
                         hp["end_date"],
-                        vis_min=vis_min,
-                        vis_max=vis_max,
+                        source=source,
+                        vis_min=dk_vis_min,
+                        vis_max=dk_vis_max,
                     )
-                )
-            layer_name = (
-                f"CH₄ anomaly {window_label}"
-            )
-        elif mode == "Date composite":
-            with st.spinner(
-                f"Loading {data_key} heatmap for "
-                f"{window_label}..."
-            ):
-                tile_url = cached_date_tile_url(
-                    data_key,
-                    hp["west"],
-                    hp["south"],
-                    hp["east"],
-                    hp["north"],
-                    selected_date.isoformat(),
-                    half_window,
-                    source=source,
-                    vis_min=vis_min,
-                    vis_max=vis_max,
-                )
-            layer_name = (
-                f"{data_key} {window_label}"
-            )
-        else:
-            with st.spinner(
-                f"Loading mean {data_key} heatmap..."
-            ):
-                tile_url = cached_mean_tile_url(
-                    data_key,
-                    hp["west"],
-                    hp["south"],
-                    hp["east"],
-                    hp["north"],
-                    hp["start_date"],
-                    hp["end_date"],
-                    source=source,
-                    vis_min=vis_min,
-                    vis_max=vis_max,
-                )
-            layer_name = f"Mean {data_key}"
+                layer_name = f"Mean {dk}"
 
-        base_map, fg = create_heatmap_folium(
-            tile_url=tile_url,
+            layer_specs.append(LayerSpec(
+                tile_url=tile_url,
+                layer_name=layer_name,
+                source=source,
+                opacity=opacities.get(dk, 0.75),
+            ))
+
+        base_map, fgs = create_multilayer_heatmap_folium(
+            layers=layer_specs,
             center_lat=center_lat,
             center_lon=center_lon,
             bounds=bounds,
-            layer_name=layer_name,
-            source=source,
         )
         st_folium(
             base_map,
             key="heatmap",
-            feature_group_to_add=fg,
+            feature_group_to_add=fgs,
             layer_control=folium.LayerControl(),
             height=500,
             width=None,
@@ -395,69 +535,24 @@ def render(
             "Could not render heatmap.",
         )
 
-    render_color_legend(
-        data_key, source,
-        vis_min=vis_min,
-        vis_max=vis_max,
-    )
-
-    if is_ch4_anomaly:
-        st.caption(
-            "**Reading the CH\u2084 anomaly scale:** "
-            "Values show the change in the B12/B11 "
-            "reflectance ratio relative to the "
-            "baseline period mean. "
-            "**Negative values** (blue) indicate "
-            "stronger SWIR absorption at the target "
-            "date \u2014 consistent with a methane "
-            "plume absorbing in Band 12. "
-            "**Values near zero** (white/yellow) "
-            "indicate no change from the baseline. "
-            "**Positive values** (red) indicate "
-            "higher B12/B11 ratio than the baseline "
-            "(surface change, not methane). "
-            "Typical methane plumes appear as "
-            "localized negative anomalies in the "
-            "range \u22120.01 to \u22120.05."
+    # ── Color legends (one per variable) ─────────────
+    for dk in data_keys:
+        dk_vis_min = (
+            vis_min if dk == data_key else None
         )
-    elif data_key == "MBSP":
-        st.caption(
-            "**Reading the MBSP scale:** "
-            "The Multi-Band Single-Pass (MBSP) index "
-            "highlights methane by computing "
-            "B12 \u2212 B11 (SWIR2 minus SWIR1). "
-            "**More negative values** indicate "
-            "stronger absorption in B12 relative to "
-            "B11 \u2014 consistent with methane "
-            "absorbing in the 2190 nm SWIR2 band. "
-            "**Values near zero** suggest no "
-            "differential absorption (no plume). "
-            "**Positive values** indicate B12 is "
-            "brighter than B11 (typical of bare "
-            "soil or mineral surfaces). "
-            "Look for localized dark patches "
-            "(negative values) against a uniform "
-            "background."
+        dk_vis_max = (
+            vis_max if dk == data_key else None
         )
-    elif data_key == "B12_B11":
-        st.caption(
-            "**Reading the B12/B11 ratio scale:** "
-            "This shows the ratio of SWIR2 (B12, "
-            "2190 nm) to SWIR1 (B11, 1610 nm) "
-            "reflectance. "
-            "**Lower ratio values** indicate that "
-            "B12 is darker relative to B11 \u2014 "
-            "consistent with methane absorption "
-            "reducing the B12 signal. "
-            "**Values near 1.0** indicate similar "
-            "reflectance in both bands (no "
-            "differential absorption). "
-            "**Values above 1.0** indicate B12 is "
-            "brighter than B11. "
-            "Methane plumes appear as localized "
-            "dips in the ratio compared to the "
-            "surrounding area."
+        if len(data_keys) > 1:
+            st.caption(f"**{dk}**")
+        render_color_legend(
+            dk, source,
+            vis_min=dk_vis_min,
+            vis_max=dk_vis_max,
         )
+        caption = _get_variable_caption(dk)
+        if caption:
+            st.caption(caption)
 
     # ── Store current heatmap state for export ───────
     st.session_state["current_heatmap"] = {

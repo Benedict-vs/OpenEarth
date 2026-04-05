@@ -8,6 +8,7 @@ from datetime import date, timedelta
 
 import streamlit as st
 
+from openearth.providers.s1_registry import S1_REGISTRY
 from openearth.providers.s2_registry import S2_REGISTRY
 from openearth.providers.s5p_registry import GAS_REGISTRY
 
@@ -94,6 +95,7 @@ CH4_DATE_HINTS: dict[str, tuple[str, str]] = {
 _SOURCE_LABELS = {
     "Sentinel-5P (Trace Gases)": "s5p",
     "Sentinel-2 (Spectral Indices)": "s2",
+    "Sentinel-1 (SAR)": "s1",
 }
 
 TRACE_GASES: dict[str, str] = {
@@ -101,6 +103,9 @@ TRACE_GASES: dict[str, str] = {
 }
 S2_INDICES: dict[str, str] = {
     k: cfg.name for k, cfg in S2_REGISTRY.items()
+}
+S1_VARIABLES: dict[str, str] = {
+    k: cfg.name for k, cfg in S1_REGISTRY.items()
 }
 
 
@@ -111,7 +116,7 @@ class SidebarConfig:
     project_id: str
     authenticate_on_fail: bool
     source: str
-    selected_key: str
+    selected_keys: list[str]
     west: float
     south: float
     east: float
@@ -149,18 +154,23 @@ def render_sidebar() -> SidebarConfig:
 
     if source == "s2":
         variables = S2_INDICES
+    elif source == "s1":
+        variables = S1_VARIABLES
     else:
         variables = TRACE_GASES
 
-    selected_key = st.sidebar.selectbox(
-        "Variable",
+    selected_keys = st.sidebar.multiselect(
+        "Variables",
         options=list(variables.keys()),
         format_func=lambda k: (
             f"{k} \u2013 {variables[k]}"
         ),
-        index=0,
+        default=[list(variables.keys())[0]],
         key="variable_select",
     )
+    if not selected_keys:
+        st.sidebar.warning("Select at least one variable.")
+        selected_keys = [list(variables.keys())[0]]
 
     st.sidebar.header("ROI (Region of Interest)")
 
@@ -231,9 +241,9 @@ def render_sidebar() -> SidebarConfig:
     north = float(st.session_state["roi_north"])
 
     st.sidebar.header("Time Range")
-    # S2 is much heavier per query (10 m resolution,
-    # cloud-prob join) so default to 90 days.
-    default_days = 90 if source == "s2" else 365
+    # S2 and S1 are heavier per query (high resolution) so default to
+    # 90 days; S5P covers the full atmosphere so 365 days is fine.
+    default_days = 90 if source in ("s2", "s1") else 365
     default_start = date.today() - timedelta(
         days=default_days,
     )
@@ -258,7 +268,7 @@ def render_sidebar() -> SidebarConfig:
         project_id=project_id,
         authenticate_on_fail=authenticate_on_fail,
         source=source,
-        selected_key=selected_key,
+        selected_keys=selected_keys,
         west=west,
         south=south,
         east=east,
