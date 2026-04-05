@@ -109,29 +109,22 @@ def _render_satellite_info(source: str) -> None:
     if info is None:
         return
 
+    cloud_tag = " · ☁️ Cloud-penetrating (SAR)" if info["cloud_penetration"] else ""
     with st.expander(
         f"About {info['full_name']}",
         expanded=True,
     ):
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Revisit interval", info["revisit"])
-        col2.metric("Ground resolution", info["resolution"].split(" · ")[0])
-        col3.metric("Swath width", info["swath"])
-        col4.metric("Orbit altitude", info["orbit_altitude"])
-
+        st.markdown(
+            f"| Revisit interval | Ground resolution | Swath width | Orbit altitude |\n"
+            f"|---|---|---|---|\n"
+            f"| {info['revisit']} | {info['resolution']} | {info['swath']} | {info['orbit_altitude']} |"
+        )
         st.caption(
             f"**Sensor:** {info['sensor']}  ·  "
             f"**Launched:** {info['launched']}  ·  "
             f"**Agency:** {info['agency']}"
-            + (
-                "  ·  ☁️ **Cloud-penetrating (SAR)**"
-                if info["cloud_penetration"]
-                else ""
-            )
+            f"{cloud_tag}"
         )
-        if len(info["resolution"].split(" · ")) > 1:
-            st.caption(f"**Full resolution detail:** {info['resolution']}")
-
         st.markdown(f"**Key applications:** {info['applications']}")
         st.caption(info["notes"])
 
