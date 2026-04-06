@@ -207,7 +207,8 @@ def _get_variable_caption(data_key: str) -> str | None:
             "**Reading the MBSP scale:** "
             "The Multi-Band Single-Pass (MBSP) index "
             "highlights methane by computing "
-            "B12 \u2212 B11 (SWIR2 minus SWIR1). "
+            "(B12 \u2212 B11) / B11, a normalized "
+            "SWIR difference. "
             "**More negative values** indicate "
             "stronger absorption in B12 relative to "
             "B11 \u2014 consistent with methane "
@@ -247,15 +248,18 @@ def _get_variable_caption(data_key: str) -> str | None:
             "in dB, equivalent to the log of the "
             "linear power ratio VV\u2097\u1d35\u2099 / "
             "VH\u2097\u1d35\u2099. "
-            "**High values (red)** indicate VV "
-            "dominates \u2014 typical of calm water, "
-            "bare soil, or urban structures with "
-            "strong specular or double-bounce "
-            "returns. "
-            "**Low values (blue)** indicate VH is "
-            "relatively stronger \u2014 typical of "
-            "dense vegetation with significant "
-            "volume scattering. "
+            "**High values (red, 10\u201315 dB)** "
+            "indicate VV dominates \u2014 typical of "
+            "calm water, bare soil, or urban "
+            "structures with strong specular or "
+            "double-bounce returns. "
+            "**Mid-range values (5\u201310 dB)** are "
+            "typical of cropland and mixed "
+            "land cover. "
+            "**Low values (blue, near 0 dB)** "
+            "indicate strong depolarisation "
+            "\u2014 typical of dense vegetation "
+            "with significant volume scattering. "
             "Useful for land-cover discrimination "
             "independent of absolute backscatter "
             "intensity."
@@ -276,6 +280,91 @@ def _get_variable_caption(data_key: str) -> str | None:
             "Unlike optical vegetation indices, "
             "RVI is unaffected by clouds or smoke "
             "and works in all weather conditions."
+        )
+    if data_key == "NDVI":
+        return (
+            "**Reading the NDVI scale:** "
+            "NDVI measures vegetation greenness "
+            "using (NIR \u2212 Red) / (NIR + Red). "
+            "**Negative values** (red/brown) "
+            "indicate water, bare soil, or built "
+            "surfaces. "
+            "**Values near 0** indicate sparse "
+            "vegetation or dry ground. "
+            "**Values 0.2\u20130.5** indicate shrubs, "
+            "grass, or crops. "
+            "**Values above 0.6** indicate dense, "
+            "healthy vegetation such as forests."
+        )
+    if data_key == "NDWI":
+        return (
+            "**Reading the NDWI scale:** "
+            "NDWI highlights water using "
+            "(Green \u2212 NIR) / (Green + NIR). "
+            "**Positive values** (blue) indicate "
+            "open water surfaces. "
+            "**Values near 0** indicate moist soil "
+            "or the water\u2013land boundary. "
+            "**Negative values** (brown) indicate "
+            "dry land, vegetation, or built "
+            "surfaces."
+        )
+    if data_key == "EVI":
+        return (
+            "**Reading the EVI scale:** "
+            "EVI is an enhanced vegetation index "
+            "that corrects for atmospheric and "
+            "soil background effects. "
+            "**Negative values** indicate water "
+            "or bare surfaces. "
+            "**Values 0.1\u20130.3** indicate sparse "
+            "vegetation or cropland. "
+            "**Values 0.3\u20130.6** indicate moderate "
+            "vegetation cover. "
+            "**Values above 0.6** indicate dense "
+            "tropical or temperate forests."
+        )
+    if data_key == "VV":
+        return (
+            "**Reading the VV backscatter scale:** "
+            "VV co-polarized radar backscatter "
+            "in dB. "
+            "**High values (bright)** near 0 dB "
+            "indicate strong returns from urban "
+            "areas, rough water, or steep terrain. "
+            "**Mid-range values** (\u221215 to "
+            "\u22125 dB) are typical of vegetated "
+            "land and cropland. "
+            "**Low values (dark)** below \u221220 dB "
+            "indicate calm water, smooth surfaces, "
+            "or radar shadow."
+        )
+    if data_key == "VH":
+        return (
+            "**Reading the VH backscatter scale:** "
+            "VH cross-polarized radar backscatter "
+            "in dB. "
+            "**Higher values (brighter)** indicate "
+            "strong volume scattering from dense "
+            "vegetation canopies or rough terrain. "
+            "**Mid-range values** (\u221220 to "
+            "\u221210 dB) are typical of crops and "
+            "mixed land cover. "
+            "**Low values (dark)** below \u221225 dB "
+            "indicate smooth surfaces such as "
+            "calm water, bare soil, or urban areas "
+            "with minimal cross-pol return."
+        )
+    if data_key.startswith("B") and data_key.lstrip("B").replace("A", "").isdigit():
+        cfg = get_config(data_key, "s2")
+        return (
+            f"**Reading the {cfg.name.split(' \u2014 ')[0]} "
+            f"scale:** "
+            f"{cfg.name} measures surface "
+            "reflectance. Higher values (brighter) "
+            "indicate stronger reflection at this "
+            "wavelength; lower values (darker) "
+            "indicate absorption or low return."
         )
     return None
 
@@ -610,7 +699,7 @@ def _render_image_export(
         cached_date_thumb_url,
         cached_download_url,
     )
-    from app.config import TRACE_GASES, S2_INDICES
+    from app.config import TRACE_GASES, S2_INDICES, S1_VARIABLES
     from app.errors import show_ee_error, show_image_error
 
     hm = st.session_state.get("current_heatmap", {})
@@ -810,10 +899,12 @@ def _render_image_export(
         st.divider()
         st.subheader("Batch Export")
 
-        variables = (
-            S2_INDICES if source == "s2"
-            else TRACE_GASES
-        )
+        if source == "s2":
+            variables = S2_INDICES
+        elif source == "s1":
+            variables = S1_VARIABLES
+        else:
+            variables = TRACE_GASES
 
         batch_mode = st.radio(
             "Mode",
