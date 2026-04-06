@@ -700,7 +700,7 @@ def _render_image_export(
         cached_download_url,
     )
     from app.config import TRACE_GASES, S2_INDICES, S1_VARIABLES
-    from app.errors import show_ee_error, show_image_error
+    from app.errors import show_image_error
 
     hm = st.session_state.get("current_heatmap", {})
     mode = hm.get("mode", "Mean composite")
