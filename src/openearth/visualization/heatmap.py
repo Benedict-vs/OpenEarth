@@ -131,6 +131,52 @@ def compute_vis_range(
     return (clamped_min, clamped_max)
 
 
+def compute_anomaly_vis_range(
+    image: ee.Image,
+    band: str = "CH4_ANOMALY",
+    geometry: ee.Geometry | None = None,
+) -> tuple[float, float]:
+    """Compute a median-centred vis range for an anomaly image.
+
+    Centres the colour ramp on the image **median** so the
+    uniform background appears neutral.  The range extends
+    symmetrically to whichever of (median − p2) or (p98 −
+    median) is larger, with 10 % headroom.
+
+    Returns ``(vis_min, vis_max)`` ready for ``getMapId``.
+    Falls back to the registry defaults on failure.
+    """
+    reducer = (
+        ee.Reducer.percentile([2, 50, 98])
+    )
+    kwargs: dict[str, Any] = {
+        "reducer": reducer,
+        "scale": 100,
+        "bestEffort": True,
+        "maxPixels": 1e8,
+    }
+    if geometry is not None:
+        kwargs["geometry"] = geometry
+
+    stats = image.reduceRegion(**kwargs).getInfo()
+
+    p02 = stats.get(f"{band}_p2")
+    median = stats.get(f"{band}_p50")
+    p98 = stats.get(f"{band}_p98")
+
+    if p02 is None or median is None or p98 is None:
+        cfg = get_config("CH4_ANOMALY", "s2")
+        return (cfg.vis_min, cfg.vis_max)
+
+    p02, median, p98 = float(p02), float(median), float(p98)
+
+    # Symmetric extent around the median.
+    half = max(median - p02, p98 - median, 0.005)
+    half *= 1.10  # 10 % headroom
+
+    return (median - half, median + half)
+
+
 def build_mean_composite(
     data_key: str,
     geometry: ee.Geometry,
