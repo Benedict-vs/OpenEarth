@@ -412,6 +412,7 @@ def _render_methane_map(
     ndwi_thresh = hp.get("methane_ndwi_threshold", 0.0)
 
     has_ch4_anomaly = "CH4_ANOMALY" in data_keys
+    show_rgb = hp.get("methane_show_rgb", False)
 
     # ── Mode toggle ──────────────────────────────────
     if has_ch4_anomaly and len(data_keys) == 1:
@@ -504,7 +505,8 @@ def _render_methane_map(
 
     # ── Layer settings (opacity per variable) ────────
     opacities: dict[str, float] = {}
-    if len(data_keys) > 1:
+    show_opacity_expander = len(data_keys) > 1 or show_rgb
+    if show_opacity_expander:
         with st.expander("Layer settings"):
             for dk in data_keys:
                 src = _resolve_source(dk, "methane")
@@ -520,11 +522,21 @@ def _render_methane_map(
                     step=0.05,
                     key=f"opacity_{dk}",
                 )
+            if show_rgb:
+                opacities["RGB"] = st.slider(
+                    "RGB (S2) opacity",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.6,
+                    step=0.05,
+                    key="opacity_RGB",
+                )
     else:
         opacities[data_keys[0]] = 0.75
 
     # ── Build tile layers ────────────────────────────
     layer_specs: list[LayerSpec] = []
+    _anomaly_vis: tuple[float, float] | None = None
     try:
         for dk in data_keys:
             src = _resolve_source(dk, "methane")
@@ -539,9 +551,10 @@ def _render_methane_map(
                     continue
                 with st.spinner(
                     f"Computing CH\u2084 anomaly for "
-                    f"{window_label}..."
+                    f"{window_label} "
+                    f"(auto-scaling to image)..."
                 ):
-                    tile_url = (
+                    tile_url, anom_vmin, anom_vmax = (
                         cached_methane_anomaly_tile_url(
                             hp["west"],
                             hp["south"],
@@ -553,6 +566,8 @@ def _render_methane_map(
                             hp["end_date"],
                         )
                     )
+                    # Store for legend rendering.
+                    _anomaly_vis = (anom_vmin, anom_vmax)
                 layer_name = (
                     f"CH\u2084 anomaly {window_label}"
                 )
@@ -605,6 +620,49 @@ def _render_methane_map(
                 opacity=opacities.get(dk, 0.75),
             ))
 
+        # ── RGB reference layer ───────────────────────
+        if show_rgb:
+            with st.spinner("Loading RGB composite..."):
+                if mode == "Date composite" and selected_date:
+                    rgb_tile_url = cached_date_tile_url(
+                        "RGB",
+                        hp["west"],
+                        hp["south"],
+                        hp["east"],
+                        hp["north"],
+                        selected_date.isoformat(),
+                        half_window,
+                        source="s2",
+                    )
+                    rgb_layer_name = (
+                        f"RGB {window_label}"
+                    )
+                else:
+                    rgb_tile_url = cached_mean_tile_url(
+                        "RGB",
+                        hp["west"],
+                        hp["south"],
+                        hp["east"],
+                        hp["north"],
+                        hp["start_date"],
+                        hp["end_date"],
+                        source="s2",
+                    )
+                    rgb_layer_name = "RGB (mean)"
+            # Insert RGB at position 0 so it renders
+            # below the methane layers.
+            layer_specs.insert(
+                0,
+                LayerSpec(
+                    tile_url=rgb_tile_url,
+                    layer_name=rgb_layer_name,
+                    source="s2",
+                    opacity=opacities.get(
+                        "RGB", 0.6
+                    ),
+                ),
+            )
+
         base_map, fgs = (
             create_multilayer_heatmap_folium(
                 layers=layer_specs,
@@ -630,12 +688,21 @@ def _render_methane_map(
         )
 
     # ── Color legends ────────────────────────────────
+    if show_rgb:
+        render_color_legend("RGB", "s2")
     for dk in data_keys:
         src = _resolve_source(dk, "methane")
         if len(data_keys) > 1:
             tag = "S5P" if src == "s5p" else "S2"
             st.caption(f"**{dk}** ({tag})")
-        render_color_legend(dk, src)
+        if dk == "CH4_ANOMALY" and _anomaly_vis:
+            render_color_legend(
+                dk, src,
+                vis_min=_anomaly_vis[0],
+                vis_max=_anomaly_vis[1],
+            )
+        else:
+            render_color_legend(dk, src)
         caption = _get_variable_caption(dk)
         if caption:
             st.caption(caption)
