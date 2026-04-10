@@ -79,7 +79,7 @@ class S1BandConfig:
 S1_REGISTRY: dict[str, S1BandConfig] = {
     "VV": S1BandConfig(
         key="VV",
-        name="VV Polarization",
+        name="Backscatter (co-pol)",
         collection_id=S1_COLLECTION_ID,
         vis_min=-25.0,
         vis_max=0.0,
@@ -90,7 +90,7 @@ S1_REGISTRY: dict[str, S1BandConfig] = {
     ),
     "VH": S1BandConfig(
         key="VH",
-        name="VH Polarization",
+        name="Backscatter (cross-pol)",
         collection_id=S1_COLLECTION_ID,
         vis_min=-30.0,
         vis_max=-5.0,
@@ -101,7 +101,7 @@ S1_REGISTRY: dict[str, S1BandConfig] = {
     ),
     "VV_VH_RATIO": S1BandConfig(
         key="VV_VH_RATIO",
-        name="VV/VH Ratio (dB difference)",
+        name="Polarization Ratio (dB)",
         collection_id=S1_COLLECTION_ID,
         vis_min=0.0,
         vis_max=15.0,
