@@ -131,6 +131,7 @@ class SidebarConfig:
         default_factory=lambda: ["MBSP"],
     )
     methane_show_s5p: bool = True
+    methane_show_rgb: bool = False
     methane_mask_vegetation: bool = True
     methane_mask_water: bool = True
     methane_ndvi_threshold: float = 0.3
@@ -145,12 +146,12 @@ _METHANE_LAYER_OPTIONS: dict[str, str] = {
 
 
 def _render_methane_sidebar() -> tuple[
-    list[str], bool, bool, bool, float, float,
+    list[str], bool, bool, bool, bool, float, float,
 ]:
     """Render methane-specific sidebar controls.
 
-    Returns (s2_layers, show_s5p, mask_veg, mask_water,
-    ndvi_thresh, ndwi_thresh).
+    Returns (s2_layers, show_s5p, show_rgb, mask_veg,
+    mask_water, ndvi_thresh, ndwi_thresh).
     """
     st.sidebar.header("Methane Layers")
 
@@ -167,6 +168,18 @@ def _render_methane_sidebar() -> tuple[
         default=["MBSP"],
         format_func=lambda k: _METHANE_LAYER_OPTIONS[k],
         key="methane_s2_layers",
+    )
+
+    st.sidebar.divider()
+    show_rgb = st.sidebar.checkbox(
+        "Show RGB composite (true colour)",
+        value=False,
+        help=(
+            "Overlay a Sentinel-2 true-colour image "
+            "to help distinguish surface features "
+            "from real methane signals."
+        ),
+        key="methane_show_rgb",
     )
 
     st.sidebar.header("Masking")
@@ -196,7 +209,7 @@ def _render_methane_sidebar() -> tuple[
         )
 
     return (
-        s2_layers, show_s5p,
+        s2_layers, show_s5p, show_rgb,
         mask_veg, mask_water,
         ndvi_thresh, ndwi_thresh,
     )
@@ -233,6 +246,7 @@ def render_sidebar() -> SidebarConfig:
     # ── Methane-specific or Explorer-specific controls ─────
     methane_s2_layers: list[str] = ["MBSP"]
     methane_show_s5p = True
+    methane_show_rgb = False
     methane_mask_veg = True
     methane_mask_water = True
     methane_ndvi_thresh = 0.3
@@ -241,6 +255,7 @@ def render_sidebar() -> SidebarConfig:
     if is_methane:
         (
             methane_s2_layers, methane_show_s5p,
+            methane_show_rgb,
             methane_mask_veg, methane_mask_water,
             methane_ndvi_thresh, methane_ndwi_thresh,
         ) = _render_methane_sidebar()
@@ -407,6 +422,7 @@ def render_sidebar() -> SidebarConfig:
         mode="methane" if is_methane else "explorer",
         methane_s2_layers=methane_s2_layers,
         methane_show_s5p=methane_show_s5p,
+        methane_show_rgb=methane_show_rgb,
         methane_mask_vegetation=methane_mask_veg,
         methane_mask_water=methane_mask_water,
         methane_ndvi_threshold=methane_ndvi_thresh,
