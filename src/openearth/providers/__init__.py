@@ -23,10 +23,18 @@ from openearth.providers.s5p_registry import (
 )
 
 
+def _resolve_source(data_key: str, source: str) -> str:
+    """Resolve the ``"methane"`` sentinel to ``"s5p"`` or ``"s2"``."""
+    if source == "methane":
+        return "s5p" if data_key == "CH4" else "s2"
+    return source
+
+
 def get_config(
     data_key: str, source: str,
 ) -> S1BandConfig | S2IndexConfig | GasConfig:
     """Return the registry config for *data_key*."""
+    source = _resolve_source(data_key, source)
     if source == "s1":
         return get_s1_band_config(data_key)
     if source == "s2":
@@ -42,6 +50,7 @@ def get_collection(
     source: str,
 ) -> ee.ImageCollection:
     """Return the filtered ImageCollection for *source*."""
+    source = _resolve_source(data_key, source)
     if source == "s1":
         return get_s1_collection(
             data_key, geometry,

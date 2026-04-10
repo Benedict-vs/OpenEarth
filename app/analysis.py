@@ -147,6 +147,93 @@ def cached_methane_anomaly_tile_url(
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def cached_masked_tile_url(
+    data_key: str,
+    west: float, south: float,
+    east: float, north: float,
+    start_date: str, end_date: str,
+    source: str = "s2",
+    mask_vegetation: bool = False,
+    mask_water: bool = False,
+    ndvi_threshold: float = 0.3,
+    ndwi_threshold: float = 0.0,
+    vis_min: float | None = None,
+    vis_max: float | None = None,
+) -> str:
+    """Build a mean composite with optional veg/water masking."""
+    from openearth.masking.vegetation_water import (
+        apply_vegetation_water_mask,
+    )
+
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_mean_composite(
+        data_key, roi, start_date, end_date,
+        source=source,
+    )
+    if mask_vegetation or mask_water:
+        image = apply_vegetation_water_mask(
+            image, roi, start_date, end_date,
+            mask_vegetation=mask_vegetation,
+            mask_water=mask_water,
+            ndvi_threshold=ndvi_threshold,
+            ndwi_threshold=ndwi_threshold,
+        )
+    return get_tile_url(
+        image, data_key, source,
+        vis_min=vis_min, vis_max=vis_max,
+    )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_masked_date_tile_url(
+    data_key: str,
+    west: float, south: float,
+    east: float, north: float,
+    target_date: str,
+    half_window_days: int,
+    source: str = "s2",
+    mask_vegetation: bool = False,
+    mask_water: bool = False,
+    ndvi_threshold: float = 0.3,
+    ndwi_threshold: float = 0.0,
+    vis_min: float | None = None,
+    vis_max: float | None = None,
+) -> str:
+    """Build a date composite with optional veg/water masking."""
+    from openearth.masking.vegetation_water import (
+        apply_vegetation_water_mask,
+    )
+
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_date_composite(
+        data_key, roi, target_date,
+        half_window_days,
+        source=source,
+    )
+    if mask_vegetation or mask_water:
+        from datetime import date as _date
+
+        td = _date.fromisoformat(target_date)
+        mask_start = (
+            td - timedelta(days=max(half_window_days, 30))
+        ).isoformat()
+        mask_end = (
+            td + timedelta(days=max(half_window_days, 30) + 1)
+        ).isoformat()
+        image = apply_vegetation_water_mask(
+            image, roi, mask_start, mask_end,
+            mask_vegetation=mask_vegetation,
+            mask_water=mask_water,
+            ndvi_threshold=ndvi_threshold,
+            ndwi_threshold=ndwi_threshold,
+        )
+    return get_tile_url(
+        image, data_key, source,
+        vis_min=vis_min, vis_max=vis_max,
+    )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def cached_vis_range(
     data_key: str,
     west: float, south: float,
@@ -338,19 +425,30 @@ def init_session(cfg: SidebarConfig) -> None:
             )
             st.stop()
 
-    st.session_state["heatmap_params"] = (
-        heatmap_params(
-            data_keys=cfg.selected_keys,
-            start_date_iso=start_date_iso,
-            end_date_iso=end_date_iso,
-            west=cfg.west,
-            south=cfg.south,
-            east=cfg.east,
-            north=cfg.north,
-            project_id=cfg.project_id,
-            source=cfg.source,
-        )
+    hp = heatmap_params(
+        data_keys=cfg.selected_keys,
+        start_date_iso=start_date_iso,
+        end_date_iso=end_date_iso,
+        west=cfg.west,
+        south=cfg.south,
+        east=cfg.east,
+        north=cfg.north,
+        project_id=cfg.project_id,
+        source=cfg.source,
     )
+    if cfg.mode == "methane":
+        hp["methane_mode"] = True
+        hp["methane_mask_vegetation"] = (
+            cfg.methane_mask_vegetation
+        )
+        hp["methane_mask_water"] = cfg.methane_mask_water
+        hp["methane_ndvi_threshold"] = (
+            cfg.methane_ndvi_threshold
+        )
+        hp["methane_ndwi_threshold"] = (
+            cfg.methane_ndwi_threshold
+        )
+    st.session_state["heatmap_params"] = hp
     # Clear stale time series and map view when params change.
     st.session_state.pop("analysis_df", None)
     st.session_state.pop("_map_view", None)
@@ -359,18 +457,25 @@ def init_session(cfg: SidebarConfig) -> None:
 # ── Lazy time series loading ─────────────────────────────────
 
 
-def ensure_timeseries() -> None:
+def ensure_timeseries(
+    data_key: str | None = None,
+    source: str | None = None,
+) -> None:
     """Build the daily time series if not already cached.
 
     Reads parameters from ``st.session_state["heatmap_params"]``.
+    Optional *data_key* and *source* override the stored values
+    (used by methane mode to switch between variables).
     """
     hp = st.session_state.get("heatmap_params")
     if hp is None:
         st.error("Load the map first.")
         st.stop()
 
-    data_key = hp["data_key"]
-    source = hp.get("source", "s5p")
+    if data_key is None:
+        data_key = hp["data_key"]
+    if source is None:
+        source = hp.get("source", "s5p")
     start_date_iso = hp["start_date"]
     end_date_iso = hp["end_date"]
 

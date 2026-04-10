@@ -181,7 +181,11 @@ if cfg.run:
 # ── Guard: stop if map not loaded yet ────────────────
 
 if "heatmap_params" not in st.session_state:
-    _render_satellite_info(cfg.source)
+    if cfg.mode == "methane":
+        _render_satellite_info("s5p")
+        _render_satellite_info("s2")
+    else:
+        _render_satellite_info(cfg.source)
     st.info(
         "Configure inputs in the sidebar "
         "and click **Load Map**."
@@ -206,13 +210,27 @@ with tab_spatial:
     )
 
 with tab_timeseries:
-    time_series.render(
-        cfg.selected_keys[0],
-        source=cfg.source,
-    )
+    if cfg.mode == "methane":
+        time_series.render(
+            cfg.selected_keys[0],
+            source=cfg.source,
+            available_keys=cfg.selected_keys,
+        )
+    else:
+        time_series.render(
+            cfg.selected_keys[0],
+            source=cfg.source,
+        )
 
 with tab_stats:
-    statistics.render(
-        cfg.selected_keys[0],
-        source=cfg.source,
-    )
+    if cfg.mode == "methane":
+        statistics.render(
+            cfg.selected_keys[0],
+            source=cfg.source,
+            available_keys=cfg.selected_keys,
+        )
+    else:
+        statistics.render(
+            cfg.selected_keys[0],
+            source=cfg.source,
+        )

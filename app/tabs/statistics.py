@@ -21,7 +21,21 @@ def _fmt(value: float, cfg) -> str:
 def render(
     selected_key: str,
     source: str = "s5p",
+    available_keys: list[str] | None = None,
 ) -> None:
+    # In methane mode, let the user pick the variable.
+    if available_keys and len(available_keys) > 1:
+        from openearth.providers import _resolve_source
+
+        selected_key = st.selectbox(
+            "Variable for statistics",
+            options=available_keys,
+            key="stats_variable_select",
+        )
+        source = _resolve_source(
+            selected_key, "methane",
+        )
+
     st.subheader("Statistics")
 
     if "analysis_df" not in st.session_state:
@@ -35,7 +49,10 @@ def render(
         ):
             from app.analysis import ensure_timeseries
 
-            ensure_timeseries()
+            ensure_timeseries(
+                data_key=selected_key,
+                source=source,
+            )
             st.rerun()
         return
 

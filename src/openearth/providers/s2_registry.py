@@ -83,6 +83,7 @@ class S2IndexConfig:
     )
     is_rgb: bool = False
     collection_id: str | None = None
+    methane_only: bool = False
 
     @property
     def band(self) -> str:
@@ -152,6 +153,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
         valid_max=1.0,
         display_unit="ratio",
         palette=METHANE_PALETTE,
+        methane_only=True,
     ),
     "B12_B11": S2IndexConfig(
         key="B12_B11",
@@ -164,6 +166,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
         valid_max=2.0,
         display_unit="ratio",
         palette=METHANE_PALETTE,
+        methane_only=True,
     ),
     "CH4_ANOMALY": S2IndexConfig(
         key="CH4_ANOMALY",
@@ -176,11 +179,12 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
         valid_max=1.0,
         display_unit="delta ratio",
         palette=METHANE_PALETTE,
+        methane_only=True,
     ),
     # ── Raw spectral bands (ordered by wavelength) ───────────────
     "B1": S2IndexConfig(
         key="B1",
-        name="B1 — Coastal Aerosol (443 nm, 60 m)",
+        name="Coastal Aerosol (443 nm, 60 m)",
         bands=["B1"],
         expression=None,
         vis_min=0.0,
@@ -192,7 +196,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B2": S2IndexConfig(
         key="B2",
-        name="B2 — Blue (490 nm, 10 m)",
+        name="Blue (490 nm, 10 m)",
         bands=["B2"],
         expression=None,
         vis_min=0.0,
@@ -204,7 +208,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B3": S2IndexConfig(
         key="B3",
-        name="B3 — Green (560 nm, 10 m)",
+        name="Green (560 nm, 10 m)",
         bands=["B3"],
         expression=None,
         vis_min=0.0,
@@ -216,7 +220,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B4": S2IndexConfig(
         key="B4",
-        name="B4 — Red (665 nm, 10 m)",
+        name="Red (665 nm, 10 m)",
         bands=["B4"],
         expression=None,
         vis_min=0.0,
@@ -228,7 +232,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B5": S2IndexConfig(
         key="B5",
-        name="B5 — Red Edge 1 (705 nm, 20 m)",
+        name="Red Edge 1 (705 nm, 20 m)",
         bands=["B5"],
         expression=None,
         vis_min=0.0,
@@ -240,7 +244,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B6": S2IndexConfig(
         key="B6",
-        name="B6 — Red Edge 2 (740 nm, 20 m)",
+        name="Red Edge 2 (740 nm, 20 m)",
         bands=["B6"],
         expression=None,
         vis_min=0.0,
@@ -252,7 +256,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B7": S2IndexConfig(
         key="B7",
-        name="B7 — Red Edge 3 (783 nm, 20 m)",
+        name="Red Edge 3 (783 nm, 20 m)",
         bands=["B7"],
         expression=None,
         vis_min=0.0,
@@ -264,7 +268,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B8": S2IndexConfig(
         key="B8",
-        name="B8 — NIR Broad (842 nm, 10 m)",
+        name="NIR Broad (842 nm, 10 m)",
         bands=["B8"],
         expression=None,
         vis_min=0.0,
@@ -276,7 +280,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B8A": S2IndexConfig(
         key="B8A",
-        name="B8A — NIR Narrow (865 nm, 20 m)",
+        name="NIR Narrow (865 nm, 20 m)",
         bands=["B8A"],
         expression=None,
         vis_min=0.0,
@@ -288,7 +292,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B9": S2IndexConfig(
         key="B9",
-        name="B9 — Water Vapour (945 nm, 60 m)",
+        name="Water Vapour (945 nm, 60 m)",
         bands=["B9"],
         expression=None,
         vis_min=0.0,
@@ -300,7 +304,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B10": S2IndexConfig(
         key="B10",
-        name="B10 — SWIR Cirrus (1375 nm, 60 m)",
+        name="SWIR Cirrus (1375 nm, 60 m)",
         bands=["B10"],
         expression=None,
         vis_min=0.0,
@@ -312,7 +316,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B11": S2IndexConfig(
         key="B11",
-        name="B11 — SWIR-1 (1610 nm, 20 m)",
+        name="SWIR-1 (1610 nm, 20 m)",
         bands=["B11"],
         expression=None,
         vis_min=0.0,
@@ -324,7 +328,7 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
     ),
     "B12": S2IndexConfig(
         key="B12",
-        name="B12 — SWIR-2 (2190 nm, 20 m)",
+        name="SWIR-2 (2190 nm, 20 m)",
         bands=["B12"],
         expression=None,
         vis_min=0.0,
@@ -335,6 +339,11 @@ S2_REGISTRY: dict[str, S2IndexConfig] = {
         palette=SWIR_PALETTE,
     ),
 }
+
+
+METHANE_S2_KEYS: list[str] = [
+    k for k, v in S2_REGISTRY.items() if v.methane_only
+]
 
 
 def get_s2_index_config(key: str) -> S2IndexConfig:

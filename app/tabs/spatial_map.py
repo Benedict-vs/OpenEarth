@@ -20,11 +20,14 @@ from openearth.visualization.heatmap import (
 
 from app.analysis import (
     cached_date_tile_url,
+    cached_masked_date_tile_url,
+    cached_masked_tile_url,
     cached_mean_tile_url,
     cached_methane_anomaly_tile_url,
     cached_vis_range,
     render_color_legend,
 )
+from openearth.providers import _resolve_source
 from app.errors import show_ee_error
 from app.roi import map_center
 
@@ -369,6 +372,275 @@ def _get_variable_caption(data_key: str) -> str | None:
     return None
 
 
+def _render_methane_map(
+    hp: dict,
+    authenticate_on_fail: bool,
+) -> None:
+    """Render the spatial map in methane detection mode.
+
+    Handles multi-source layers (S5P + S2) with optional
+    vegetation/water masking.
+    """
+    data_keys = hp.get("data_keys", [hp["data_key"]])
+
+    try:
+        initialize_ee(
+            project_id=hp["project_id"],
+            authenticate=authenticate_on_fail,
+        )
+    except ee.EEException as exc:
+        show_ee_error(
+            exc,
+            "Could not initialize Earth Engine "
+            "for map rendering.",
+        )
+        st.stop()
+
+    center_lat, center_lon = map_center(
+        hp["west"], hp["south"],
+        hp["east"], hp["north"],
+    )
+    bounds = [
+        [hp["south"], hp["west"]],
+        [hp["north"], hp["east"]],
+    ]
+
+    # Masking params from heatmap_params.
+    mask_veg = hp.get("methane_mask_vegetation", True)
+    mask_water = hp.get("methane_mask_water", True)
+    ndvi_thresh = hp.get("methane_ndvi_threshold", 0.3)
+    ndwi_thresh = hp.get("methane_ndwi_threshold", 0.0)
+
+    has_ch4_anomaly = "CH4_ANOMALY" in data_keys
+
+    # ── Mode toggle ──────────────────────────────────
+    if has_ch4_anomaly and len(data_keys) == 1:
+        mode = "Anomaly"
+        st.info(
+            "Methane anomaly mode: the date range "
+            "is used as the baseline reference. "
+            "Select a target date to compare "
+            "against it."
+        )
+    else:
+        mode = st.radio(
+            "Composite type",
+            options=[
+                "Date composite",
+                "Mean composite",
+            ],
+            horizontal=True,
+            key="heatmap_mode",
+        )
+
+    # ── Date controls ────────────────────────────────
+    selected_date = None
+    half_window = 0
+    window_label = ""
+
+    from datetime import timedelta as _td
+
+    _start = date.fromisoformat(hp["start_date"])
+    _end = date.fromisoformat(hp["end_date"])
+    available_dates = [
+        _start + _td(days=i)
+        for i in range((_end - _start).days)
+    ]
+
+    if mode in ("Date composite", "Anomaly"):
+        if len(available_dates) < 2:
+            st.info(
+                "Need at least 2 dates to "
+                "use the date composite."
+            )
+            return
+
+        selected_date = cast(
+            date,
+            st.select_slider(
+                "Select target date"
+                if mode == "Anomaly"
+                else "Select date",
+                options=available_dates,
+                value=available_dates[
+                    len(available_dates) // 2
+                ],
+                key="heatmap_date_slider",
+            ),
+        )
+        half_window = st.slider(
+            "Composite window (+/- days)",
+            min_value=0,
+            max_value=14,
+            value=7,
+            help=(
+                "Days before and after the "
+                "selected date to include."
+            ),
+            key="heatmap_half_window",
+        )
+        window_label = (
+            f"{selected_date}"
+            if half_window == 0
+            else (
+                f"{selected_date} "
+                f"+/- {half_window} days"
+            )
+        )
+        if mode == "Anomaly":
+            st.caption(
+                f"Target: {window_label} — "
+                f"Reference: {hp['start_date']} "
+                f"to {hp['end_date']}"
+            )
+        else:
+            st.caption(f"Showing: {window_label}")
+    else:
+        st.caption(
+            f"Composite mean from "
+            f"{hp['start_date']} to "
+            f"{hp['end_date']}"
+        )
+
+    # ── Layer settings (opacity per variable) ────────
+    opacities: dict[str, float] = {}
+    if len(data_keys) > 1:
+        with st.expander("Layer settings"):
+            for dk in data_keys:
+                src = _resolve_source(dk, "methane")
+                label = (
+                    f"{dk} (S5P)" if src == "s5p"
+                    else f"{dk} (S2)"
+                )
+                opacities[dk] = st.slider(
+                    f"{label} opacity",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.75,
+                    step=0.05,
+                    key=f"opacity_{dk}",
+                )
+    else:
+        opacities[data_keys[0]] = 0.75
+
+    # ── Build tile layers ────────────────────────────
+    layer_specs: list[LayerSpec] = []
+    try:
+        for dk in data_keys:
+            src = _resolve_source(dk, "methane")
+
+            if dk == "CH4_ANOMALY":
+                if selected_date is None:
+                    st.caption(
+                        "CH\u2084 anomaly requires a "
+                        "target date — skipped in "
+                        "mean composite mode."
+                    )
+                    continue
+                with st.spinner(
+                    f"Computing CH\u2084 anomaly for "
+                    f"{window_label}..."
+                ):
+                    tile_url = (
+                        cached_methane_anomaly_tile_url(
+                            hp["west"],
+                            hp["south"],
+                            hp["east"],
+                            hp["north"],
+                            selected_date.isoformat(),
+                            half_window,
+                            hp["start_date"],
+                            hp["end_date"],
+                        )
+                    )
+                layer_name = (
+                    f"CH\u2084 anomaly {window_label}"
+                )
+            elif mode == "Date composite":
+                with st.spinner(
+                    f"Loading {dk} ({src}) for "
+                    f"{window_label}..."
+                ):
+                    tile_url = (
+                        cached_masked_date_tile_url(
+                            dk,
+                            hp["west"],
+                            hp["south"],
+                            hp["east"],
+                            hp["north"],
+                            selected_date.isoformat(),
+                            half_window,
+                            source=src,
+                            mask_vegetation=mask_veg,
+                            mask_water=mask_water,
+                            ndvi_threshold=ndvi_thresh,
+                            ndwi_threshold=ndwi_thresh,
+                        )
+                    )
+                layer_name = f"{dk} {window_label}"
+            else:
+                with st.spinner(
+                    f"Loading mean {dk} ({src})..."
+                ):
+                    tile_url = cached_masked_tile_url(
+                        dk,
+                        hp["west"],
+                        hp["south"],
+                        hp["east"],
+                        hp["north"],
+                        hp["start_date"],
+                        hp["end_date"],
+                        source=src,
+                        mask_vegetation=mask_veg,
+                        mask_water=mask_water,
+                        ndvi_threshold=ndvi_thresh,
+                        ndwi_threshold=ndwi_thresh,
+                    )
+                layer_name = f"Mean {dk}"
+
+            layer_specs.append(LayerSpec(
+                tile_url=tile_url,
+                layer_name=layer_name,
+                source=src,
+                opacity=opacities.get(dk, 0.75),
+            ))
+
+        base_map, fgs = (
+            create_multilayer_heatmap_folium(
+                layers=layer_specs,
+                center_lat=center_lat,
+                center_lon=center_lon,
+                bounds=bounds,
+            )
+        )
+        st_folium(
+            base_map,
+            key="heatmap",
+            feature_group_to_add=fgs,
+            layer_control=folium.LayerControl(),
+            height=500,
+            width=None,
+            returned_objects=[],
+        )
+
+    except ee.EEException as exc:
+        show_ee_error(
+            exc,
+            "Could not render heatmap.",
+        )
+
+    # ── Color legends ────────────────────────────────
+    for dk in data_keys:
+        src = _resolve_source(dk, "methane")
+        if len(data_keys) > 1:
+            tag = "S5P" if src == "s5p" else "S2"
+            st.caption(f"**{dk}** ({tag})")
+        render_color_legend(dk, src)
+        caption = _get_variable_caption(dk)
+        if caption:
+            st.caption(caption)
+
+
 def render(
     authenticate_on_fail: bool,
 ) -> None:
@@ -377,6 +649,12 @@ def render(
         return
 
     hp = st.session_state["heatmap_params"]
+
+    # ── Methane mode early exit ───────────────────────
+    if hp.get("methane_mode"):
+        _render_methane_map(hp, authenticate_on_fail)
+        return
+
     data_key = hp["data_key"]
     data_keys = hp.get("data_keys", [data_key])
     source = hp.get("source", "s5p")

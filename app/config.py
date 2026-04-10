@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import streamlit as st
@@ -102,7 +102,9 @@ TRACE_GASES: dict[str, str] = {
     k: cfg.name for k, cfg in GAS_REGISTRY.items()
 }
 S2_INDICES: dict[str, str] = {
-    k: cfg.name for k, cfg in S2_REGISTRY.items()
+    k: cfg.name
+    for k, cfg in S2_REGISTRY.items()
+    if not cfg.methane_only
 }
 S1_VARIABLES: dict[str, str] = {
     k: cfg.name for k, cfg in S1_REGISTRY.items()
@@ -124,6 +126,80 @@ class SidebarConfig:
     start_date: date
     end_date_inclusive: date
     run: bool
+    mode: str = "explorer"
+    methane_s2_layers: list[str] = field(
+        default_factory=lambda: ["MBSP"],
+    )
+    methane_show_s5p: bool = True
+    methane_mask_vegetation: bool = True
+    methane_mask_water: bool = True
+    methane_ndvi_threshold: float = 0.3
+    methane_ndwi_threshold: float = 0.0
+
+
+_METHANE_LAYER_OPTIONS: dict[str, str] = {
+    "MBSP": "MBSP — (B12−B11)/B11",
+    "B12_B11": "B12/B11 ratio",
+    "CH4_ANOMALY": "CH₄ anomaly (B12/B11 vs baseline)",
+}
+
+
+def _render_methane_sidebar() -> tuple[
+    list[str], bool, bool, bool, float, float,
+]:
+    """Render methane-specific sidebar controls.
+
+    Returns (s2_layers, show_s5p, mask_veg, mask_water,
+    ndvi_thresh, ndwi_thresh).
+    """
+    st.sidebar.header("Methane Layers")
+
+    show_s5p = st.sidebar.checkbox(
+        "S5P CH₄ (coarse, ~7 km)",
+        value=True,
+        key="methane_show_s5p",
+    )
+
+    st.sidebar.caption("High-resolution S2 proxies:")
+    s2_layers = st.sidebar.multiselect(
+        "S2 proxy layers",
+        options=list(_METHANE_LAYER_OPTIONS.keys()),
+        default=["MBSP"],
+        format_func=lambda k: _METHANE_LAYER_OPTIONS[k],
+        key="methane_s2_layers",
+    )
+
+    st.sidebar.header("Masking")
+    mask_veg = st.sidebar.checkbox(
+        "Mask vegetation (NDVI)",
+        value=True,
+        key="methane_mask_veg",
+    )
+    mask_water = st.sidebar.checkbox(
+        "Mask water (NDWI)",
+        value=True,
+        key="methane_mask_water",
+    )
+
+    ndvi_thresh = 0.3
+    ndwi_thresh = 0.0
+    with st.sidebar.expander("Mask thresholds"):
+        ndvi_thresh = st.slider(
+            "NDVI threshold",
+            0.0, 1.0, 0.3,
+            key="methane_ndvi_thresh",
+        )
+        ndwi_thresh = st.slider(
+            "NDWI threshold",
+            -0.5, 0.5, 0.0,
+            key="methane_ndwi_thresh",
+        )
+
+    return (
+        s2_layers, show_s5p,
+        mask_veg, mask_water,
+        ndvi_thresh, ndwi_thresh,
+    )
 
 
 def render_sidebar() -> SidebarConfig:
@@ -143,44 +219,91 @@ def render_sidebar() -> SidebarConfig:
         value=True,
     )
 
-    st.sidebar.header("Data Source")
-    source_label = st.sidebar.radio(
-        "Satellite",
-        options=list(_SOURCE_LABELS.keys()),
+    # ── Mode toggle ───────────────────────────────────────
+    st.sidebar.header("Mode")
+    mode_label = st.sidebar.radio(
+        "Application mode",
+        options=["Explorer", "Methane Detection"],
         index=0,
-        key="source_radio",
+        horizontal=True,
+        key="app_mode_radio",
     )
-    source = _SOURCE_LABELS[source_label]
+    is_methane = mode_label == "Methane Detection"
 
-    if source == "s2":
-        variables = S2_INDICES
-    elif source == "s1":
-        variables = S1_VARIABLES
+    # ── Methane-specific or Explorer-specific controls ─────
+    methane_s2_layers: list[str] = ["MBSP"]
+    methane_show_s5p = True
+    methane_mask_veg = True
+    methane_mask_water = True
+    methane_ndvi_thresh = 0.3
+    methane_ndwi_thresh = 0.0
+
+    if is_methane:
+        (
+            methane_s2_layers, methane_show_s5p,
+            methane_mask_veg, methane_mask_water,
+            methane_ndvi_thresh, methane_ndwi_thresh,
+        ) = _render_methane_sidebar()
+
+        source = "methane"
+        selected_keys = (
+            (["CH4"] if methane_show_s5p else [])
+            + methane_s2_layers
+        )
+        if not selected_keys:
+            st.sidebar.warning(
+                "Enable at least one methane layer.",
+            )
+            selected_keys = ["MBSP"]
     else:
-        variables = TRACE_GASES
+        st.sidebar.header("Data Source")
+        source_label = st.sidebar.radio(
+            "Satellite",
+            options=list(_SOURCE_LABELS.keys()),
+            index=0,
+            key="source_radio",
+        )
+        source = _SOURCE_LABELS[source_label]
 
-    selected_keys = st.sidebar.multiselect(
-        "Variables",
-        options=list(variables.keys()),
-        format_func=lambda k: (
-            f"{k} \u2013 {variables[k]}"
-        ),
-        key="variable_select",
-    )
-    if not selected_keys:
-        st.sidebar.warning("Select at least one variable.")
-        selected_keys = [list(variables.keys())[0]]
+        if source == "s2":
+            variables = S2_INDICES
+        elif source == "s1":
+            variables = S1_VARIABLES
+        else:
+            variables = TRACE_GASES
+
+        selected_keys = st.sidebar.multiselect(
+            "Variables",
+            options=list(variables.keys()),
+            format_func=lambda k: (
+                f"{k} \u2013 {variables[k]}"
+            ),
+            key="variable_select",
+        )
+        if not selected_keys:
+            st.sidebar.warning(
+                "Select at least one variable.",
+            )
+            selected_keys = [list(variables.keys())[0]]
 
     st.sidebar.header("ROI (Region of Interest)")
 
     # Quick-start: load a predefined region
     st.sidebar.caption("Quick start:")
+    if is_methane:
+        # Show CH4 sites first in methane mode.
+        roi_options = sorted(
+            ROI_EXAMPLES.keys(),
+            key=lambda k: (0 if k.startswith("CH4:") else 1, k),
+        )
+        default_idx = 0
+    else:
+        roi_options = list(ROI_EXAMPLES.keys())
+        default_idx = roi_options.index(DEFAULT_EXAMPLE)
     selected_example = st.sidebar.selectbox(
         "Example regions",
-        options=list(ROI_EXAMPLES.keys()),
-        index=list(ROI_EXAMPLES.keys()).index(
-            DEFAULT_EXAMPLE,
-        ),
+        options=roi_options,
+        index=default_idx,
     )
     if st.sidebar.button("Load example ROI"):
         set_bbox(*ROI_EXAMPLES[selected_example])
@@ -242,20 +365,26 @@ def render_sidebar() -> SidebarConfig:
     st.sidebar.header("Time Range")
     # S2 and S1 are heavier per query (high resolution) so default to
     # 90 days; S5P covers the full atmosphere so 365 days is fine.
-    default_days = 90 if source in ("s2", "s1") else 365
+    # Methane mode uses S2 proxies → 90 days.
+    default_days = (
+        90 if source in ("s2", "s1", "methane") else 365
+    )
     default_start = date.today() - timedelta(
         days=default_days,
     )
     default_end = date.today() - timedelta(days=1)
 
+    if "date_start" not in st.session_state:
+        st.session_state["date_start"] = default_start
+    if "date_end" not in st.session_state:
+        st.session_state["date_end"] = default_end
+
     start_date = st.sidebar.date_input(
         "Start date",
-        value=default_start,
         key="date_start",
     )
     end_date_inclusive = st.sidebar.date_input(
         "End date (inclusive)",
-        value=default_end,
         key="date_end",
     )
 
@@ -275,4 +404,11 @@ def render_sidebar() -> SidebarConfig:
         start_date=start_date,
         end_date_inclusive=end_date_inclusive,
         run=run,
+        mode="methane" if is_methane else "explorer",
+        methane_s2_layers=methane_s2_layers,
+        methane_show_s5p=methane_show_s5p,
+        methane_mask_vegetation=methane_mask_veg,
+        methane_mask_water=methane_mask_water,
+        methane_ndvi_threshold=methane_ndvi_thresh,
+        methane_ndwi_threshold=methane_ndwi_thresh,
     )
