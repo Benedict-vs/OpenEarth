@@ -19,6 +19,7 @@ from openearth.visualization.heatmap import (
     build_mean_composite,
     build_date_composite,
     build_methane_anomaly_composite,
+    compute_anomaly_vis_range,
     compute_vis_range,
     get_tile_url,
     get_thumb_url,
@@ -131,19 +132,35 @@ def cached_methane_anomaly_tile_url(
     ref_start: str, ref_end: str,
     vis_min: float | None = None,
     vis_max: float | None = None,
-) -> str:
-    """Return a tile URL for the CH4 anomaly map."""
+    auto_scale: bool = True,
+) -> tuple[str, float, float]:
+    """Return (tile_url, vis_min, vis_max) for CH4 anomaly.
+
+    When *auto_scale* is True (default) the colour ramp is
+    centred on the image median so that the uniform background
+    appears neutral and only local deviations stand out.
+    """
     roi = ee.Geometry.BBox(west, south, east, north)
     image = build_methane_anomaly_composite(
         roi, target_date, half_window_days,
         ref_start, ref_end,
     )
+    if auto_scale and vis_min is None and vis_max is None:
+        vis_min, vis_max = compute_anomaly_vis_range(
+            image, geometry=roi,
+        )
     params = get_vis_params(
         "CH4_ANOMALY", "s2",
         vis_min=vis_min, vis_max=vis_max,
     )
     map_id_dict = image.getMapId(params)
-    return map_id_dict["tile_fetcher"].url_format
+    return (
+        map_id_dict["tile_fetcher"].url_format,
+        float(vis_min) if vis_min is not None
+        else params["min"],
+        float(vis_max) if vis_max is not None
+        else params["max"],
+    )
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -438,6 +455,7 @@ def init_session(cfg: SidebarConfig) -> None:
     )
     if cfg.mode == "methane":
         hp["methane_mode"] = True
+        hp["methane_show_rgb"] = cfg.methane_show_rgb
         hp["methane_mask_vegetation"] = (
             cfg.methane_mask_vegetation
         )
