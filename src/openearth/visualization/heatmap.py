@@ -22,6 +22,10 @@ _ATTR = {
         "Google Earth Engine / "
         "Copernicus Sentinel-2"
     ),
+    "s1": (
+        "Google Earth Engine / "
+        "Copernicus Sentinel-1"
+    ),
 }
 
 

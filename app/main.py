@@ -181,10 +181,7 @@ if cfg.run:
 # ── Guard: stop if map not loaded yet ────────────────
 
 if "heatmap_params" not in st.session_state:
-    if cfg.mode == "methane":
-        _render_satellite_info("s5p")
-        _render_satellite_info("s2")
-    else:
+    if cfg.mode != "methane":
         _render_satellite_info(cfg.source)
     st.info(
         "Configure inputs in the sidebar "

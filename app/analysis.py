@@ -51,13 +51,18 @@ def render_color_legend(
     label_min = raw_min * cfg.display_scale
     label_max = raw_max * cfg.display_scale
     unit = cfg.display_unit
+
+    # Use fewer significant figures for small-magnitude
+    # values (e.g. anomaly deltas) to keep labels tidy.
+    fmt = ".2g" if abs(label_max - label_min) < 1 else ".4g"
+
     st.markdown(
         f"""
         <div style="display:flex;align-items:center;
                     margin:8px 0 16px 0;">
             <span style="font-size:0.85em;
                          margin-right:8px;">
-                {label_min:.4g} {unit}
+                {label_min:{fmt}} {unit}
             </span>
             <div style="
                 flex:1; height:16px;
@@ -68,7 +73,7 @@ def render_color_legend(
             "></div>
             <span style="font-size:0.85em;
                          margin-left:8px;">
-                {label_max:.4g} {unit}
+                {label_max:{fmt}} {unit}
             </span>
         </div>
         """,
@@ -133,6 +138,10 @@ def cached_methane_anomaly_tile_url(
     vis_min: float | None = None,
     vis_max: float | None = None,
     auto_scale: bool = True,
+    mask_vegetation: bool = False,
+    mask_water: bool = False,
+    ndvi_threshold: float = 0.3,
+    ndwi_threshold: float = 0.0,
 ) -> tuple[str, float, float]:
     """Return (tile_url, vis_min, vis_max) for CH4 anomaly.
 
@@ -145,6 +154,27 @@ def cached_methane_anomaly_tile_url(
         roi, target_date, half_window_days,
         ref_start, ref_end,
     )
+    if mask_vegetation or mask_water:
+        from datetime import date as _date
+
+        from openearth.masking.vegetation_water import (
+            apply_vegetation_water_mask,
+        )
+
+        td = _date.fromisoformat(target_date)
+        mask_start = (
+            td - timedelta(days=max(half_window_days, 30))
+        ).isoformat()
+        mask_end = (
+            td + timedelta(days=max(half_window_days, 30) + 1)
+        ).isoformat()
+        image = apply_vegetation_water_mask(
+            image, roi, mask_start, mask_end,
+            mask_vegetation=mask_vegetation,
+            mask_water=mask_water,
+            ndvi_threshold=ndvi_threshold,
+            ndwi_threshold=ndwi_threshold,
+        )
     if auto_scale and vis_min is None and vis_max is None:
         vis_min, vis_max = compute_anomaly_vis_range(
             image, geometry=roi,
@@ -267,6 +297,73 @@ def cached_vis_range(
     return compute_vis_range(
         image, data_key, source,
         geometry=roi,
+    )
+
+
+# ── Source classification ────────────────────────────────────
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_source_classification_tile_url(
+    west: float, south: float,
+    east: float, north: float,
+    start_date: str, end_date: str,
+    s1_vv_high: float = -10.0,
+    ndvi_veg: float = 0.35,
+    ndwi_water: float = 0.1,
+    methane_signal: float = -0.02,
+) -> str:
+    """Return a tile URL for methane source classification."""
+    from openearth.analytics.source_classification import (
+        ClassificationThresholds,
+        classify_methane_sources,
+        CLASS_PALETTE,
+    )
+
+    roi = ee.Geometry.BBox(west, south, east, north)
+    thresholds = ClassificationThresholds(
+        s1_vv_high=s1_vv_high,
+        ndvi_veg=ndvi_veg,
+        ndwi_water=ndwi_water,
+        methane_signal=methane_signal,
+    )
+    image = classify_methane_sources(
+        roi, start_date, end_date,
+        thresholds=thresholds,
+    )
+    params = {
+        "min": 1,
+        "max": 5,
+        "palette": CLASS_PALETTE,
+    }
+    map_id_dict = image.getMapId(params)
+    return map_id_dict["tile_fetcher"].url_format
+
+
+def render_classification_legend() -> None:
+    """Render a categorical legend for source classification."""
+    from openearth.analytics.source_classification import (
+        CLASS_LABELS,
+        CLASS_PALETTE,
+    )
+
+    items_html = ""
+    for idx, (_, label) in enumerate(CLASS_LABELS.items()):
+        color = CLASS_PALETTE[idx]
+        items_html += (
+            f'<span style="display:inline-flex;'
+            f"align-items:center;"
+            f'margin-right:12px;">'
+            f'<span style="width:14px;height:14px;'
+            f"background:{color};border-radius:2px;"
+            f"margin-right:4px;"
+            f'display:inline-block;"></span>'
+            f"{label}</span>"
+        )
+    st.markdown(
+        f'<div style="margin:8px 0 16px 0;'
+        f'font-size:0.85em;">{items_html}</div>',
+        unsafe_allow_html=True,
     )
 
 
@@ -466,10 +563,25 @@ def init_session(cfg: SidebarConfig) -> None:
         hp["methane_ndwi_threshold"] = (
             cfg.methane_ndwi_threshold
         )
+        hp["methane_show_s1"] = cfg.methane_show_s1
+        hp["methane_s1_variable"] = cfg.methane_s1_variable
+        hp["methane_show_classification"] = (
+            cfg.methane_show_classification
+        )
+        hp["methane_cls_s1_high"] = cfg.methane_cls_s1_high
+        hp["methane_cls_ndvi_veg"] = cfg.methane_cls_ndvi_veg
+        hp["methane_cls_ndwi_water"] = (
+            cfg.methane_cls_ndwi_water
+        )
+        hp["methane_cls_methane_thresh"] = (
+            cfg.methane_cls_methane_thresh
+        )
+    hp["show_wind"] = cfg.show_wind
     st.session_state["heatmap_params"] = hp
     # Clear stale time series and map view when params change.
     st.session_state.pop("analysis_df", None)
     st.session_state.pop("_map_view", None)
+    st.session_state.pop("_anomaly_scale", None)
 
 
 # ── Lazy time series loading ─────────────────────────────────

@@ -24,7 +24,9 @@ from app.analysis import (
     cached_masked_tile_url,
     cached_mean_tile_url,
     cached_methane_anomaly_tile_url,
+    cached_source_classification_tile_url,
     cached_vis_range,
+    render_classification_legend,
     render_color_legend,
 )
 from openearth.providers import _resolve_source
@@ -413,6 +415,12 @@ def _render_methane_map(
 
     has_ch4_anomaly = "CH4_ANOMALY" in data_keys
     show_rgb = hp.get("methane_show_rgb", False)
+    show_s1 = hp.get("methane_show_s1", False)
+    s1_variable = hp.get("methane_s1_variable", "VV")
+    show_wind = hp.get("show_wind", False)
+    show_classification = hp.get(
+        "methane_show_classification", False,
+    )
 
     # ── Mode toggle ──────────────────────────────────
     if has_ch4_anomaly and len(data_keys) == 1:
@@ -503,9 +511,109 @@ def _render_methane_map(
             f"{hp['end_date']}"
         )
 
+    # ── Temporal animation ─────────────────────────────
+    if mode in ("Date composite", "Anomaly"):
+        with st.expander("Temporal Animation"):
+            anim_enabled = st.checkbox(
+                "Enable date stepping",
+                value=False,
+                key="methane_anim_enabled",
+            )
+            if anim_enabled and len(available_dates) >= 2:
+                step_days = st.slider(
+                    "Step size (days)",
+                    min_value=1,
+                    max_value=14,
+                    value=7,
+                    key="methane_anim_step",
+                )
+                anim_dates = available_dates[::step_days]
+                if len(anim_dates) < 2:
+                    st.warning(
+                        "Not enough dates for "
+                        "animation with this "
+                        "step size."
+                    )
+                else:
+                    anim_idx = st.slider(
+                        "Animation frame",
+                        min_value=0,
+                        max_value=len(anim_dates) - 1,
+                        value=0,
+                        key="methane_anim_idx",
+                    )
+                    def _anim_prev():
+                        st.session_state[
+                            "methane_anim_idx"
+                        ] -= 1
+
+                    def _anim_next():
+                        st.session_state[
+                            "methane_anim_idx"
+                        ] += 1
+
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.button(
+                            "\u25c0 Previous",
+                            key="anim_prev",
+                            disabled=anim_idx == 0,
+                            on_click=_anim_prev,
+                        )
+                    with col2:
+                        st.caption(
+                            f"Frame {anim_idx + 1}/"
+                            f"{len(anim_dates)}: "
+                            f"{anim_dates[anim_idx]}"
+                        )
+                    with col3:
+                        st.button(
+                            "Next \u25b6",
+                            key="anim_next",
+                            disabled=(
+                                anim_idx
+                                == len(anim_dates) - 1
+                            ),
+                            on_click=_anim_next,
+                        )
+
+                    # Override selected_date.
+                    selected_date = anim_dates[anim_idx]
+                    window_label = (
+                        f"{selected_date}"
+                        if half_window == 0
+                        else (
+                            f"{selected_date} "
+                            f"+/- {half_window} days"
+                        )
+                    )
+
+                    # Thumbnail date strip.
+                    preview_dates = anim_dates[:8]
+                    st.caption("Quick preview:")
+                    thumb_cols = st.columns(
+                        min(len(preview_dates), 8),
+                    )
+                    for i, d in enumerate(preview_dates):
+                        with thumb_cols[i]:
+                            is_current = (
+                                d == selected_date
+                            )
+                            label = (
+                                f"**{d}**"
+                                if is_current
+                                else str(d)
+                            )
+                            st.caption(label)
+
     # ── Layer settings (opacity per variable) ────────
     opacities: dict[str, float] = {}
-    show_opacity_expander = len(data_keys) > 1 or show_rgb
+    show_opacity_expander = (
+        len(data_keys) > 1
+        or show_rgb
+        or show_s1
+        or show_classification
+    )
     if show_opacity_expander:
         with st.expander("Layer settings"):
             for dk in data_keys:
@@ -531,6 +639,24 @@ def _render_methane_map(
                     step=0.05,
                     key="opacity_RGB",
                 )
+            if show_s1:
+                opacities["S1"] = st.slider(
+                    f"S1 {s1_variable} opacity",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.5,
+                    step=0.05,
+                    key="opacity_S1",
+                )
+            if show_classification:
+                opacities["classification"] = st.slider(
+                    "Source classification opacity",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.6,
+                    step=0.05,
+                    key="opacity_classification",
+                )
     else:
         opacities[data_keys[0]] = 0.75
 
@@ -549,25 +675,68 @@ def _render_methane_map(
                         "mean composite mode."
                     )
                     continue
-                with st.spinner(
-                    f"Computing CH\u2084 anomaly for "
-                    f"{window_label} "
-                    f"(auto-scaling to image)..."
-                ):
-                    tile_url, anom_vmin, anom_vmax = (
-                        cached_methane_anomaly_tile_url(
-                            hp["west"],
-                            hp["south"],
-                            hp["east"],
-                            hp["north"],
-                            selected_date.isoformat(),
-                            half_window,
-                            hp["start_date"],
-                            hp["end_date"],
+
+                # Use cached scale if available;
+                # auto-scale only on first load or
+                # when user clicks recalculate.
+                stored = st.session_state.get(
+                    "_anomaly_scale",
+                )
+                force_auto = st.session_state.pop(
+                    "_anomaly_recalc", False,
+                )
+                _mask_kw = dict(
+                    mask_vegetation=mask_veg,
+                    mask_water=mask_water,
+                    ndvi_threshold=ndvi_thresh,
+                    ndwi_threshold=ndwi_thresh,
+                )
+                if stored and not force_auto:
+                    anom_vmin, anom_vmax = stored
+                    with st.spinner(
+                        f"Computing CH\u2084 anomaly "
+                        f"for {window_label}..."
+                    ):
+                        tile_url, _, _ = (
+                            cached_methane_anomaly_tile_url(
+                                hp["west"],
+                                hp["south"],
+                                hp["east"],
+                                hp["north"],
+                                selected_date.isoformat(),
+                                half_window,
+                                hp["start_date"],
+                                hp["end_date"],
+                                vis_min=anom_vmin,
+                                vis_max=anom_vmax,
+                                auto_scale=False,
+                                **_mask_kw,
+                            )
                         )
-                    )
-                    # Store for legend rendering.
-                    _anomaly_vis = (anom_vmin, anom_vmax)
+                else:
+                    with st.spinner(
+                        f"Computing CH\u2084 anomaly "
+                        f"for {window_label} "
+                        f"(auto-scaling)..."
+                    ):
+                        tile_url, anom_vmin, anom_vmax = (
+                            cached_methane_anomaly_tile_url(
+                                hp["west"],
+                                hp["south"],
+                                hp["east"],
+                                hp["north"],
+                                selected_date.isoformat(),
+                                half_window,
+                                hp["start_date"],
+                                hp["end_date"],
+                                **_mask_kw,
+                            )
+                        )
+                    st.session_state[
+                        "_anomaly_scale"
+                    ] = (anom_vmin, anom_vmax)
+
+                _anomaly_vis = (anom_vmin, anom_vmax)
                 layer_name = (
                     f"CH\u2084 anomaly {window_label}"
                 )
@@ -663,6 +832,93 @@ def _render_methane_map(
                 ),
             )
 
+        # ── S1 SAR context layer ──────────────────────
+        if show_s1:
+            with st.spinner(
+                f"Loading S1 {s1_variable} context layer..."
+            ):
+                if (
+                    mode == "Date composite"
+                    and selected_date
+                ):
+                    s1_tile_url = cached_date_tile_url(
+                        s1_variable,
+                        hp["west"], hp["south"],
+                        hp["east"], hp["north"],
+                        selected_date.isoformat(),
+                        half_window,
+                        source="s1",
+                    )
+                    s1_layer_name = (
+                        f"S1 {s1_variable} "
+                        f"{window_label}"
+                    )
+                else:
+                    s1_tile_url = cached_mean_tile_url(
+                        s1_variable,
+                        hp["west"], hp["south"],
+                        hp["east"], hp["north"],
+                        hp["start_date"],
+                        hp["end_date"],
+                        source="s1",
+                    )
+                    s1_layer_name = (
+                        f"S1 {s1_variable} (mean)"
+                    )
+            layer_specs.insert(
+                0,
+                LayerSpec(
+                    tile_url=s1_tile_url,
+                    layer_name=s1_layer_name,
+                    source="s1",
+                    opacity=opacities.get("S1", 0.5),
+                ),
+            )
+
+        # ── Source classification layer ───────────────
+        if show_classification:
+            with st.spinner(
+                "Computing source classification..."
+            ):
+                try:
+                    cls_tile_url = (
+                        cached_source_classification_tile_url(
+                            hp["west"], hp["south"],
+                            hp["east"], hp["north"],
+                            hp["start_date"],
+                            hp["end_date"],
+                            s1_vv_high=hp.get(
+                                "methane_cls_s1_high",
+                                -10.0,
+                            ),
+                            ndvi_veg=hp.get(
+                                "methane_cls_ndvi_veg",
+                                0.35,
+                            ),
+                            ndwi_water=hp.get(
+                                "methane_cls_ndwi_water",
+                                0.1,
+                            ),
+                            methane_signal=hp.get(
+                                "methane_cls_methane_thresh",
+                                -0.02,
+                            ),
+                        )
+                    )
+                    layer_specs.append(LayerSpec(
+                        tile_url=cls_tile_url,
+                        layer_name="Source Classification",
+                        source="s2",
+                        opacity=opacities.get(
+                            "classification", 0.6,
+                        ),
+                    ))
+                except Exception as exc:
+                    st.warning(
+                        f"Source classification failed: "
+                        f"{exc}"
+                    )
+
         base_map, fgs = (
             create_multilayer_heatmap_folium(
                 layers=layer_specs,
@@ -671,6 +927,35 @@ def _render_methane_map(
                 bounds=bounds,
             )
         )
+
+        # ── ERA5 wind arrows ─────────────────────────
+        if show_wind and selected_date:
+            with st.spinner("Loading ERA5 wind data..."):
+                try:
+                    from openearth.providers.gee_era5 import (
+                        sample_wind_grid,
+                    )
+                    from app.wind_overlay import (
+                        add_wind_arrows,
+                    )
+
+                    roi = ee.Geometry.BBox(
+                        hp["west"], hp["south"],
+                        hp["east"], hp["north"],
+                    )
+                    wind_data = sample_wind_grid(
+                        roi,
+                        selected_date.isoformat(),
+                        n_points=25,
+                    )
+                    wind_fg = add_wind_arrows(wind_data)
+                    # Insert before ROI layer (last fg).
+                    fgs.insert(-1, wind_fg)
+                except Exception as exc:
+                    st.warning(
+                        f"Wind overlay failed: {exc}"
+                    )
+
         st_folium(
             base_map,
             key="heatmap",
@@ -693,19 +978,38 @@ def _render_methane_map(
     for dk in data_keys:
         src = _resolve_source(dk, "methane")
         if len(data_keys) > 1:
-            tag = "S5P" if src == "s5p" else "S2"
-            st.caption(f"**{dk}** ({tag})")
+            st.caption(f"**{dk}**")
         if dk == "CH4_ANOMALY" and _anomaly_vis:
             render_color_legend(
                 dk, src,
                 vis_min=_anomaly_vis[0],
                 vis_max=_anomaly_vis[1],
             )
+            if st.button(
+                "\u2699 Recalculate scale",
+                key="anomaly_recalc_btn",
+                help=(
+                    "Re-run auto-scale on the "
+                    "current date's anomaly image."
+                ),
+            ):
+                st.session_state[
+                    "_anomaly_recalc"
+                ] = True
+                st.session_state.pop(
+                    "_anomaly_scale", None,
+                )
+                st.rerun()
         else:
             render_color_legend(dk, src)
         caption = _get_variable_caption(dk)
         if caption:
             st.caption(caption)
+
+    if show_s1:
+        render_color_legend(s1_variable, "s1")
+    if show_classification:
+        render_classification_legend()
 
 
 def render(
@@ -953,6 +1257,35 @@ def render(
             center_lon=center_lon,
             bounds=bounds,
         )
+
+        # ── ERA5 wind arrows (explorer) ──────────────
+        show_wind = hp.get("show_wind", False)
+        if show_wind and selected_date:
+            with st.spinner("Loading ERA5 wind data..."):
+                try:
+                    from openearth.providers.gee_era5 import (
+                        sample_wind_grid,
+                    )
+                    from app.wind_overlay import (
+                        add_wind_arrows,
+                    )
+
+                    roi = ee.Geometry.BBox(
+                        hp["west"], hp["south"],
+                        hp["east"], hp["north"],
+                    )
+                    wind_data = sample_wind_grid(
+                        roi,
+                        selected_date.isoformat(),
+                        n_points=25,
+                    )
+                    wind_fg = add_wind_arrows(wind_data)
+                    fgs.insert(-1, wind_fg)
+                except Exception as exc:
+                    st.warning(
+                        f"Wind overlay failed: {exc}"
+                    )
+
         st_folium(
             base_map,
             key="heatmap",

@@ -23,10 +23,17 @@ from openearth.providers.s5p_registry import (
 )
 
 
+_S1_KEYS = {"VV", "VH", "VV_VH_RATIO", "RVI"}
+
+
 def _resolve_source(data_key: str, source: str) -> str:
-    """Resolve the ``"methane"`` sentinel to ``"s5p"`` or ``"s2"``."""
+    """Resolve the ``"methane"`` sentinel to ``"s5p"``, ``"s1"``, or ``"s2"``."""
     if source == "methane":
-        return "s5p" if data_key == "CH4" else "s2"
+        if data_key == "CH4":
+            return "s5p"
+        if data_key in _S1_KEYS:
+            return "s1"
+        return "s2"
     return source
 
 

@@ -136,6 +136,14 @@ class SidebarConfig:
     methane_mask_water: bool = True
     methane_ndvi_threshold: float = 0.3
     methane_ndwi_threshold: float = 0.0
+    methane_show_s1: bool = False
+    methane_s1_variable: str = "VV"
+    show_wind: bool = False
+    methane_show_classification: bool = False
+    methane_cls_s1_high: float = -10.0
+    methane_cls_ndvi_veg: float = 0.35
+    methane_cls_ndwi_water: float = 0.1
+    methane_cls_methane_thresh: float = -0.02
 
 
 _METHANE_LAYER_OPTIONS: dict[str, str] = {
@@ -145,23 +153,13 @@ _METHANE_LAYER_OPTIONS: dict[str, str] = {
 }
 
 
-def _render_methane_sidebar() -> tuple[
-    list[str], bool, bool, bool, bool, float, float,
-]:
+def _render_methane_sidebar() -> dict:
     """Render methane-specific sidebar controls.
 
-    Returns (s2_layers, show_s5p, show_rgb, mask_veg,
-    mask_water, ndvi_thresh, ndwi_thresh).
+    Returns a dict with all methane sidebar settings.
     """
-    st.sidebar.header("Methane Layers")
-
-    show_s5p = st.sidebar.checkbox(
-        "S5P CH₄ (coarse, ~7 km)",
-        value=True,
-        key="methane_show_s5p",
-    )
-
-    st.sidebar.caption("High-resolution S2 proxies:")
+    # ── Methane proxies ──────────────────────────────
+    st.sidebar.header("Methane Proxies")
     s2_layers = st.sidebar.multiselect(
         "S2 proxy layers",
         options=list(_METHANE_LAYER_OPTIONS.keys()),
@@ -170,18 +168,92 @@ def _render_methane_sidebar() -> tuple[
         key="methane_s2_layers",
     )
 
-    st.sidebar.divider()
-    show_rgb = st.sidebar.checkbox(
-        "Show RGB composite (true colour)",
+    # ── Overlay layers ───────────────────────────────
+    st.sidebar.header("Overlay Layers")
+    show_s5p = st.sidebar.checkbox(
+        "S5P CH\u2084 (coarse, ~7 km)",
+        value=True,
+        key="methane_show_s5p",
+    )
+    show_s1 = st.sidebar.checkbox(
+        "S1 SAR context",
         value=False,
         help=(
-            "Overlay a Sentinel-2 true-colour image "
-            "to help distinguish surface features "
-            "from real methane signals."
+            "Overlay Sentinel-1 SAR backscatter to "
+            "identify infrastructure, wetlands, and "
+            "surface features."
+        ),
+        key="methane_show_s1",
+    )
+    s1_variable = "VV"
+    if show_s1:
+        s1_variable = st.sidebar.radio(
+            "SAR variable",
+            options=["VV", "VH", "VV_VH_RATIO"],
+            format_func=lambda k: {
+                "VV": "VV (co-pol, infrastructure)",
+                "VH": "VH (cross-pol, vegetation)",
+                "VV_VH_RATIO": "VV/VH ratio (land cover)",
+            }[k],
+            key="methane_s1_var",
+        )
+    show_wind = st.sidebar.checkbox(
+        "ERA5 wind overlay",
+        value=False,
+        help=(
+            "Overlay wind direction and speed arrows "
+            "from ERA5 reanalysis to help trace "
+            "methane plume origins."
+        ),
+        key="methane_show_wind",
+    )
+    show_classification = st.sidebar.checkbox(
+        "Source classification",
+        value=False,
+        help=(
+            "Auto-classify methane emission sources "
+            "using S1 SAR, NDVI, NDWI, and MBSP."
+        ),
+        key="methane_show_classification",
+    )
+    cls_s1_high = -10.0
+    cls_ndvi_veg = 0.35
+    cls_ndwi_water = 0.1
+    cls_methane_thresh = -0.02
+    if show_classification:
+        with st.sidebar.expander("Classification thresholds"):
+            cls_s1_high = st.slider(
+                "S1 VV high (dB)",
+                -20.0, 0.0, -10.0,
+                key="cls_s1_high",
+            )
+            cls_ndvi_veg = st.slider(
+                "NDVI vegetation",
+                0.0, 1.0, 0.35,
+                key="cls_ndvi",
+            )
+            cls_ndwi_water = st.slider(
+                "NDWI water",
+                -0.5, 0.5, 0.1,
+                key="cls_ndwi",
+            )
+            cls_methane_thresh = st.slider(
+                "MBSP methane",
+                -0.1, 0.0, -0.02,
+                key="cls_methane",
+            )
+    show_rgb = st.sidebar.checkbox(
+        "RGB composite (true colour)",
+        value=False,
+        help=(
+            "Overlay a true-colour image to help "
+            "distinguish surface features from "
+            "methane signals."
         ),
         key="methane_show_rgb",
     )
 
+    # ── Masking ──────────────────────────────────────
     st.sidebar.header("Masking")
     mask_veg = st.sidebar.checkbox(
         "Mask vegetation (NDVI)",
@@ -208,11 +280,23 @@ def _render_methane_sidebar() -> tuple[
             key="methane_ndwi_thresh",
         )
 
-    return (
-        s2_layers, show_s5p, show_rgb,
-        mask_veg, mask_water,
-        ndvi_thresh, ndwi_thresh,
-    )
+    return {
+        "s2_layers": s2_layers,
+        "show_s5p": show_s5p,
+        "show_rgb": show_rgb,
+        "mask_veg": mask_veg,
+        "mask_water": mask_water,
+        "ndvi_thresh": ndvi_thresh,
+        "ndwi_thresh": ndwi_thresh,
+        "show_s1": show_s1,
+        "s1_variable": s1_variable,
+        "show_wind": show_wind,
+        "show_classification": show_classification,
+        "cls_s1_high": cls_s1_high,
+        "cls_ndvi_veg": cls_ndvi_veg,
+        "cls_ndwi_water": cls_ndwi_water,
+        "cls_methane_thresh": cls_methane_thresh,
+    }
 
 
 def render_sidebar() -> SidebarConfig:
@@ -251,14 +335,33 @@ def render_sidebar() -> SidebarConfig:
     methane_mask_water = True
     methane_ndvi_thresh = 0.3
     methane_ndwi_thresh = 0.0
+    methane_show_s1 = False
+    methane_s1_variable = "VV"
+    show_wind = False
+    methane_show_classification = False
+    methane_cls_s1_high = -10.0
+    methane_cls_ndvi_veg = 0.35
+    methane_cls_ndwi_water = 0.1
+    methane_cls_methane_thresh = -0.02
 
     if is_methane:
-        (
-            methane_s2_layers, methane_show_s5p,
-            methane_show_rgb,
-            methane_mask_veg, methane_mask_water,
-            methane_ndvi_thresh, methane_ndwi_thresh,
-        ) = _render_methane_sidebar()
+        meth = _render_methane_sidebar()
+
+        methane_s2_layers = meth["s2_layers"]
+        methane_show_s5p = meth["show_s5p"]
+        methane_show_rgb = meth["show_rgb"]
+        methane_mask_veg = meth["mask_veg"]
+        methane_mask_water = meth["mask_water"]
+        methane_ndvi_thresh = meth["ndvi_thresh"]
+        methane_ndwi_thresh = meth["ndwi_thresh"]
+        methane_show_s1 = meth["show_s1"]
+        methane_s1_variable = meth["s1_variable"]
+        show_wind = meth["show_wind"]
+        methane_show_classification = meth["show_classification"]
+        methane_cls_s1_high = meth["cls_s1_high"]
+        methane_cls_ndvi_veg = meth["cls_ndvi_veg"]
+        methane_cls_ndwi_water = meth["cls_ndwi_water"]
+        methane_cls_methane_thresh = meth["cls_methane_thresh"]
 
         source = "methane"
         selected_keys = (
@@ -300,6 +403,16 @@ def render_sidebar() -> SidebarConfig:
                 "Select at least one variable.",
             )
             selected_keys = [list(variables.keys())[0]]
+
+        show_wind = st.sidebar.checkbox(
+            "ERA5 wind overlay",
+            value=False,
+            help=(
+                "Overlay wind direction and speed "
+                "arrows from ERA5 reanalysis."
+            ),
+            key="explorer_show_wind",
+        )
 
     st.sidebar.header("ROI (Region of Interest)")
 
@@ -387,7 +500,13 @@ def render_sidebar() -> SidebarConfig:
     default_start = date.today() - timedelta(
         days=default_days,
     )
-    default_end = date.today() - timedelta(days=1)
+    # OFFL processing latency per source
+    default_end_offset = (
+        5 if source == "s5p"
+        else 2 if source == "s1"
+        else 3  # s2, methane
+    )
+    default_end = date.today() - timedelta(days=default_end_offset)
 
     if "date_start" not in st.session_state:
         st.session_state["date_start"] = default_start
@@ -427,4 +546,12 @@ def render_sidebar() -> SidebarConfig:
         methane_mask_water=methane_mask_water,
         methane_ndvi_threshold=methane_ndvi_thresh,
         methane_ndwi_threshold=methane_ndwi_thresh,
+        methane_show_s1=methane_show_s1,
+        methane_s1_variable=methane_s1_variable,
+        show_wind=show_wind,
+        methane_show_classification=methane_show_classification,
+        methane_cls_s1_high=methane_cls_s1_high,
+        methane_cls_ndvi_veg=methane_cls_ndvi_veg,
+        methane_cls_ndwi_water=methane_cls_ndwi_water,
+        methane_cls_methane_thresh=methane_cls_methane_thresh,
     )
