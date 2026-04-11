@@ -8,8 +8,6 @@ from typing import Any
 
 import ee
 
-from openearth.analytics.conversions import to_ee_date
-
 ERA5_COLLECTION_ID = "ECMWF/ERA5_LAND/HOURLY"
 
 
