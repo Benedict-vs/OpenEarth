@@ -9,6 +9,7 @@ from typing import Any
 
 import ee
 import folium
+from folium.plugins import MousePosition
 
 from openearth.providers import get_collection, get_config
 from openearth.providers.gee_s2 import compute_methane_anomaly
@@ -427,6 +428,12 @@ def create_heatmap_folium(
         zoom_start=2 if is_global else 10,
         tiles=None,
     )
+    MousePosition(
+        position="bottomleft",
+        separator=" | ",
+        prefix="Lat/Lon:",
+        num_digits=4,
+    ).add_to(fmap)
     folium.TileLayer(
         tiles="CartoDB positron",
         name="Background map",
@@ -500,6 +507,12 @@ def create_multilayer_heatmap_folium(
         zoom_start=2 if is_global else 10,
         tiles=None,
     )
+    MousePosition(
+        position="bottomleft",
+        separator=" | ",
+        prefix="Lat/Lon:",
+        num_digits=4,
+    ).add_to(fmap)
     folium.TileLayer(
         tiles="CartoDB positron",
         name="Background map",

@@ -312,6 +312,10 @@ def cached_source_classification_tile_url(
     ndvi_veg: float = 0.35,
     ndwi_water: float = 0.1,
     methane_signal: float = -0.02,
+    thermal_b11: float = 0.5,
+    thermal_b12: float = 0.5,
+    geo_methane_strong: float = -0.04,
+    ndvi_barren: float = 0.1,
 ) -> str:
     """Return a tile URL for methane source classification."""
     from openearth.analytics.source_classification import (
@@ -326,6 +330,10 @@ def cached_source_classification_tile_url(
         ndvi_veg=ndvi_veg,
         ndwi_water=ndwi_water,
         methane_signal=methane_signal,
+        thermal_b11=thermal_b11,
+        thermal_b12=thermal_b12,
+        geo_methane_strong=geo_methane_strong,
+        ndvi_barren=ndvi_barren,
     )
     image = classify_methane_sources(
         roi, start_date, end_date,

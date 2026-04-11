@@ -903,6 +903,22 @@ def _render_methane_map(
                                 "methane_cls_methane_thresh",
                                 -0.02,
                             ),
+                            thermal_b11=hp.get(
+                                "methane_cls_thermal_b11",
+                                0.5,
+                            ),
+                            thermal_b12=hp.get(
+                                "methane_cls_thermal_b12",
+                                0.5,
+                            ),
+                            geo_methane_strong=hp.get(
+                                "methane_cls_geo_methane",
+                                -0.04,
+                            ),
+                            ndvi_barren=hp.get(
+                                "methane_cls_ndvi_barren",
+                                0.1,
+                            ),
                         )
                     )
                     layer_specs.append(LayerSpec(
@@ -1257,34 +1273,6 @@ def render(
             center_lon=center_lon,
             bounds=bounds,
         )
-
-        # ── ERA5 wind arrows (explorer) ──────────────
-        show_wind = hp.get("show_wind", False)
-        if show_wind and selected_date:
-            with st.spinner("Loading ERA5 wind data..."):
-                try:
-                    from openearth.providers.gee_era5 import (
-                        sample_wind_grid,
-                    )
-                    from app.wind_overlay import (
-                        add_wind_arrows,
-                    )
-
-                    roi = ee.Geometry.BBox(
-                        hp["west"], hp["south"],
-                        hp["east"], hp["north"],
-                    )
-                    wind_data = sample_wind_grid(
-                        roi,
-                        selected_date.isoformat(),
-                        n_points=25,
-                    )
-                    wind_fg = add_wind_arrows(wind_data)
-                    fgs.insert(-1, wind_fg)
-                except Exception as exc:
-                    st.warning(
-                        f"Wind overlay failed: {exc}"
-                    )
 
         st_folium(
             base_map,

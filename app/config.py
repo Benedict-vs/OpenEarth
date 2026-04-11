@@ -144,6 +144,10 @@ class SidebarConfig:
     methane_cls_ndvi_veg: float = 0.35
     methane_cls_ndwi_water: float = 0.1
     methane_cls_methane_thresh: float = -0.02
+    methane_cls_thermal_b11: float = 0.5
+    methane_cls_thermal_b12: float = 0.5
+    methane_cls_geo_methane: float = -0.04
+    methane_cls_ndvi_barren: float = 0.1
 
 
 _METHANE_LAYER_OPTIONS: dict[str, str] = {
@@ -220,6 +224,10 @@ def _render_methane_sidebar() -> dict:
     cls_ndvi_veg = 0.35
     cls_ndwi_water = 0.1
     cls_methane_thresh = -0.02
+    cls_thermal_b11 = 0.5
+    cls_thermal_b12 = 0.5
+    cls_geo_methane = -0.04
+    cls_ndvi_barren = 0.1
     if show_classification:
         with st.sidebar.expander("Classification thresholds"):
             cls_s1_high = st.slider(
@@ -241,6 +249,42 @@ def _render_methane_sidebar() -> dict:
                 "MBSP methane",
                 -0.1, 0.0, -0.02,
                 key="cls_methane",
+            )
+            cls_thermal_b11 = st.slider(
+                "Thermal B11",
+                0.0, 1.0, 0.5,
+                help=(
+                    "B11 reflectance above this indicates "
+                    "thermal emission (gas flares)."
+                ),
+                key="cls_thermal_b11",
+            )
+            cls_thermal_b12 = st.slider(
+                "Thermal B12",
+                0.0, 1.0, 0.5,
+                help=(
+                    "B12 reflectance above this indicates "
+                    "thermal emission (gas flares)."
+                ),
+                key="cls_thermal_b12",
+            )
+            cls_geo_methane = st.slider(
+                "Geo seep MBSP",
+                -0.1, 0.0, -0.04,
+                help=(
+                    "Stricter MBSP threshold for "
+                    "geological seep classification."
+                ),
+                key="cls_geo_methane",
+            )
+            cls_ndvi_barren = st.slider(
+                "Barren NDVI cutoff",
+                0.0, 0.3, 0.1,
+                help=(
+                    "NDVI below this is barren desert "
+                    "(suppresses geological seep)."
+                ),
+                key="cls_ndvi_barren",
             )
     show_rgb = st.sidebar.checkbox(
         "RGB composite (true colour)",
@@ -296,6 +340,10 @@ def _render_methane_sidebar() -> dict:
         "cls_ndvi_veg": cls_ndvi_veg,
         "cls_ndwi_water": cls_ndwi_water,
         "cls_methane_thresh": cls_methane_thresh,
+        "cls_thermal_b11": cls_thermal_b11,
+        "cls_thermal_b12": cls_thermal_b12,
+        "cls_geo_methane": cls_geo_methane,
+        "cls_ndvi_barren": cls_ndvi_barren,
     }
 
 
@@ -343,6 +391,10 @@ def render_sidebar() -> SidebarConfig:
     methane_cls_ndvi_veg = 0.35
     methane_cls_ndwi_water = 0.1
     methane_cls_methane_thresh = -0.02
+    methane_cls_thermal_b11 = 0.5
+    methane_cls_thermal_b12 = 0.5
+    methane_cls_geo_methane = -0.04
+    methane_cls_ndvi_barren = 0.1
 
     if is_methane:
         meth = _render_methane_sidebar()
@@ -362,6 +414,10 @@ def render_sidebar() -> SidebarConfig:
         methane_cls_ndvi_veg = meth["cls_ndvi_veg"]
         methane_cls_ndwi_water = meth["cls_ndwi_water"]
         methane_cls_methane_thresh = meth["cls_methane_thresh"]
+        methane_cls_thermal_b11 = meth["cls_thermal_b11"]
+        methane_cls_thermal_b12 = meth["cls_thermal_b12"]
+        methane_cls_geo_methane = meth["cls_geo_methane"]
+        methane_cls_ndvi_barren = meth["cls_ndvi_barren"]
 
         source = "methane"
         selected_keys = (
@@ -403,16 +459,6 @@ def render_sidebar() -> SidebarConfig:
                 "Select at least one variable.",
             )
             selected_keys = [list(variables.keys())[0]]
-
-        show_wind = st.sidebar.checkbox(
-            "ERA5 wind overlay",
-            value=False,
-            help=(
-                "Overlay wind direction and speed "
-                "arrows from ERA5 reanalysis."
-            ),
-            key="explorer_show_wind",
-        )
 
     st.sidebar.header("ROI (Region of Interest)")
 
@@ -554,4 +600,8 @@ def render_sidebar() -> SidebarConfig:
         methane_cls_ndvi_veg=methane_cls_ndvi_veg,
         methane_cls_ndwi_water=methane_cls_ndwi_water,
         methane_cls_methane_thresh=methane_cls_methane_thresh,
+        methane_cls_thermal_b11=methane_cls_thermal_b11,
+        methane_cls_thermal_b12=methane_cls_thermal_b12,
+        methane_cls_geo_methane=methane_cls_geo_methane,
+        methane_cls_ndvi_barren=methane_cls_ndvi_barren,
     )

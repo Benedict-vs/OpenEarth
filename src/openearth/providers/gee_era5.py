@@ -87,8 +87,8 @@ def sample_wind_grid(
     # Generate grid points from the bounding box.
     coords = geometry.bounds().coordinates().getInfo()
     ring = coords[0]
-    lons = [p[0] for p in ring]
-    lats = [p[1] for p in ring]
+    lons = [float(p[0]) for p in ring]
+    lats = [float(p[1]) for p in ring]
     west, east = min(lons), max(lons)
     south, north = min(lats), max(lats)
 

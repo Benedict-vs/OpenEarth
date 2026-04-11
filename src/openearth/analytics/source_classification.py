@@ -20,6 +20,10 @@ class ClassificationThresholds:
     ndvi_veg: float = 0.35         # above → vegetation
     ndwi_water: float = 0.1        # above → water
     methane_signal: float = -0.02  # MBSP below this → methane
+    thermal_b11: float = 0.5       # B11 above → thermal source (flare)
+    thermal_b12: float = 0.5       # B12 above → thermal source (flare)
+    geo_methane_strong: float = -0.04  # stricter MBSP for geo seep
+    ndvi_barren: float = 0.1       # NDVI below → barren desert
 
 
 CLASS_LABELS = {
@@ -89,6 +93,18 @@ def classify_methane_sources(
     low_ndvi = ndvi.lt(thresholds.ndvi_veg)
     high_ndwi = ndwi.gt(thresholds.ndwi_water)
 
+    # Thermal anomaly: both SWIR bands abnormally high → active
+    # combustion (gas flaring).  Normal surfaces stay below ~0.3.
+    is_thermal = b11.gt(thresholds.thermal_b11).And(
+        b12.gt(thresholds.thermal_b12),
+    )
+
+    # Barren desert: extremely low NDVI (sand/rock).
+    is_barren = ndvi.lt(thresholds.ndvi_barren)
+
+    # Stricter MBSP threshold for geological seep classification.
+    has_strong_methane = mbsp.lt(thresholds.geo_methane_strong)
+
     # Start with "no signal" (class 5).
     classification = (
         ee.Image.constant(5).toInt()
@@ -96,10 +112,12 @@ def classify_methane_sources(
     )
 
     # Apply rules in ascending priority order.
-    # Rule 4: Geological seep.
+    # Rule 4: Geological seep — requires stronger MBSP signal
+    # and excludes true barren desert (NDVI < ndvi_barren).
     is_geological = (
-        has_methane
+        has_strong_methane
         .And(low_ndvi)
+        .And(is_barren.Not())
         .And(low_s1.Not())
         .And(high_s1.Not())
     )
@@ -122,8 +140,16 @@ def classify_methane_sources(
     )
 
     # Rule 1: Industrial (highest priority).
-    is_industrial = (
+    # Two paths: methane-based (pipeline leaks, valves) and
+    # thermal-based (gas flares where MBSP goes positive).
+    industrial_methane = (
         has_methane.And(high_s1).And(low_ndvi)
+    )
+    industrial_thermal = (
+        is_thermal.And(high_s1).And(low_ndvi)
+    )
+    is_industrial = industrial_methane.Or(
+        industrial_thermal,
     )
     classification = classification.where(
         is_industrial, 1,
