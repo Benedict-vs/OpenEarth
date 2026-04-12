@@ -62,6 +62,7 @@ OpenEarth/
 │   ├── roi.py                    # ROI state management & draw-map widget
 │   ├── errors.py                 # EE error classification & display
 │   ├── analysis.py               # Cached helpers & analysis orchestration
+│   ├── wind_overlay.py           # ERA5 wind arrow rendering
 │   └── tabs/
 │       ├── spatial_map.py        # Heatmap tab with image export
 │       ├── time_series.py        # Time-series chart + CSV export
@@ -69,16 +70,22 @@ OpenEarth/
 │
 ├── src/openearth/                # Reusable core library
 │   ├── providers/                # Data access layer
-│   │   ├── __init__.py           # Shared get_config() / get_collection()
+│   │   ├── __init__.py           # Dispatcher: get_config() / get_collection()
 │   │   ├── gee_session.py        # EE initialization & auth
 │   │   ├── gee_s5p.py            # Sentinel-5P collection builder
 │   │   ├── gee_s2.py             # Sentinel-2 with cloud masking
+│   │   ├── gee_s1.py             # Sentinel-1 GRD collection builder
+│   │   ├── gee_era5.py           # ERA5-Land wind data provider
 │   │   ├── s5p_registry.py       # 6 trace-gas configurations
-│   │   └── s2_registry.py        # 5 spectral-index configurations
+│   │   ├── s2_registry.py        # 18 spectral indices + 13 raw bands + 3 methane proxies
+│   │   └── s1_registry.py        # 4 SAR variable configurations
 │   ├── analytics/
 │   │   ├── conversions.py        # Date → ee.Date conversion
 │   │   ├── smoothing.py          # Rolling-window smoothing
-│   │   └── daily_timeseries.py   # Batched daily ROI time series
+│   │   ├── daily_timeseries.py   # Batched daily ROI time series
+│   │   └── source_classification.py  # Rule-based methane source classifier
+│   ├── masking/
+│   │   └── vegetation_water.py   # NDVI/NDWI-based pixel masking
 │   └── visualization/
 │       └── heatmap.py            # Composites, tile URLs, thumbnails, GeoTIFF
 │
@@ -118,12 +125,12 @@ On first run, the app will prompt you to authenticate with Earth Engine.
 ## Usage
 
 1. Enter your Earth Engine project ID in the sidebar (or set `OPENEARTH_EE_PROJECT` env var)
-2. Choose a data source: **Sentinel-5P** (trace gases) or **Sentinel-2** (spectral indices)
-3. Select a variable (e.g. NO₂, NDVI)
+2. Choose a mode: **Explorer** (general analysis) or **Methane Detection**
+3. In Explorer mode, pick a data source (**Sentinel-5P**, **Sentinel-2**, or **Sentinel-1**) and select variables
 4. Define a region of interest — draw on the map, pick from examples, or type coordinates
-5. Set the date range and click **Run analysis**
+5. Set the date range and click **Load Map**
 6. Explore results across three tabs:
-   - **Spatial Map** — interactive heatmap with date slider and image export
+   - **Spatial Map** — interactive heatmap with date slider, colour legend, scale description, and image export
    - **Time Series** — daily chart with smoothing controls and CSV download
    - **Statistics** — summary metrics, distribution, seasonality, anomalies
 
@@ -131,15 +138,20 @@ On first run, the app will prompt you to authenticate with Earth Engine.
 
 - [x] Interactive ROI drawing + predefined regions
 - [x] Sentinel-5P time series (6 trace gases)
-- [x] Sentinel-2 spectral indices with cloud masking
+- [x] Sentinel-2 spectral indices with cloud masking (18 indices + 13 raw bands)
+- [x] Sentinel-1 SAR (VV, VH, polarization ratio, RVI)
+- [x] ERA5 wind overlay
+- [x] Methane Detection mode (multi-source, temporal animation, source classification)
 - [x] Spatial heatmap with date/mean composite toggle
 - [x] Statistical dashboard (distribution, anomalies, YoY)
 - [x] Image export (PNG, JPEG, GeoTIFF)
 - [x] CSV export
 - [x] Analysis caching with LRU eviction
+- [x] Per-variable "Reading the scale" descriptions
+- [ ] Multi-temporal products (dNBR, flood mask, deforestation change)
+- [ ] Multi-source fusion products (biomass proxy, soil moisture, building damage)
 - [ ] Unit tests for core analytics
 - [ ] CLI for scriptable/reproducible runs
-- [ ] Additional data sources (e.g. ERA5 climate reanalysis)
 
 ## License
 
