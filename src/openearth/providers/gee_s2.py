@@ -73,6 +73,20 @@ def _compute_index(
     if getattr(config, "is_rgb", False):
         return image.select(config.bands)
 
+    if config.expression is None and config.key == "CHLA":
+        # 4.26 * (B5/B4)^3.94 — requires ee.Image.pow()
+        ratio = image.select("B5").divide(
+            image.select("B4"),
+        )
+        return (
+            ratio.pow(3.94)
+            .multiply(4.26)
+            .rename(config.key)
+            .copyProperties(
+                image, ["system:time_start"],
+            )
+        )
+
     if config.expression is None:
         return (
             image.select(config.bands)

@@ -110,6 +110,7 @@ class GasConfig:
     valid_min: float
     valid_max: float
     display_unit: str
+    description: str = ""
     display_scale: float = 1.0
     palette: list[str] = field(
         default_factory=lambda: list(DEFAULT_PALETTE),
@@ -127,6 +128,21 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         valid_min=-0.0001,
         valid_max=0.001,
         display_unit="\u00b5mol/m\u00b2",
+        description=(
+            "**Reading the NO\u2082 scale:** "
+            "Tropospheric nitrogen dioxide column "
+            "density from TROPOMI. "
+            "**Low values** (pale) indicate clean "
+            "air typical of rural or oceanic areas. "
+            "**Moderate values** indicate background "
+            "urban or industrial activity. "
+            "**High values** (dark red) indicate "
+            "intense combustion sources such as "
+            "power plants, traffic corridors, or "
+            "industrial zones. "
+            "Useful for monitoring air quality and "
+            "identifying pollution hotspots."
+        ),
         display_scale=1e6,
         palette=_PALETTE_NO2,
     ),
@@ -140,6 +156,21 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         valid_min=-0.001,
         valid_max=0.01,
         display_unit="\u00b5mol/m\u00b2",
+        description=(
+            "**Reading the SO\u2082 scale:** "
+            "Sulphur dioxide column density from "
+            "TROPOMI. "
+            "**Low values** (pale) indicate clean "
+            "background conditions. "
+            "**Elevated values** indicate volcanic "
+            "degassing, coal-fired power plants, "
+            "or smelters. "
+            "**Very high values** (dark purple) "
+            "indicate active volcanic eruptions "
+            "or major industrial emissions. "
+            "Useful for tracking volcanic plumes "
+            "and industrial pollution sources."
+        ),
         display_scale=1e6,
         palette=_PALETTE_SO2,
     ),
@@ -153,6 +184,21 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         valid_min=0.0,
         valid_max=0.1,
         display_unit="mmol/m\u00b2",
+        description=(
+            "**Reading the CO scale:** "
+            "Carbon monoxide total column density "
+            "from TROPOMI. "
+            "**Low values** (dark) indicate clean "
+            "background air. "
+            "**Moderate values** indicate regional "
+            "biomass burning or urban emissions. "
+            "**High values** (bright yellow) "
+            "indicate intense wildfires, "
+            "agricultural burning, or major "
+            "industrial emissions. "
+            "Useful for tracking fire plumes and "
+            "long-range pollution transport."
+        ),
         display_scale=1e3,
         palette=_PALETTE_CO,
     ),
@@ -166,6 +212,21 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         valid_min=0.0,
         valid_max=0.3,
         display_unit="mol/m\u00b2",
+        description=(
+            "**Reading the O\u2083 scale:** "
+            "Total ozone column density from "
+            "TROPOMI. "
+            "**Low values** (blue/purple) indicate "
+            "ozone-depleted regions, potentially "
+            "near polar vortex boundaries. "
+            "**Mid-range values** indicate typical "
+            "background ozone levels. "
+            "**High values** (red) indicate ozone "
+            "accumulation from stratospheric "
+            "intrusion or photochemical production. "
+            "Useful for monitoring the ozone layer "
+            "and tropospheric ozone episodes."
+        ),
         display_scale=1.0,
         palette=_PALETTE_O3,
     ),
@@ -182,6 +243,20 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         valid_min=1600.0,
         valid_max=2200.0,
         display_unit="ppb",
+        description=(
+            "**Reading the CH\u2084 scale:** "
+            "Column-averaged dry-air methane mixing "
+            "ratio from TROPOMI (~7 km resolution). "
+            "**Values around 1850 ppb** represent "
+            "the current global background. "
+            "**Values above 1900 ppb** indicate "
+            "regional enhancement from oil & gas "
+            "infrastructure, wetlands, or livestock. "
+            "**Values above 2000 ppb** indicate "
+            "strong local sources or super-emitters. "
+            "Useful for identifying large methane "
+            "emission regions at coarse scale."
+        ),
         display_scale=1.0,
         palette=_PALETTE_CH4,
     ),
@@ -198,6 +273,22 @@ GAS_REGISTRY: dict[str, GasConfig] = {
         valid_min=-0.0005,
         valid_max=0.005,
         display_unit="\u00b5mol/m\u00b2",
+        description=(
+            "**Reading the HCHO scale:** "
+            "Tropospheric formaldehyde column "
+            "density from TROPOMI. "
+            "**Low values** (pale) indicate clean "
+            "conditions with minimal VOC oxidation. "
+            "**Moderate values** indicate biogenic "
+            "emissions from forests (isoprene "
+            "oxidation) or urban photochemistry. "
+            "**High values** (dark red) indicate "
+            "intense biomass burning, industrial "
+            "VOC emissions, or petrochemical "
+            "activity. "
+            "Useful as a proxy for volatile organic "
+            "compound emissions and fire detection."
+        ),
         display_scale=1e6,
         palette=_PALETTE_HCHO,
     ),
