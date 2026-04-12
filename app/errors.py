@@ -42,6 +42,9 @@ _EMPTY_PHRASES = (
     "empty collection",
     "0 elements",
     "no valid pixels",
+    "collection.first",
+    "no bands",
+    "image collection is empty",
 )
 
 
@@ -81,7 +84,10 @@ def classify_ee_error(
             "empty",
             "No satellite observations are "
             "available for this variable, ROI, "
-            "and time window.",
+            "and time window. If your date range "
+            "extends close to today, try an earlier "
+            "end date \u2014 recent imagery may not be "
+            "processed yet.",
         )
 
     return (

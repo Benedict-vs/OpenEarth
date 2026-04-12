@@ -347,6 +347,13 @@ def _render_methane_map(
             )
         else:
             st.caption(f"Showing: {window_label}")
+        _effective_end = selected_date + _td(days=half_window)
+        if _effective_end > date.today():
+            st.warning(
+                "The selected date window extends into the "
+                "future \u2014 satellite data may not be available "
+                "yet for the most recent dates."
+            )
     else:
         st.caption(
             f"Composite mean from "
@@ -995,6 +1002,13 @@ def render(
             )
         else:
             st.caption(f"Showing: {window_label}")
+        _effective_end = selected_date + _td(days=half_window)
+        if _effective_end > date.today():
+            st.warning(
+                "The selected date window extends into the "
+                "future \u2014 satellite data may not be available "
+                "yet for the most recent dates."
+            )
     else:
         st.caption(
             f"Composite mean of all {sat} passes "

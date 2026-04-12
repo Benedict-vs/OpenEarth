@@ -568,6 +568,12 @@ def render_sidebar() -> SidebarConfig:
         key="date_end",
     )
 
+    if end_date_inclusive > date.today():
+        st.sidebar.info(
+            "End date is in the future \u2014 satellite data "
+            "may not yet be available for recent dates."
+        )
+
     run = st.sidebar.button(
         "Load Map", type="primary",
     )
