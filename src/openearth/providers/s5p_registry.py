@@ -141,7 +141,19 @@ GAS_REGISTRY: dict[str, GasConfig] = {
             "power plants, traffic corridors, or "
             "industrial zones. "
             "Useful for monitoring air quality and "
-            "identifying pollution hotspots."
+            "identifying pollution hotspots. "
+            "**Safe limits (ground-level references "
+            "— not directly comparable to satellite "
+            "column values):** "
+            "WHO guideline: 10 µg/m³ annual mean, "
+            "25 µg/m³ 24-hour mean. "
+            "Prolonged exposure above these levels "
+            "increases respiratory and cardiovascular "
+            "risk in humans and animals. "
+            "Sustained high concentrations damage "
+            "plant foliage and contribute to acid "
+            "rain, harming terrestrial and aquatic "
+            "ecosystems."
         ),
         display_scale=1e6,
         palette=_PALETTE_NO2,
@@ -169,7 +181,18 @@ GAS_REGISTRY: dict[str, GasConfig] = {
             "indicate active volcanic eruptions "
             "or major industrial emissions. "
             "Useful for tracking volcanic plumes "
-            "and industrial pollution sources."
+            "and industrial pollution sources. "
+            "**Safe limits (ground-level references "
+            "— not directly comparable to satellite "
+            "column values):** "
+            "WHO guideline: 40 µg/m³ 24-hour mean. "
+            "Short-term exposure above this level "
+            "aggravates asthma and respiratory "
+            "conditions in humans and animals. "
+            "Vegetation suffers leaf necrosis at "
+            "concentrations above ~100 µg/m³. "
+            "SO₂ also acidifies water bodies, "
+            "harming fish and aquatic organisms."
         ),
         display_scale=1e6,
         palette=_PALETTE_SO2,
@@ -197,7 +220,16 @@ GAS_REGISTRY: dict[str, GasConfig] = {
             "agricultural burning, or major "
             "industrial emissions. "
             "Useful for tracking fire plumes and "
-            "long-range pollution transport."
+            "long-range pollution transport. "
+            "**Safe limits (ground-level references "
+            "— not directly comparable to satellite "
+            "column values):** "
+            "WHO guideline: 4 mg/m³ 24-hour mean. "
+            "Exposure above ~35 ppm (1-hour) is "
+            "dangerous to humans and animals, "
+            "impairing oxygen transport in the blood. "
+            "Plants are largely unaffected by ambient "
+            "CO levels."
         ),
         display_scale=1e3,
         palette=_PALETTE_CO,
@@ -225,7 +257,18 @@ GAS_REGISTRY: dict[str, GasConfig] = {
             "accumulation from stratospheric "
             "intrusion or photochemical production. "
             "Useful for monitoring the ozone layer "
-            "and tropospheric ozone episodes."
+            "and tropospheric ozone episodes. "
+            "**Safe limits (ground-level references "
+            "— not directly comparable to satellite "
+            "column values):** "
+            "WHO guideline: 100 µg/m³ 8-hour mean "
+            "(~50 ppb). Ground-level ozone above "
+            "this threshold irritates airways in "
+            "humans and animals. "
+            "Crops and forests suffer reduced growth "
+            "and visible leaf damage above ~60 ppb "
+            "(AOT40 metric used in vegetation "
+            "protection standards)."
         ),
         display_scale=1.0,
         palette=_PALETTE_O3,
@@ -255,7 +298,18 @@ GAS_REGISTRY: dict[str, GasConfig] = {
             "**Values above 2000 ppb** indicate "
             "strong local sources or super-emitters. "
             "Useful for identifying large methane "
-            "emission regions at coarse scale."
+            "emission regions at coarse scale. "
+            "**Safe limits:** "
+            "Methane is not directly toxic at "
+            "ambient atmospheric concentrations. "
+            "Its primary concern is as a potent "
+            "greenhouse gas (~80× CO₂ warming "
+            "potential over 20 years). "
+            "CH₄ becomes an explosion hazard only "
+            "at 5–15 % by volume — far above the "
+            "ppb levels observed by satellite. "
+            "No specific WHO air-quality guideline "
+            "exists for ambient methane."
         ),
         display_scale=1.0,
         palette=_PALETTE_CH4,
@@ -287,7 +341,17 @@ GAS_REGISTRY: dict[str, GasConfig] = {
             "VOC emissions, or petrochemical "
             "activity. "
             "Useful as a proxy for volatile organic "
-            "compound emissions and fire detection."
+            "compound emissions and fire detection. "
+            "**Safe limits (ground-level references "
+            "— not directly comparable to satellite "
+            "column values):** "
+            "WHO guideline: 100 µg/m³ for 30-minute "
+            "indoor exposure. Formaldehyde is "
+            "classified as carcinogenic to humans "
+            "(IARC Group 1). Chronic exposure "
+            "irritates eyes and airways in humans "
+            "and animals. High concentrations can "
+            "also damage plant cell membranes."
         ),
         display_scale=1e6,
         palette=_PALETTE_HCHO,
