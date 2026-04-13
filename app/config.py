@@ -541,7 +541,7 @@ def render_sidebar() -> SidebarConfig:
     # 90 days; S5P covers the full atmosphere so 365 days is fine.
     # Methane mode uses S2 proxies → 90 days.
     default_days = (
-        90 if source in ("s2", "s1", "methane") else 365
+        90 if source == "methane" else 365
     )
 
     # OFFL processing latency per source
@@ -556,10 +556,11 @@ def render_sidebar() -> SidebarConfig:
         days=default_days,
     )
 
-    if "date_start" not in st.session_state:
+    prev_source = st.session_state.get("_prev_source")
+    if prev_source != source or "date_start" not in st.session_state:
         st.session_state["date_start"] = default_start
-    if "date_end" not in st.session_state:
         st.session_state["date_end"] = default_end
+        st.session_state["_prev_source"] = source
 
     start_date = st.sidebar.date_input(
         "Start date",
