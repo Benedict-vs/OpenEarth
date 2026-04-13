@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 import ee
 
@@ -271,6 +271,66 @@ def compute_methane_anomaly(
         cloud_prob_thresh=cloud_prob_thresh,
     )
     target_ratio = target_base.map(_b12_over_b11).mean()
+
+    return (
+        target_ratio
+        .subtract(ref_ratio)
+        .rename("CH4_ANOMALY")
+    )
+
+
+def compute_methane_anomaly_single_scene(
+    geometry: ee.Geometry,
+    timestamp_ms: int,
+    ref_start: str | date | datetime,
+    ref_end: str | date | datetime,
+    *,
+    cloud_max: int = 65,
+    cloud_prob_thresh: int = DEFAULT_CLOUD_PROB_THRESH,
+) -> ee.Image:
+    """Methane anomaly from a single S2 scene vs reference mean.
+
+    Like :func:`compute_methane_anomaly` but the target is one
+    acquisition identified by *timestamp_ms* instead of a
+    date-window composite.
+    """
+    centre = datetime.fromtimestamp(
+        timestamp_ms / 1000, tz=timezone.utc,
+    )
+    t_start = centre - timedelta(hours=12)
+    t_end = centre + timedelta(hours=12)
+
+    def _b12_over_b11(img: ee.Image) -> ee.Image:
+        return (
+            img.select("B12")
+            .divide(img.select("B11"))
+            .copyProperties(img, ["system:time_start"])
+        )
+
+    ref_base = _get_s2_base_collection(
+        geometry, ref_start, ref_end,
+        cloud_max=cloud_max,
+        cloud_prob_thresh=cloud_prob_thresh,
+    )
+    ref_ratio = ref_base.map(_b12_over_b11).mean()
+
+    target_base = _get_s2_base_collection(
+        geometry,
+        t_start.isoformat(),
+        t_end.isoformat(),
+        cloud_max=cloud_max,
+        cloud_prob_thresh=cloud_prob_thresh,
+    )
+    target_img = (
+        target_base
+        .filter(
+            ee.Filter.eq(
+                "system:time_start", timestamp_ms,
+            ),
+        )
+        .first()
+    )
+    target_ratio = _b12_over_b11(target_img)
 
     return (
         target_ratio

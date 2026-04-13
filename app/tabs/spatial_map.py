@@ -19,11 +19,15 @@ from openearth.visualization.heatmap import (
 )
 
 from app.analysis import (
+    cached_acquisition_times,
     cached_date_tile_url,
     cached_masked_date_tile_url,
+    cached_masked_single_scene_tile_url,
     cached_masked_tile_url,
     cached_mean_tile_url,
+    cached_methane_anomaly_single_scene_tile_url,
     cached_methane_anomaly_tile_url,
+    cached_single_scene_tile_url,
     cached_source_classification_tile_url,
     cached_vis_range,
     render_classification_legend,
@@ -37,6 +41,25 @@ _SAT_LABEL = {
     "s5p": "Sentinel-5P",
     "s2": "Sentinel-2",
 }
+
+
+def _find_nearest_acquisition(
+    target_ms: int,
+    candidates: list[int],
+    tolerance_hours: int = 24,
+) -> int | None:
+    """Return the candidate timestamp closest to *target_ms*.
+
+    Returns ``None`` if no candidate falls within
+    *tolerance_hours* of the target.
+    """
+    if not candidates:
+        return None
+    tol_ms = tolerance_hours * 3_600_000
+    best = min(candidates, key=lambda c: abs(c - target_ms))
+    if abs(best - target_ms) <= tol_ms:
+        return best
+    return None
 
 
 def _ee_fetch_timeout(
@@ -279,14 +302,18 @@ def _render_methane_map(
             "Composite type",
             options=[
                 "Date composite",
+                "Individual acquisition",
                 "Mean composite",
             ],
             horizontal=True,
             key="heatmap_mode",
         )
 
-    # ── Date controls ────────────────────────────────
+    # ── Date / acquisition controls ─────────────────
     selected_date = None
+    selected_timestamp_ms: int | None = None
+    # Per-source nearest timestamps for methane overlays
+    _nearest_timestamps: dict[str, int | None] = {}
     half_window = 0
     window_label = ""
 
@@ -294,12 +321,87 @@ def _render_methane_map(
 
     _start = date.fromisoformat(hp["start_date"])
     _end = date.fromisoformat(hp["end_date"])
-    available_dates = [
-        _start + _td(days=i)
-        for i in range((_end - _start).days)
-    ]
 
-    if mode in ("Date composite", "Anomaly"):
+    if mode == "Individual acquisition":
+        # S2 drives the timeline (primary methane proxy).
+        with st.spinner(
+            "Listing S2 acquisitions..."
+        ):
+            s2_acq = cached_acquisition_times(
+                data_keys[0] if data_keys[0] != "CH4"
+                else "MBSP",
+                hp["west"], hp["south"],
+                hp["east"], hp["north"],
+                hp["start_date"], hp["end_date"],
+                source="s2",
+            )
+        if not s2_acq:
+            st.warning(
+                "No S2 acquisitions found in this "
+                "date range and ROI."
+            )
+            return
+        labels = [a["label"] for a in s2_acq]
+        chosen_label = st.select_slider(
+            "Select S2 acquisition",
+            options=labels,
+            value=labels[len(labels) // 2],
+            key="methane_acq_slider",
+        )
+        chosen_idx = labels.index(chosen_label)
+        selected_timestamp_ms = s2_acq[chosen_idx][
+            "timestamp_ms"
+        ]
+        window_label = chosen_label
+
+        # Find nearest S5P / S1 acquisitions.
+        _source_info_parts: list[str] = [
+            f"S2: {chosen_label}",
+        ]
+        for overlay_key, overlay_src, tol_h in [
+            ("CH4", "s5p", 24),
+            (s1_variable, "s1", 72),
+        ]:
+            acq = cached_acquisition_times(
+                overlay_key,
+                hp["west"], hp["south"],
+                hp["east"], hp["north"],
+                hp["start_date"], hp["end_date"],
+                source=overlay_src,
+            )
+            nearest = _find_nearest_acquisition(
+                selected_timestamp_ms,
+                [a["timestamp_ms"] for a in acq],
+                tolerance_hours=tol_h,
+            )
+            _nearest_timestamps[overlay_src] = nearest
+            if nearest is not None:
+                offset_h = abs(
+                    nearest - selected_timestamp_ms
+                ) / 3_600_000
+                nlabel = next(
+                    a["label"] for a in acq
+                    if a["timestamp_ms"] == nearest
+                )
+                tag = overlay_src.upper()
+                _source_info_parts.append(
+                    f"{tag}: {nlabel} "
+                    f"({offset_h:+.0f}h)"
+                )
+
+        st.caption(
+            f"{len(s2_acq)} S2 acquisitions — "
+            + " | ".join(_source_info_parts)
+        )
+        st.caption(
+            "Single scene — cloud artifacts may be "
+            "more visible than in composites."
+        )
+    elif mode in ("Date composite", "Anomaly"):
+        available_dates = [
+            _start + _td(days=i)
+            for i in range((_end - _start).days)
+        ]
         if len(available_dates) < 2:
             st.info(
                 "Need at least 2 dates to "
@@ -362,7 +464,84 @@ def _render_methane_map(
         )
 
     # ── Temporal animation ─────────────────────────────
-    if mode in ("Date composite", "Anomaly"):
+    if mode == "Individual acquisition":
+        with st.expander("Temporal Animation"):
+            anim_enabled = st.checkbox(
+                "Enable acquisition stepping",
+                value=False,
+                key="methane_anim_enabled",
+            )
+            if anim_enabled and len(s2_acq) >= 2:
+                step_n = st.slider(
+                    "Step size (acquisitions)",
+                    min_value=1,
+                    max_value=min(10, len(s2_acq)),
+                    value=1,
+                    key="methane_anim_step",
+                )
+                anim_acqs = s2_acq[::step_n]
+                if len(anim_acqs) < 2:
+                    st.warning(
+                        "Not enough acquisitions "
+                        "for animation."
+                    )
+                else:
+                    anim_idx = st.slider(
+                        "Animation frame",
+                        min_value=0,
+                        max_value=len(anim_acqs) - 1,
+                        value=0,
+                        key="methane_anim_idx",
+                    )
+
+                    def _anim_prev():
+                        st.session_state[
+                            "methane_anim_idx"
+                        ] -= 1
+
+                    def _anim_next():
+                        st.session_state[
+                            "methane_anim_idx"
+                        ] += 1
+
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.button(
+                            "\u25c0 Previous",
+                            key="anim_prev",
+                            disabled=anim_idx == 0,
+                            on_click=_anim_prev,
+                        )
+                    with col2:
+                        st.caption(
+                            f"Frame {anim_idx + 1}/"
+                            f"{len(anim_acqs)}: "
+                            f"{anim_acqs[anim_idx]['label']}"
+                        )
+                    with col3:
+                        st.button(
+                            "Next \u25b6",
+                            key="anim_next",
+                            disabled=(
+                                anim_idx
+                                == len(anim_acqs) - 1
+                            ),
+                            on_click=_anim_next,
+                        )
+
+                    selected_timestamp_ms = (
+                        anim_acqs[anim_idx][
+                            "timestamp_ms"
+                        ]
+                    )
+                    window_label = (
+                        anim_acqs[anim_idx]["label"]
+                    )
+    elif mode in ("Date composite", "Anomaly"):
+        available_dates = [
+            _start + _td(days=i)
+            for i in range((_end - _start).days)
+        ]
         with st.expander("Temporal Animation"):
             anim_enabled = st.checkbox(
                 "Enable date stepping",
@@ -392,6 +571,7 @@ def _render_methane_map(
                         value=0,
                         key="methane_anim_idx",
                     )
+
                     def _anim_prev():
                         st.session_state[
                             "methane_anim_idx"
@@ -518,7 +698,10 @@ def _render_methane_map(
             src = _resolve_source(dk, "methane")
 
             if dk == "CH4_ANOMALY":
-                if selected_date is None:
+                if (
+                    selected_date is None
+                    and selected_timestamp_ms is None
+                ):
                     st.caption(
                         "CH\u2084 anomaly requires a "
                         "target date — skipped in "
@@ -541,7 +724,53 @@ def _render_methane_map(
                     ndvi_threshold=ndvi_thresh,
                     ndwi_threshold=ndwi_thresh,
                 )
-                if stored and not force_auto:
+                if (
+                    mode == "Individual acquisition"
+                    and selected_timestamp_ms is not None
+                ):
+                    if stored and not force_auto:
+                        anom_vmin, anom_vmax = stored
+                        with st.spinner(
+                            "Computing CH\u2084 anomaly "
+                            f"for {window_label}..."
+                        ):
+                            tile_url, _, _ = (
+                                cached_methane_anomaly_single_scene_tile_url(
+                                    hp["west"],
+                                    hp["south"],
+                                    hp["east"],
+                                    hp["north"],
+                                    selected_timestamp_ms,
+                                    hp["start_date"],
+                                    hp["end_date"],
+                                    vis_min=anom_vmin,
+                                    vis_max=anom_vmax,
+                                    auto_scale=False,
+                                    **_mask_kw,
+                                )
+                            )
+                    else:
+                        with st.spinner(
+                            "Computing CH\u2084 anomaly "
+                            f"for {window_label} "
+                            "(auto-scaling)..."
+                        ):
+                            tile_url, anom_vmin, anom_vmax = (
+                                cached_methane_anomaly_single_scene_tile_url(
+                                    hp["west"],
+                                    hp["south"],
+                                    hp["east"],
+                                    hp["north"],
+                                    selected_timestamp_ms,
+                                    hp["start_date"],
+                                    hp["end_date"],
+                                    **_mask_kw,
+                                )
+                            )
+                        st.session_state[
+                            "_anomaly_scale"
+                        ] = (anom_vmin, anom_vmax)
+                elif stored and not force_auto:
                     anom_vmin, anom_vmax = stored
                     with st.spinner(
                         f"Computing CH\u2084 anomaly "
@@ -590,6 +819,27 @@ def _render_methane_map(
                 layer_name = (
                     f"CH\u2084 anomaly {window_label}"
                 )
+            elif mode == "Individual acquisition":
+                with st.spinner(
+                    f"Loading {dk} ({src}) scene "
+                    f"{window_label}..."
+                ):
+                    tile_url = (
+                        cached_masked_single_scene_tile_url(
+                            dk,
+                            hp["west"],
+                            hp["south"],
+                            hp["east"],
+                            hp["north"],
+                            selected_timestamp_ms,
+                            source=src,
+                            mask_vegetation=mask_veg,
+                            mask_water=mask_water,
+                            ndvi_threshold=ndvi_thresh,
+                            ndwi_threshold=ndwi_thresh,
+                        )
+                    )
+                layer_name = f"{dk} {window_label}"
             elif mode == "Date composite":
                 with st.spinner(
                     f"Loading {dk} ({src}) for "
@@ -642,7 +892,28 @@ def _render_methane_map(
         # ── RGB reference layer ───────────────────────
         if show_rgb:
             with st.spinner("Loading RGB composite..."):
-                if mode == "Date composite" and selected_date:
+                if (
+                    mode == "Individual acquisition"
+                    and selected_timestamp_ms is not None
+                ):
+                    rgb_tile_url = (
+                        cached_single_scene_tile_url(
+                            "RGB",
+                            hp["west"],
+                            hp["south"],
+                            hp["east"],
+                            hp["north"],
+                            selected_timestamp_ms,
+                            source="s2",
+                        )
+                    )
+                    rgb_layer_name = (
+                        f"RGB {window_label}"
+                    )
+                elif (
+                    mode == "Date composite"
+                    and selected_date
+                ):
                     rgb_tile_url = cached_date_tile_url(
                         "RGB",
                         hp["west"],
@@ -687,7 +958,25 @@ def _render_methane_map(
             with st.spinner(
                 f"Loading S1 {s1_variable} context layer..."
             ):
+                _s1_ts = _nearest_timestamps.get("s1")
                 if (
+                    mode == "Individual acquisition"
+                    and _s1_ts is not None
+                ):
+                    s1_tile_url = (
+                        cached_single_scene_tile_url(
+                            s1_variable,
+                            hp["west"], hp["south"],
+                            hp["east"], hp["north"],
+                            _s1_ts,
+                            source="s1",
+                        )
+                    )
+                    s1_layer_name = (
+                        f"S1 {s1_variable} "
+                        f"{window_label}"
+                    )
+                elif (
                     mode == "Date composite"
                     and selected_date
                 ):
@@ -934,14 +1223,16 @@ def render(
             "Composite type",
             options=[
                 "Date composite",
+                "Individual acquisition",
                 "Mean composite",
             ],
             horizontal=True,
             key="heatmap_mode",
         )
 
-    # ── Date controls (only for date / anomaly mode) ─
+    # ── Date / acquisition controls ─────────────────
     selected_date = None
+    selected_timestamp_ms: int | None = None
     half_window = 0
     window_label = ""
 
@@ -949,12 +1240,47 @@ def render(
 
     _start = date.fromisoformat(hp["start_date"])
     _end = date.fromisoformat(hp["end_date"])
-    available_dates = [
-        _start + _td(days=i)
-        for i in range((_end - _start).days)
-    ]
 
-    if mode in ("Date composite", "Anomaly"):
+    if mode == "Individual acquisition":
+        with st.spinner("Listing acquisitions..."):
+            acq_list = cached_acquisition_times(
+                data_key,
+                hp["west"], hp["south"],
+                hp["east"], hp["north"],
+                hp["start_date"], hp["end_date"],
+                source=source,
+            )
+        if not acq_list:
+            st.warning(
+                "No acquisitions found in this "
+                "date range and ROI."
+            )
+            return
+        labels = [a["label"] for a in acq_list]
+        chosen_label = st.select_slider(
+            "Select acquisition",
+            options=labels,
+            value=labels[len(labels) // 2],
+            key="heatmap_acq_slider",
+        )
+        chosen_idx = labels.index(chosen_label)
+        selected_timestamp_ms = acq_list[chosen_idx][
+            "timestamp_ms"
+        ]
+        window_label = chosen_label
+        st.caption(
+            f"{len(acq_list)} acquisitions found — "
+            f"showing: {chosen_label}"
+        )
+        st.caption(
+            "Single scene — cloud artifacts may be "
+            "more visible than in composites."
+        )
+    elif mode in ("Date composite", "Anomaly"):
+        available_dates = [
+            _start + _td(days=i)
+            for i in range((_end - _start).days)
+        ]
         if len(available_dates) < 2:
             st.info(
                 "Need at least 2 dates to "
@@ -1051,34 +1377,78 @@ def render(
             )
 
             if dk == "CH4_ANOMALY":
-                if selected_date is None:
+                if (
+                    selected_date is None
+                    and selected_timestamp_ms is None
+                ):
                     st.caption(
                         "CH\u2084 anomaly requires a "
                         "target date — skipped in "
                         "mean composite mode."
                     )
                     continue
+                if (
+                    mode == "Individual acquisition"
+                    and selected_timestamp_ms is not None
+                ):
+                    with st.spinner(
+                        "Computing CH\u2084 anomaly "
+                        f"for {window_label}..."
+                    ):
+                        tile_url = (
+                            cached_methane_anomaly_single_scene_tile_url(
+                                hp["west"],
+                                hp["south"],
+                                hp["east"],
+                                hp["north"],
+                                selected_timestamp_ms,
+                                hp["start_date"],
+                                hp["end_date"],
+                                vis_min=dk_vis_min,
+                                vis_max=dk_vis_max,
+                            )
+                        )
+                else:
+                    with st.spinner(
+                        "Computing CH\u2084 anomaly "
+                        f"for {window_label}..."
+                    ):
+                        tile_url = (
+                            cached_methane_anomaly_tile_url(
+                                hp["west"],
+                                hp["south"],
+                                hp["east"],
+                                hp["north"],
+                                selected_date.isoformat(),
+                                half_window,
+                                hp["start_date"],
+                                hp["end_date"],
+                                vis_min=dk_vis_min,
+                                vis_max=dk_vis_max,
+                            )
+                        )
+                layer_name = (
+                    f"CH\u2084 anomaly {window_label}"
+                )
+            elif mode == "Individual acquisition":
                 with st.spinner(
-                    f"Computing CH\u2084 anomaly for "
+                    f"Loading {dk} scene "
                     f"{window_label}..."
                 ):
                     tile_url = (
-                        cached_methane_anomaly_tile_url(
+                        cached_single_scene_tile_url(
+                            dk,
                             hp["west"],
                             hp["south"],
                             hp["east"],
                             hp["north"],
-                            selected_date.isoformat(),
-                            half_window,
-                            hp["start_date"],
-                            hp["end_date"],
+                            selected_timestamp_ms,
+                            source=source,
                             vis_min=dk_vis_min,
                             vis_max=dk_vis_max,
                         )
                     )
-                layer_name = (
-                    f"CH\u2084 anomaly {window_label}"
-                )
+                layer_name = f"{dk} {window_label}"
             elif mode == "Date composite":
                 with st.spinner(
                     f"Loading {dk} heatmap for "

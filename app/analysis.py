@@ -13,11 +13,15 @@ from openearth.analytics.daily_timeseries import (
     build_daily_timeseries,
     BATCH_SIZE,
 )
-from openearth.providers import get_config
+from openearth.providers import (
+    get_config,
+    list_acquisition_times,
+)
 from openearth.providers.gee_session import initialize_ee
 from openearth.visualization.heatmap import (
     build_mean_composite,
     build_date_composite,
+    build_single_scene,
     build_methane_anomaly_composite,
     compute_anomaly_vis_range,
     compute_vis_range,
@@ -297,6 +301,166 @@ def cached_vis_range(
     return compute_vis_range(
         image, data_key, source,
         geometry=roi,
+    )
+
+
+# ── Individual acquisition helpers ──────────────────────────
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_acquisition_times(
+    data_key: str,
+    west: float, south: float,
+    east: float, north: float,
+    start_date: str, end_date: str,
+    source: str = "s5p",
+) -> list[dict]:
+    """Return ``[{"timestamp_ms": int, "label": str}, ...]``."""
+    roi = ee.Geometry.BBox(west, south, east, north)
+    dts = list_acquisition_times(
+        data_key, roi, start_date, end_date, source,
+    )
+    return [
+        {
+            "timestamp_ms": int(
+                dt.timestamp() * 1000,
+            ),
+            "label": dt.strftime("%Y-%m-%d %H:%M UTC"),
+        }
+        for dt in dts
+    ]
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_single_scene_tile_url(
+    data_key: str,
+    west: float, south: float,
+    east: float, north: float,
+    timestamp_ms: int,
+    source: str = "s5p",
+    vis_min: float | None = None,
+    vis_max: float | None = None,
+) -> str:
+    """Tile URL for a single satellite acquisition."""
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_single_scene(
+        data_key, roi, timestamp_ms, source=source,
+    )
+    return get_tile_url(
+        image, data_key, source,
+        vis_min=vis_min, vis_max=vis_max,
+    )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_masked_single_scene_tile_url(
+    data_key: str,
+    west: float, south: float,
+    east: float, north: float,
+    timestamp_ms: int,
+    source: str = "s2",
+    mask_vegetation: bool = False,
+    mask_water: bool = False,
+    ndvi_threshold: float = 0.3,
+    ndwi_threshold: float = 0.0,
+    vis_min: float | None = None,
+    vis_max: float | None = None,
+) -> str:
+    """Single-scene tile with optional veg/water masking."""
+    from datetime import datetime as _dt, timezone as _tz
+
+    from openearth.masking.vegetation_water import (
+        apply_vegetation_water_mask,
+    )
+
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = build_single_scene(
+        data_key, roi, timestamp_ms, source=source,
+    )
+    if mask_vegetation or mask_water:
+        centre = _dt.fromtimestamp(
+            timestamp_ms / 1000, tz=_tz.utc,
+        )
+        mask_start = (
+            centre - timedelta(days=30)
+        ).strftime("%Y-%m-%d")
+        mask_end = (
+            centre + timedelta(days=31)
+        ).strftime("%Y-%m-%d")
+        image = apply_vegetation_water_mask(
+            image, roi, mask_start, mask_end,
+            mask_vegetation=mask_vegetation,
+            mask_water=mask_water,
+            ndvi_threshold=ndvi_threshold,
+            ndwi_threshold=ndwi_threshold,
+        )
+    return get_tile_url(
+        image, data_key, source,
+        vis_min=vis_min, vis_max=vis_max,
+    )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_methane_anomaly_single_scene_tile_url(
+    west: float, south: float,
+    east: float, north: float,
+    timestamp_ms: int,
+    ref_start: str, ref_end: str,
+    vis_min: float | None = None,
+    vis_max: float | None = None,
+    auto_scale: bool = True,
+    mask_vegetation: bool = False,
+    mask_water: bool = False,
+    ndvi_threshold: float = 0.3,
+    ndwi_threshold: float = 0.0,
+) -> tuple[str, float, float]:
+    """Single-scene CH4 anomaly tile with auto-scale."""
+    from datetime import datetime as _dt, timezone as _tz
+
+    from openearth.providers.gee_s2 import (
+        compute_methane_anomaly_single_scene,
+    )
+
+    roi = ee.Geometry.BBox(west, south, east, north)
+    image = compute_methane_anomaly_single_scene(
+        roi, timestamp_ms, ref_start, ref_end,
+    )
+    if mask_vegetation or mask_water:
+        from openearth.masking.vegetation_water import (
+            apply_vegetation_water_mask,
+        )
+
+        centre = _dt.fromtimestamp(
+            timestamp_ms / 1000, tz=_tz.utc,
+        )
+        mask_start = (
+            centre - timedelta(days=30)
+        ).strftime("%Y-%m-%d")
+        mask_end = (
+            centre + timedelta(days=31)
+        ).strftime("%Y-%m-%d")
+        image = apply_vegetation_water_mask(
+            image, roi, mask_start, mask_end,
+            mask_vegetation=mask_vegetation,
+            mask_water=mask_water,
+            ndvi_threshold=ndvi_threshold,
+            ndwi_threshold=ndwi_threshold,
+        )
+    if auto_scale and vis_min is None and vis_max is None:
+        vis_min, vis_max = compute_anomaly_vis_range(
+            image, geometry=roi,
+        )
+    params = get_vis_params(
+        "CH4_ANOMALY", "s2",
+        vis_min=vis_min, vis_max=vis_max,
+    )
+    map_id_dict = image.getMapId(params)
+    return (
+        map_id_dict["tile_fetcher"].url_format,
+        float(vis_min) if vis_min is not None
+        else params["min"],
+        float(vis_max) if vis_max is not None
+        else params["max"],
     )
 
 

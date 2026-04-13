@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 import ee
 
@@ -72,3 +72,57 @@ def get_collection(
         data_key, geometry,
         start_date, end_date,
     )
+
+
+def list_acquisition_times(
+    data_key: str,
+    geometry: ee.Geometry,
+    start_date: str | date | datetime,
+    end_date: str | date | datetime,
+    source: str,
+) -> list[datetime]:
+    """Return sorted UTC datetimes for every image in the collection."""
+    collection = get_collection(
+        data_key, geometry,
+        start_date, end_date, source,
+    )
+    timestamps_ms: list[int] = (
+        collection
+        .aggregate_array("system:time_start")
+        .getInfo()
+    )
+    if not timestamps_ms:
+        return []
+    return sorted(
+        datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+        for ms in timestamps_ms
+    )
+
+
+def get_single_image(
+    data_key: str,
+    geometry: ee.Geometry,
+    timestamp_ms: int,
+    source: str,
+) -> ee.Image:
+    """Return one image matching *timestamp_ms* exactly."""
+    # Build a 1-day window to keep the collection query efficient.
+    centre = datetime.fromtimestamp(
+        timestamp_ms / 1000, tz=timezone.utc,
+    )
+    start = (centre - timedelta(hours=12)).isoformat()
+    end = (centre + timedelta(hours=12)).isoformat()
+
+    collection = get_collection(
+        data_key, geometry, start, end, source,
+    )
+    image = (
+        collection
+        .filter(
+            ee.Filter.eq(
+                "system:time_start", timestamp_ms,
+            ),
+        )
+        .first()
+    )
+    return image

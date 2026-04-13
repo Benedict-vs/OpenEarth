@@ -11,7 +11,7 @@ import ee
 import folium
 from folium.plugins import MousePosition
 
-from openearth.providers import get_collection, get_config
+from openearth.providers import get_collection, get_config, get_single_image
 from openearth.providers.gee_s2 import compute_methane_anomaly
 
 _ATTR = {
@@ -239,6 +239,24 @@ def build_date_composite(
         image = collection.mean()
     else:
         image = collection.mean().select(cfg.band)
+    if not _is_global(geometry):
+        image = image.clip(geometry)
+    return image
+
+
+def build_single_scene(
+    data_key: str,
+    geometry: ee.Geometry,
+    timestamp_ms: int,
+    source: str = "s5p",
+) -> ee.Image:
+    """Return one scene (no aggregation) for *timestamp_ms*."""
+    cfg = get_config(data_key, source)
+    image = get_single_image(
+        data_key, geometry, timestamp_ms, source,
+    )
+    if not getattr(cfg, "is_rgb", False):
+        image = image.select(cfg.band)
     if not _is_global(geometry):
         image = image.clip(geometry)
     return image
