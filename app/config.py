@@ -543,9 +543,7 @@ def render_sidebar() -> SidebarConfig:
     default_days = (
         90 if source in ("s2", "s1", "methane") else 365
     )
-    default_start = date.today() - timedelta(
-        days=default_days,
-    )
+
     # OFFL processing latency per source
     default_end_offset = (
         5 if source == "s5p"
@@ -553,6 +551,10 @@ def render_sidebar() -> SidebarConfig:
         else 3  # s2, methane
     )
     default_end = date.today() - timedelta(days=default_end_offset)
+
+    default_start = default_end - timedelta(
+        days=default_days,
+    )
 
     if "date_start" not in st.session_state:
         st.session_state["date_start"] = default_start
