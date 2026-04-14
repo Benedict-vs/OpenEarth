@@ -1105,7 +1105,7 @@ def _render_methane_map(
                     wind_data = sample_wind_grid(
                         roi,
                         selected_date.isoformat(),
-                        n_points=25,
+                        n_points=100,
                     )
                     wind_fg = add_wind_arrows(wind_data)
                     # Insert before ROI layer (last fg).

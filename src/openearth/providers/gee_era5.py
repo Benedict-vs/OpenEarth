@@ -51,7 +51,7 @@ def get_wind_data(
 def sample_wind_grid(
     geometry: ee.Geometry,
     target_date: str | date | datetime,
-    n_points: int = 25,
+    n_points: int = 100,
     half_window_hours: int = 12,
 ) -> list[dict[str, Any]]:
     """Sample wind at a grid of points within the ROI.
@@ -99,11 +99,20 @@ def sample_wind_grid(
         for j in range(1, side + 1):
             lon = west + i * lon_step
             lat = south + j * lat_step
-            points.append(ee.Geometry.Point(lon, lat))
+            if i % 4 == 2 and j % 4 == 2:
+                level = 0
+            elif i % 2 == 0 and j % 2 == 0:
+                level = 1
+            else:
+                level = 2
+            points.append(
+                ee.Feature(
+                    ee.Geometry.Point(lon, lat),
+                    {"density_level": level},
+                ),
+            )
 
-    fc = ee.FeatureCollection(
-        [ee.Feature(p) for p in points],
-    )
+    fc = ee.FeatureCollection(points)
 
     sampled = combined.sampleRegions(
         collection=fc,
@@ -122,5 +131,6 @@ def sample_wind_grid(
             "v": props.get("v_component_of_wind_10m"),
             "speed": props.get("wind_speed"),
             "direction_deg": props.get("wind_dir"),
+            "density_level": props.get("density_level", 0),
         })
     return results
