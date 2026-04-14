@@ -362,13 +362,17 @@ def _render_methane_map(
             ("CH4", "s5p", 24),
             (s1_variable, "s1", 72),
         ]:
-            acq = cached_acquisition_times(
-                overlay_key,
-                hp["west"], hp["south"],
-                hp["east"], hp["north"],
-                hp["start_date"], hp["end_date"],
-                source=overlay_src,
-            )
+            with st.spinner(
+                f"Finding nearest "
+                f"{overlay_src.upper()} overpass..."
+            ):
+                acq = cached_acquisition_times(
+                    overlay_key,
+                    hp["west"], hp["south"],
+                    hp["east"], hp["north"],
+                    hp["start_date"], hp["end_date"],
+                    source=overlay_src,
+                )
             nearest = _find_nearest_acquisition(
                 selected_timestamp_ms,
                 [a["timestamp_ms"] for a in acq],
