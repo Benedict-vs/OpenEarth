@@ -94,14 +94,20 @@ def sample_wind_grid(
     lon_step = (east - west) / (side + 1)
     lat_step = (north - south) / (side + 1)
 
+    # Pre-compute uniform subgrid indices for each density level.
+    n0 = max(2, side // 3)  # ~3 points per axis for level 0
+    n1 = max(2, side // 2)  # ~5 points per axis for level 1
+    idx0 = {round(k * (side - 1) / (n0 - 1)) for k in range(n0)}
+    idx1 = {round(k * (side - 1) / (n1 - 1)) for k in range(n1)}
+
     points = []
-    for i in range(1, side + 1):
-        for j in range(1, side + 1):
-            lon = west + i * lon_step
-            lat = south + j * lat_step
-            if i % 4 == 2 and j % 4 == 2:
+    for i in range(side):
+        for j in range(side):
+            lon = west + (i + 1) * lon_step
+            lat = south + (j + 1) * lat_step
+            if i in idx0 and j in idx0:
                 level = 0
-            elif i % 2 == 0 and j % 2 == 0:
+            elif i in idx1 and j in idx1:
                 level = 1
             else:
                 level = 2
