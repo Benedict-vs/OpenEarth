@@ -1233,6 +1233,7 @@ def render(
     # ── Date / acquisition controls ─────────────────
     selected_date = None
     selected_timestamp_ms: int | None = None
+    available_dates: list[date] | None = None
     half_window = 0
     window_label = ""
 
