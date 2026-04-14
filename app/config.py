@@ -460,6 +460,12 @@ def render_sidebar() -> SidebarConfig:
             )
             selected_keys = [list(variables.keys())[0]]
 
+        if source == "s2":
+            st.sidebar.info(
+                "Clouds are automatically masked using the "
+                "S2 Cloud Probability dataset (s2cloudless)."
+            )
+
     st.sidebar.header("ROI (Region of Interest)")
 
     # Quick-start: load a predefined region
