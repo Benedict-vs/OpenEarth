@@ -10,6 +10,10 @@ import ee
 import pandas as pd
 
 from openearth.analytics.conversions import to_ee_date
+from openearth.errors import (
+    EmptyCollectionError,
+    validate_date_range,
+)
 from openearth.providers import get_collection, get_config
 
 DEFAULT_SCALE_METERS_S5P = 11_132
@@ -17,15 +21,6 @@ DEFAULT_SCALE_METERS_S2 = 500
 DEFAULT_SCALE_METERS_S1 = 100
 DEFAULT_MAX_PIXELS = 1_000_000_000
 BATCH_SIZE = 10
-
-_RESULT_COLUMNS = [
-    "date",
-    "value",
-    "n_images",
-    "valid_pixel_count",
-    "total_pixel_count",
-    "coverage_fraction",
-]
 
 
 def _rows_from_fc_info(
@@ -79,6 +74,8 @@ def build_daily_timeseries(
         ``"s5p"`` for Sentinel-5P trace gases or
         ``"s2"`` for Sentinel-2 spectral indices.
     """
+    validate_date_range(start_date, end_date)
+
     config = get_config(data_key, source)
     band = config.band
 
@@ -125,7 +122,10 @@ def build_daily_timeseries(
         else 0
     )
     if n_days <= 0:
-        return pd.DataFrame(columns=_RESULT_COLUMNS)
+        raise EmptyCollectionError(
+            f"No days to process between "
+            f"{start_date} and {end_date}."
+        )
 
     # Combined reducer: one reduceRegion per day.
     # Output keys: {band}_mean  and  {band}_count
@@ -211,7 +211,11 @@ def build_daily_timeseries(
             progress_callback(batch_end, n_days)
 
     if not all_rows:
-        return pd.DataFrame(columns=_RESULT_COLUMNS)
+        raise EmptyCollectionError(
+            f"No observations returned for "
+            f"{data_key} between {start_date} "
+            f"and {end_date}."
+        )
 
     # ── Build DataFrame, compute coverage ─────────
     df = pd.DataFrame(all_rows)
@@ -232,6 +236,14 @@ def build_daily_timeseries(
         df["value"], errors="coerce",
     )
     df = df.dropna(subset=["value"])
+
+    if df.empty:
+        raise EmptyCollectionError(
+            f"No valid {data_key} pixels in any "
+            f"day between {start_date} and "
+            f"{end_date} (all days were empty or "
+            f"cloud-masked)."
+        )
 
     return df.sort_values("date").reset_index(
         drop=True,

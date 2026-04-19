@@ -31,8 +31,19 @@ from openearth.visualization.heatmap import (
     get_vis_params,
 )
 
+from openearth.errors import (
+    EmptyCollectionError,
+    InvalidDateRangeError,
+    InvalidROIError,
+    validate_roi_bbox,
+)
+
 from app.config import SidebarConfig
-from app.errors import show_ee_error
+from app.errors import (
+    show_empty_collection,
+    show_ee_error,
+    show_validation_error,
+)
 
 
 # ── Color legend ──────────────────────────────────────────────
@@ -819,6 +830,17 @@ def ensure_timeseries(
         )
         st.stop()
 
+    try:
+        validate_roi_bbox(
+            hp["west"], hp["south"],
+            hp["east"], hp["north"],
+        )
+    except InvalidROIError as exc:
+        show_validation_error(
+            exc, "Invalid region of interest.",
+        )
+        st.stop()
+
     roi = ee.Geometry.BBox(
         hp["west"], hp["south"],
         hp["east"], hp["north"],
@@ -882,10 +904,14 @@ def ensure_timeseries(
         progress_bar.empty()
         show_ee_error(exc, "Analysis failed.")
         st.stop()
-
-    progress_bar.empty()
-
-    if df.empty:
+    except InvalidDateRangeError as exc:
+        progress_bar.empty()
+        show_validation_error(
+            exc, "Invalid date range.",
+        )
+        st.stop()
+    except EmptyCollectionError as exc:
+        progress_bar.empty()
         if source == "s2":
             st.info(
                 "No clear-sky observations found. "
@@ -895,12 +921,10 @@ def ensure_timeseries(
                 "larger ROI."
             )
         else:
-            st.info(
-                "No observations found for the "
-                "selected variable, ROI, and "
-                "date range."
-            )
+            show_empty_collection(exc, "")
         return
+
+    progress_bar.empty()
 
     st.session_state["analysis_df"] = df
 

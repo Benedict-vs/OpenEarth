@@ -1,4 +1,11 @@
-"""Error classification and display helpers."""
+"""Streamlit display helpers for OpenEarth errors.
+
+Classification logic lives in :mod:`openearth.errors` so
+that non-Streamlit callers share the same categories.
+This module only handles rendering — it imports the
+classifiers and maps them to ``st.error`` / ``st.warning``
+/ ``st.info``.
+"""
 
 from __future__ import annotations
 
@@ -7,93 +14,15 @@ import urllib.error
 import ee
 import streamlit as st
 
-# ── EE error handling ─────────────────────────────────────────
-
-_AUTH_PHRASES = (
-    "not authorized",
-    "access denied",
-    "permission denied",
-    "authenticate",
-    "credentials",
-    "forbidden",
-    " 401",
-    " 403",
+from openearth.errors import (
+    _TIMEOUT_PHRASES,
+    EmptyCollectionError,
+    InvalidDateRangeError,
+    InvalidROIError,
+    classify_ee_error,
 )
 
-_QUOTA_PHRASES = (
-    "too many concurrent",
-    "quota exceeded",
-    "rate limit",
-    "limit exceeded",
-    " 429",
-    "user memory limit exceeded",
-)
-
-_TIMEOUT_PHRASES = (
-    "timed out",
-    "timeout",
-    "deadline exceeded",
-)
-
-_EMPTY_PHRASES = (
-    "collection is empty",
-    "no images",
-    "contains no images",
-    "empty collection",
-    "0 elements",
-    "no valid pixels",
-    "collection.first",
-    "no bands",
-    "image collection is empty",
-)
-
-
-def classify_ee_error(
-    exc: Exception,
-) -> tuple[str, str]:
-    """Classify an Earth Engine error by its message.
-
-    Returns (category, user_message) where category is
-    one of: "auth", "quota", "timeout", "empty",
-    "unknown".
-    """
-    message = str(exc).lower()
-
-    if any(p in message for p in _AUTH_PHRASES):
-        return (
-            "auth",
-            "Earth Engine authentication or "
-            "permissions failed. Check project "
-            "access and sign in again.",
-        )
-    if any(p in message for p in _QUOTA_PHRASES):
-        return (
-            "quota",
-            "Earth Engine quota or concurrency "
-            "limit reached. Try a smaller "
-            "ROI/date range or retry shortly.",
-        )
-    if any(p in message for p in _TIMEOUT_PHRASES):
-        return (
-            "timeout",
-            "Earth Engine request timed out. "
-            "Try a smaller ROI or date range.",
-        )
-    if any(p in message for p in _EMPTY_PHRASES):
-        return (
-            "empty",
-            "No satellite observations are "
-            "available for this variable, ROI, "
-            "and time window. If your date range "
-            "extends close to today, try an earlier "
-            "end date \u2014 recent imagery may not be "
-            "processed yet.",
-        )
-
-    return (
-        "unknown",
-        "Unexpected Earth Engine error.",
-    )
+# ── EE error display ─────────────────────────────────────────
 
 
 def show_ee_error(
@@ -216,6 +145,37 @@ def show_image_error(
 
     with st.expander("Error details", expanded=False):
         st.exception(exc)
+
+
+# ── Validation + empty-collection errors ─────────────────────
+
+
+def show_validation_error(
+    exc: InvalidROIError | InvalidDateRangeError,
+    context: str,
+) -> None:
+    """Display a library validation error (ROI / dates).
+
+    These are user-input failures — shown as a red
+    ``st.error`` with the exception's own message
+    (e.g. "End date must be after start date; ...").
+    """
+    st.error(f"{context} {exc}")
+    with st.expander("Error details", expanded=False):
+        st.exception(exc)
+
+
+def show_empty_collection(
+    exc: EmptyCollectionError,
+    context: str,
+) -> None:
+    """Display an empty-collection result as info, not error.
+
+    No satellite data is not a failure — it's a benign
+    outcome that the user may want to widen the query
+    to fix.
+    """
+    st.info(f"{context} {exc}")
 
 
 # ── Unexpected / non-EE error handling ───────────────────────
