@@ -18,7 +18,7 @@ def initialize_ee(project_id: str,
 
     try:
         ee.Initialize(project=project_id)
-    except Exception:
+    except ee.EEException:
         if not authenticate:
             raise
         ee.Authenticate()

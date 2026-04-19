@@ -216,3 +216,21 @@ def show_image_error(
 
     with st.expander("Error details", expanded=False):
         st.exception(exc)
+
+
+# ── Unexpected / non-EE error handling ───────────────────────
+
+
+def show_unexpected_error(
+    exc: Exception,
+    context: str,
+) -> None:
+    """Display a non-EE exception with a collapsed traceback.
+
+    Use as the fallback branch when an EE-specific handler
+    (``show_ee_error``) does not apply. Prefer
+    ``show_ee_error`` when the exception is known to be EE.
+    """
+    st.error(f"{context} An unexpected error occurred.")
+    with st.expander("Error details", expanded=False):
+        st.exception(exc)

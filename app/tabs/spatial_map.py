@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import traceback
 from datetime import date
 from typing import cast
 
@@ -34,7 +35,13 @@ from app.analysis import (
     render_color_legend,
 )
 from openearth.providers import _resolve_source
-from app.errors import show_ee_error
+from app.errors import (
+    _classify_image_error,
+    classify_ee_error,
+    show_ee_error,
+    show_image_error,
+    show_unexpected_error,
+)
 from app.roi import map_center
 
 _SAT_LABEL = {
@@ -84,6 +91,33 @@ def _ee_fetch_timeout(
     area_factor = max(1.0, area_deg2 / 25)
     timeout = int(120 * dim_factor * area_factor)
     return min(timeout, 600)
+
+
+def _batch_failure_row(
+    exc: Exception,
+    label: str,
+    var: str,
+) -> dict:
+    """Build a failure-row dict for batch export.
+
+    Classifies the exception so the batch-results UI can
+    group failures by category (auth, quota, timeout,
+    empty, size, network, ...).
+    """
+    if isinstance(exc, ee.EEException):
+        category, user_message = classify_ee_error(exc)
+    else:
+        category, user_message = _classify_image_error(exc)
+    return {
+        "date": label,
+        "var": var,
+        "bytes": None,
+        "fname": None,
+        "error": str(exc),
+        "category": category,
+        "user_message": user_message,
+        "traceback": traceback.format_exc(),
+    }
 
 
 def _scale_controls(
@@ -1072,10 +1106,15 @@ def _render_methane_map(
                             "classification", 0.6,
                         ),
                     ))
+                except ee.EEException as exc:
+                    show_ee_error(
+                        exc,
+                        "Source classification failed.",
+                    )
                 except Exception as exc:
-                    st.warning(
-                        f"Source classification failed: "
-                        f"{exc}"
+                    show_unexpected_error(
+                        exc,
+                        "Source classification failed.",
                     )
 
         base_map, fgs = (
@@ -1110,9 +1149,13 @@ def _render_methane_map(
                     wind_fg = add_wind_arrows(wind_data)
                     # Insert before ROI layer (last fg).
                     fgs.insert(-1, wind_fg)
+                except ee.EEException as exc:
+                    show_ee_error(
+                        exc, "Wind overlay failed.",
+                    )
                 except Exception as exc:
-                    st.warning(
-                        f"Wind overlay failed: {exc}"
+                    show_unexpected_error(
+                        exc, "Wind overlay failed.",
                     )
 
         st_folium(
@@ -1588,7 +1631,6 @@ def _render_image_export(
     """Render image export controls below the heatmap."""
     import io
     import itertools
-    import traceback
     import urllib.request
     import zipfile
 
@@ -1598,7 +1640,6 @@ def _render_image_export(
         cached_download_url,
     )
     from app.config import TRACE_GASES, S2_INDICES, S1_VARIABLES
-    from app.errors import show_image_error
 
     hm = st.session_state.get("current_heatmap", {})
     mode = hm.get("mode", "Mean composite")
@@ -2014,16 +2055,11 @@ def _render_image_export(
                             f"_{d}.{b_ext}"
                         )
                     except Exception as exc:
-                        results.append({
-                            "date": label,
-                            "var": var,
-                            "bytes": None,
-                            "fname": None,
-                            "error": str(exc),
-                            "traceback": (
-                                traceback.format_exc()
-                            ),
-                        })
+                        results.append(
+                            _batch_failure_row(
+                                exc, label, var,
+                            )
+                        )
                         progress.progress(
                             (i + 1) / len(combos),
                             text=(
@@ -2076,16 +2112,11 @@ def _render_image_export(
                             f".{b_ext}"
                         )
                     except Exception as exc:
-                        results.append({
-                            "date": label,
-                            "var": var,
-                            "bytes": None,
-                            "fname": None,
-                            "error": str(exc),
-                            "traceback": (
-                                traceback.format_exc()
-                            ),
-                        })
+                        results.append(
+                            _batch_failure_row(
+                                exc, label, var,
+                            )
+                        )
                         progress.progress(
                             (i + 1) / len(combos),
                             text=(
@@ -2116,16 +2147,11 @@ def _render_image_export(
                         "error": None,
                     })
                 except Exception as exc:
-                    results.append({
-                        "date": label,
-                        "var": var,
-                        "bytes": None,
-                        "fname": None,
-                        "error": str(exc),
-                        "traceback": (
-                            traceback.format_exc()
-                        ),
-                    })
+                    results.append(
+                        _batch_failure_row(
+                            exc, label, var,
+                        )
+                    )
                 progress.progress(
                     (i + 1) / len(combos),
                     text=(
@@ -2146,6 +2172,22 @@ def _render_image_export(
                 st.warning(
                     f"{len(fail)} image(s) failed.",
                 )
+                # Group by classification category so
+                # users see *why* at a glance.
+                by_category: dict[str, list[dict]] = {}
+                for r in fail:
+                    cat = r.get("category", "unknown")
+                    by_category.setdefault(
+                        cat, [],
+                    ).append(r)
+                for cat, rows in by_category.items():
+                    sample_msg = rows[0].get(
+                        "user_message", "",
+                    )
+                    st.caption(
+                        f"**{cat}** — {len(rows)} "
+                        f"failure(s). {sample_msg}"
+                    )
                 for r in fail:
                     st.caption(
                         f"{r['var']} @ {r['date']}: "
