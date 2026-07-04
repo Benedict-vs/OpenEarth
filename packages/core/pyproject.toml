@@ -1,0 +1,19 @@
+[project]
+name = "openearth-core"
+version = "2.0.0a0"
+description = "OpenEarth core science library: Earth Engine access, dataset catalog, and NumPy physics."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "earthengine-api>=1.7,<2",
+    "numpy>=1.26,<3",
+    "pandas>=2.0,<3",
+    "pydantic-settings>=2.4,<3",
+    "tenacity>=9,<10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openearth"]

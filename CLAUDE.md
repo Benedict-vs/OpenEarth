@@ -1,70 +1,60 @@
-# OpenEarth Explorer
+# CLAUDE.md
 
-Interactive Streamlit app for satellite-based environmental analysis. Users select a region (ROI) and time range to explore atmospheric trace gases (Sentinel-5P/TROPOMI), land-surface spectral indices (Sentinel-2), and SAR data (Sentinel-1) via spatial heatmaps, time-series charts, and statistics. A dedicated **Methane Detection** mode combines multi-source data for methane emission analysis.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Tech Stack
-- **Streamlit** — UI framework (entry point: `app/main.py`)
-- **Google Earth Engine (EE) API** — satellite data access
-- **Folium / streamlit-folium** — interactive map + ROI drawing
-- **Altair** — charts
-- **Pandas / NumPy** — data processing
+# OpenEarth v2
+
+Satellite-based environmental analysis. **v2 rebuild in progress** (currently Phase 0 complete):
+Python core library (`packages/core`) + FastAPI backend (Phase 1) + React/MapLibre frontend
+(Phase 1), with a physics-honest methane detection suite (Phase 3+). The v1 Streamlit app is
+frozen in `legacy/` until v2 reaches parity (end of Phase 4).
+
+## Commands
+
+```bash
+uv sync --all-packages        # whole dev env (uv workspace, Python 3.13 pinned)
+uv run pytest                 # offline unit tests — no Earth Engine, run these after changes
+uv run ruff check . && uv run ruff format --check .
+uv run mypy                   # strict on packages/core
+make legacy                   # run the frozen v1 Streamlit app (own pins, separate resolution)
+OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; never CI)
+```
 
 ## Architecture
 
-Two layers:
-- `src/openearth/` — pure core library (no Streamlit dependency); usable from scripts/notebooks
-- `app/` — Streamlit UI layer; depends on core library
+- `packages/core/src/openearth/` — the science library. **No UI frameworks, ever**
+  (`tests/test_no_ui_deps.py` enforces it). Guiding split: *Earth Engine for browsing and bulk
+  reduction; NumPy for physics* — everything science-critical runs on plain arrays so it is
+  unit-testable offline.
+  - `catalog/` — unified dataset catalog. `models.py` (frozen `DatasetSpec`/`ProductSpec`),
+    `builtin/{s5p,s2,s1}.py` (ported v1 registries), `presets.py` (ROI presets + 7 methane sites).
+  - `providers/` — EE collection builders per source; `__init__.py` is the key/source dispatcher
+    (routes the `"methane"` sentinel).
+  - `ee/` — `client.py` (`ee_call()` = global semaphore + tenacity retry on quota/timeout;
+    ALL blocking EE round-trips go through it), `render.py` (tile/thumb/GeoTIFF URL minting;
+    `TileRef.expires_at` for the ~4 h getMapId lifetime).
+  - `methane/wind.py` — overpass-matched ERA5 wind; `wind_to_deg`/`wind_from_deg` are distinct,
+    tested conventions. Retrieval/plume/IME modules arrive in Phase 3.
+  - `geometry.py` — `BBox`/`PolygonROI` validate on construction; pure-python `is_global`,
+    aspect math (no EE round-trips).
+- `legacy/` — frozen v1. Do not add features; fix defects in `packages/core` instead.
 
-**Data flow:** Sidebar config → ROI bbox → build composite/timeseries via EE → render in tabs
+## Conventions
 
-## Application Modes
+- **Data key + source**: `get_product("s2", "NDVI")` or v1-style `resolve_product("MBSP", "methane")`.
+- **ROI**: pass `BBox`/`PolygonROI` models, not raw tuples or `ee.Geometry` (convert at the EE
+  boundary via `.to_ee_geometry()`).
+- **S2 collections**: L2A SR by default; methane proxies pin L1C TOA via catalog `collection_id`
+  (deliberate — retrieval literature). Don't "fix" that.
+- **Products needing dedicated builders** (e.g. `CH4_ANOMALY`) carry `builder=` in the catalog;
+  the generic pipeline refuses them by design.
+- **Config**: pydantic-settings, env prefix `OPENEARTH_` (`.env.example`).
+- Typographic characters (−, –, ×) in catalog description strings are intentional UI text
+  (RUF001-003 disabled).
 
-### Explorer Mode
-General-purpose satellite data exploration. User selects a data source (S5P, S2, or S1), variables, ROI, and date range. Supports ERA5 wind overlay.
+## Testing & verification
 
-### Methane Detection Mode
-Dedicated mode combining multiple data sources for methane emission analysis:
-- **S2 SWIR proxies** — MBSP `(B12-B11)/B11`, B12/B11 ratio, CH4 anomaly (target vs baseline)
-- **Overlay layers** — S5P CH4 (coarse ~7 km), S1 SAR context, ERA5 wind arrows, source classification, RGB composite
-- **Masking** — vegetation (NDVI) and water (NDWI) masks with adjustable thresholds
-- **Temporal animation** — step through dates with prev/next controls to track emission events
-- **Source classification** — rule-based classifier combining S1 VV, NDVI, NDWI, and MBSP to label sources as Industrial, Biogenic, Wetland, or Geological
-- **Auto-scale** — CH4 anomaly colour ramp auto-centres on image median; cached across date changes, recalculate via button
-
-## Key Files
-
-| Path | Purpose |
-|------|---------|
-| `app/main.py` | Entry point (`streamlit run app/main.py`); renders sidebar + 3 tabs |
-| `app/config.py` | Sidebar UI, ROI_EXAMPLES dict, CH4_DATE_HINTS constants |
-| `app/roi.py` | ROI state management; Folium draw-map widget |
-| `app/analysis.py` | Cached tile/composite builders; color legend rendering; source classification tile helper |
-| `app/errors.py` | EE error classification → user-friendly messages |
-| `app/wind_overlay.py` | ERA5 wind arrow rendering as Folium DivIcon markers |
-| `app/tabs/spatial_map.py` | Heatmap tab (date/mean toggle, image export, methane multi-layer map, temporal animation) |
-| `app/tabs/time_series.py` | Daily chart, smoothing controls, CSV export |
-| `app/tabs/statistics.py` | Summary metrics, distribution, seasonality, anomalies |
-| `src/openearth/providers/__init__.py` | Dispatcher: `get_config()`, `get_collection()`, `_resolve_source()` (routes `"methane"` → s5p/s2/s1) |
-| `src/openearth/providers/gee_session.py` | EE init & auth |
-| `src/openearth/providers/gee_s5p.py` | Sentinel-5P collection builder |
-| `src/openearth/providers/gee_s2.py` | Sentinel-2 collection builder (cloud masking, spectral indices, methane anomaly) |
-| `src/openearth/providers/gee_s1.py` | Sentinel-1 GRD collection builder (VV, VH, VV/VH ratio, RVI) |
-| `src/openearth/providers/gee_era5.py` | ERA5-Land hourly wind data provider (`sample_wind_grid()` for u/v at grid points) |
-| `src/openearth/providers/s5p_registry.py` | 6 trace-gas configs (NO2, SO2, CO, O3, CH4, HCHO) |
-| `src/openearth/providers/s2_registry.py` | Spectral-index configs (NDVI, NDWI, EVI, SWIR-1, SWIR-2, RGB) + methane proxies (MBSP, B12_B11, CH4_ANOMALY) |
-| `src/openearth/providers/s1_registry.py` | S1 SAR band configs (VV, VH, VV_VH_RATIO, RVI) |
-| `src/openearth/analytics/daily_timeseries.py` | `build_daily_timeseries()` — batched daily ROI stats → DataFrame |
-| `src/openearth/analytics/smoothing.py` | `add_rolling_smooth()` |
-| `src/openearth/analytics/source_classification.py` | Rule-based methane source classifier (S1 VV + NDVI + NDWI + MBSP → 5 categories) |
-| `src/openearth/visualization/heatmap.py` | Composites, tile URLs, thumbnails, GeoTIFF export, multi-layer Folium map |
-| `src/openearth/masking/vegetation_water.py` | NDVI/NDWI-based pixel masking for methane layers |
-
-## Key Conventions
-- **Data key**: string like `"NO2"`, `"NDVI"`, `"VV"` identifying the variable
-- **Source**: `"s5p"`, `"s2"`, `"s1"`, or `"methane"` — routes to correct provider via `_resolve_source()`
-- **ROI**: `(west, south, east, north)` float tuple → `ee.Geometry.Rectangle()`
-- **Registry pattern**: `GasConfig` / `S2IndexConfig` / `S1BandConfig` dataclasses hold band name, palette, vis_min/max, unit
-- **Date input**: accepts ISO string, Python `date`, or `datetime`; converted via `to_ee_date()`
-- **Caching**: Streamlit `@cache_data` for tiles; dynamic timeout based on ROI area. CH4 anomaly scale cached in `session_state["_anomaly_scale"]`
-- **Config**: `OPENEARTH_EE_PROJECT` env var for EE project ID
-- **Methane mode sidebar**: grouped as Methane Proxies → Overlay Layers → Masking (no satellite labels in UI)
+- Unit tests live in `packages/core/tests` and MUST pass with zero EE calls / no credentials.
+- Live EE tests are `@pytest.mark.ee` (deselected by default via `addopts`).
+- mypy is strict; modules wrapping EE chains have `warn_return_any` scoped off in root
+  `pyproject.toml` (ee's methods return Any — that's the library, not us).

@@ -43,3 +43,7 @@ htmlcov/
 
 
 deferred products.md
+# OpenEarth v2 local state
+data/
+node_modules/
+uv-receipt.json

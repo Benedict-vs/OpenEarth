@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.8.17
+    hooks:
+      - id: uv-lock
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (strict, core)
+        entry: uv run mypy
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

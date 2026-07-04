@@ -1,17 +1,74 @@
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "openearth"
-version = "0.1.0"
-description = "OpenEarth Explorer core package and app code."
-readme = "README.md"
-requires-python = ">=3.10"
+name = "openearth-workspace"
+version = "2.0.0a0"
+description = "OpenEarth v2 monorepo workspace root (not a package)."
+requires-python = ">=3.12,<3.14"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
+[tool.uv]
+package = false
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["openearth*"]
+[tool.uv.workspace]
+members = ["packages/*"]
+exclude = ["legacy"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-cov>=6,<8",
+    "ruff>=0.9",
+    "mypy>=1.14,<2",
+    "pandas-stubs>=2.0",
+    "pre-commit>=4,<5",
+]
+
+# ── Lint / format ────────────────────────────────────────────────
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["legacy"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "PT"]
+# Typographic minus/en-dash/× are intentional in catalog display strings.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["openearth"]
+
+# ── Type checking ────────────────────────────────────────────────
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+mypy_path = "packages/core/src"
+packages = ["openearth"]
+exclude = ["legacy/"]
+
+[[tool.mypy.overrides]]
+module = ["ee", "ee.*"]
+ignore_missing_imports = true
+
+# Modules that wrap Earth Engine chains: ee's own methods return Any, so
+# "returning Any" is inherent there, not a defect in our annotations.
+[[tool.mypy.overrides]]
+module = [
+    "openearth.providers.*",
+    "openearth.ee.*",
+    "openearth.composites",
+    "openearth.masking",
+    "openearth.geometry",
+    "openearth.analytics.conversions",
+    "openearth.analytics.source_classification",
+    "openearth.methane.wind",
+]
+warn_return_any = false
+
+# ── Tests ────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+testpaths = ["packages/core/tests"]
+addopts = "-ra -m 'not ee'"
+markers = [
+    "ee: live Earth Engine tests (need OPENEARTH_EE_TESTS=1 and real auth; never run in CI)",
+]
