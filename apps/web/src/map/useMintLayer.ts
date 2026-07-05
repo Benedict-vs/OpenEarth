@@ -10,7 +10,7 @@
 import { useEffect } from "react";
 import { mintTiles } from "../api/queries";
 import type { TilesRequest } from "../api/types";
-import { isoToMs } from "../lib/time";
+import { isoToMs, remintAtMs } from "../lib/time";
 import { useDateStore } from "../stores/dateStore";
 import { useLayersStore, type Layer } from "../stores/layersStore";
 import { useRoiStore } from "../stores/roiStore";
@@ -66,10 +66,29 @@ function currentParamsKey(layerId: string): string | null {
   return JSON.stringify(body);
 }
 
-export async function mintLayerNow(layerId: string): Promise<void> {
+// One request per (layer, params) at a time — dev remounts (StrictMode) and
+// scheduler/param races must not stack identical mints onto the EE budget.
+const inFlight = new Map<string, string>();
+
+export async function mintLayerNow(layerId: string, options?: { force?: boolean }): Promise<void> {
   const requestKey = currentParamsKey(layerId);
   if (requestKey === null) return;
+  if (inFlight.get(layerId) === requestKey) return;
+
   const { setMinting, setMint, setError } = useLayersStore.getState();
+  const layer = useLayersStore.getState().layers.find((l) => l.id === layerId);
+  // A fresh mint with identical params is still valid — skip unless forced
+  // (the expiry re-mint passes force to get a new URL for the same params).
+  if (
+    !options?.force &&
+    layer?.status === "ready" &&
+    layer.mint?.paramsKey === requestKey &&
+    Date.now() < remintAtMs(layer.mint.mintedAt, layer.mint.expiresAt)
+  ) {
+    return;
+  }
+
+  inFlight.set(layerId, requestKey);
   setMinting(layerId);
   try {
     const response = await mintTiles(JSON.parse(requestKey) as TilesRequest);
@@ -80,10 +99,13 @@ export async function mintLayerNow(layerId: string): Promise<void> {
       expiresAt: isoToMs(response.expires_at),
       attribution: response.attribution,
       legend: response.legend,
+      paramsKey: requestKey,
     });
   } catch (error: unknown) {
     if (currentParamsKey(layerId) !== requestKey) return;
     setError(layerId, error instanceof Error ? error.message : String(error));
+  } finally {
+    if (inFlight.get(layerId) === requestKey) inFlight.delete(layerId);
   }
 }
 

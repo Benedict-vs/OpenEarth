@@ -19,7 +19,7 @@ export function useTileRemint(layer: Layer): void {
   useEffect(() => {
     if (!map || !ready) return;
     const scheduler = createRemintScheduler({
-      onRemint: () => void mintLayerNow(layer.id),
+      onRemint: () => void mintLayerNow(layer.id, { force: true }),
     });
     schedulerRef.current = scheduler;
 

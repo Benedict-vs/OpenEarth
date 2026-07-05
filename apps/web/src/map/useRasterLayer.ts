@@ -59,8 +59,14 @@ export function useRasterLayer(layer: Layer): void {
   useEffect(() => {
     if (!map) return;
     return () => {
-      if (map.getLayer(sid)) map.removeLayer(sid);
-      if (map.getSource(sid)) map.removeSource(sid);
+      // The whole map may already be destroyed (view switch unmounts
+      // MapProvider); ops on a removed map throw.
+      try {
+        if (map.getLayer(sid)) map.removeLayer(sid);
+        if (map.getSource(sid)) map.removeSource(sid);
+      } catch {
+        /* map already removed */
+      }
     };
   }, [map, sid]);
 

@@ -48,7 +48,11 @@ export function useTerraDraw(): DrawApi {
 
     drawRef.current = draw;
     return () => {
-      draw.stop();
+      try {
+        draw.stop();
+      } catch {
+        /* map already removed (view switch) */
+      }
       drawRef.current = null;
     };
   }, [map, ready]);

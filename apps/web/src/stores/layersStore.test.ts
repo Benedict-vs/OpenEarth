@@ -19,6 +19,7 @@ function mint(url: string): LayerMint {
     expiresAt: 2000,
     attribution: "test",
     legend: LEGEND,
+    paramsKey: '{"dataset":"s2"}',
   };
 }
 

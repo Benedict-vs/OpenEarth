@@ -47,7 +47,8 @@ export function CatalogBrowser() {
         </select>
       </label>
       {product?.description ? (
-        <p className="muted product-description">{product.description}</p>
+        // Catalog descriptions carry light markdown bold markers; render as plain text.
+        <p className="muted product-description">{product.description.replaceAll("**", "")}</p>
       ) : null}
       <button
         className="primary"

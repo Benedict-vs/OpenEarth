@@ -8,6 +8,8 @@ export interface LayerMint {
   expiresAt: number;
   attribution: string;
   legend: Legend;
+  /** Serialized mint parameters — lets remounts skip redundant re-mints. */
+  paramsKey: string;
 }
 
 export type LayerStatus = "idle" | "minting" | "ready" | "error";
