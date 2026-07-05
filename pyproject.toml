@@ -77,7 +77,9 @@ warn_return_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["packages/core/tests", "packages/api/tests"]
-addopts = "-ra -m 'not ee'"
+# importlib mode: core and api both have a test_timeseries.py; without it
+# pytest's basename-based import would collide (no __init__.py in test dirs).
+addopts = "-ra -m 'not ee' --import-mode=importlib"
 # Strict mode: async tests are opt-in via @pytest.mark.asyncio, no auto-collection.
 asyncio_mode = "strict"
 markers = [

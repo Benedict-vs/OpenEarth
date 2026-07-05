@@ -134,6 +134,34 @@ class ScenesRequest(BaseModel):
     dates: DateRangeIn
 
 
+# ── Timeseries ───────────────────────────────────────────────
+
+
+class TimeseriesRequest(BaseModel):
+    """ROI is required — a global reduceRegion series is unbounded compute
+    (plan.md). ``scale`` picks native resolution or the 4× coarse preview."""
+
+    dataset: str
+    product: str
+    roi: RoiIn
+    dates: DateRangeIn
+    scale: Literal["coarse", "native"] = "native"
+
+
+class TimeseriesPoint(BaseModel):
+    date: str  # ISO date, e.g. "2019-04-02"
+    value: float  # raw reduced value (multiply by display_scale for display)
+    count: int  # contributing pixel count that day
+
+
+class TimeseriesResultOut(BaseModel):
+    points: list[TimeseriesPoint]
+    unit: str
+    display_scale: float
+    scale_m: int
+    band: str
+
+
 class SceneOut(BaseModel):
     timestamp_ms: int
     datetime_utc: datetime

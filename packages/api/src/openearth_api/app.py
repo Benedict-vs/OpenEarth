@@ -24,7 +24,7 @@ from openearth_api.cache import make_cache
 from openearth_api.db import create_db_engine, migrate
 from openearth_api.errors import register_exception_handlers
 from openearth_api.jobs import JobManager
-from openearth_api.routers import catalog, jobs, meta, presets, scenes, tiles
+from openearth_api.routers import catalog, jobs, meta, presets, scenes, tiles, timeseries
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -96,4 +96,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(scenes.router, prefix="/api")
     app.include_router(presets.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
+    app.include_router(timeseries.router, prefix="/api")
     return app

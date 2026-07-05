@@ -226,6 +226,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Timeseries Route */
+        post: operations["submit_timeseries_route_api_timeseries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/timeseries/{job_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timeseries Result Route */
+        get: operations["timeseries_result_route_api_timeseries__job_id__result_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -318,6 +352,11 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
+        };
+        /** JobCreated */
+        JobCreated: {
+            /** Job Id */
+            job_id: string;
         };
         /** JobOut */
         JobOut: {
@@ -518,6 +557,48 @@ export interface components {
             /** Timestamp Ms */
             timestamp_ms?: number | null;
             viz_overrides?: components["schemas"]["VizOverrides"] | null;
+        };
+        /** TimeseriesPoint */
+        TimeseriesPoint: {
+            /** Count */
+            count: number;
+            /** Date */
+            date: string;
+            /** Value */
+            value: number;
+        };
+        /**
+         * TimeseriesRequest
+         * @description ROI is required — a global reduceRegion series is unbounded compute
+         *     (plan.md). ``scale`` picks native resolution or the 4× coarse preview.
+         */
+        TimeseriesRequest: {
+            /** Dataset */
+            dataset: string;
+            dates: components["schemas"]["DateRangeIn"];
+            /** Product */
+            product: string;
+            /** Roi */
+            roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+            /**
+             * Scale
+             * @default native
+             * @enum {string}
+             */
+            scale: "coarse" | "native";
+        };
+        /** TimeseriesResultOut */
+        TimeseriesResultOut: {
+            /** Band */
+            band: string;
+            /** Display Scale */
+            display_scale: number;
+            /** Points */
+            points: components["schemas"]["TimeseriesPoint"][];
+            /** Scale M */
+            scale_m: number;
+            /** Unit */
+            unit: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -932,6 +1013,88 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TileResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_timeseries_route_api_timeseries_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimeseriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    timeseries_result_route_api_timeseries__job_id__result_get: {
+        parameters: {
+            query?: {
+                format?: "json" | "csv" | "parquet";
+            };
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeseriesResultOut"];
+                    "application/vnd.apache.parquet": unknown;
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Job not finished */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cached result evicted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

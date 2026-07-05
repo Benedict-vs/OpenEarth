@@ -220,6 +220,19 @@
         "title": "HealthOut",
         "type": "object"
       },
+      "JobCreated": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "JobCreated",
+        "type": "object"
+      },
       "JobOut": {
         "properties": {
           "created_at": {
@@ -839,6 +852,116 @@
         "title": "TilesRequest",
         "type": "object"
       },
+      "TimeseriesPoint": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "value",
+          "count"
+        ],
+        "title": "TimeseriesPoint",
+        "type": "object"
+      },
+      "TimeseriesRequest": {
+        "description": "ROI is required \u2014 a global reduceRegion series is unbounded compute\n(plan.md). ``scale`` picks native resolution or the 4\u00d7 coarse preview.",
+        "properties": {
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "$ref": "#/components/schemas/DateRangeIn"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          },
+          "scale": {
+            "default": "native",
+            "enum": [
+              "coarse",
+              "native"
+            ],
+            "title": "Scale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "roi",
+          "dates"
+        ],
+        "title": "TimeseriesRequest",
+        "type": "object"
+      },
+      "TimeseriesResultOut": {
+        "properties": {
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "display_scale": {
+            "title": "Display Scale",
+            "type": "number"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/TimeseriesPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "scale_m": {
+            "title": "Scale M",
+            "type": "integer"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "points",
+          "unit",
+          "display_scale",
+          "scale_m",
+          "band"
+        ],
+        "title": "TimeseriesResultOut",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1416,6 +1539,112 @@
         "summary": "Mint Tiles Route",
         "tags": [
           "render"
+        ]
+      }
+    },
+    "/api/timeseries": {
+      "post": {
+        "operationId": "submit_timeseries_route_api_timeseries_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimeseriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Timeseries Route",
+        "tags": [
+          "timeseries"
+        ]
+      }
+    },
+    "/api/timeseries/{job_id}/result": {
+      "get": {
+        "operationId": "timeseries_result_route_api_timeseries__job_id__result_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "json",
+              "enum": [
+                "json",
+                "csv",
+                "parquet"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeseriesResultOut"
+                }
+              },
+              "application/vnd.apache.parquet": {},
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Job not finished"
+          },
+          "410": {
+            "description": "Cached result evicted"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Timeseries Result Route",
+        "tags": [
+          "timeseries"
         ]
       }
     }
