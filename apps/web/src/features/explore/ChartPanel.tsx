@@ -103,11 +103,7 @@ export function ChartPanel() {
         ) : null}
         <span className="chart-drawer-spacer" />
         {status === "done" && fineJobId ? (
-          <a
-            className="csv-link"
-            href={`/api/timeseries/${fineJobId}/result?format=csv`}
-            download
-          >
+          <a className="csv-link" href={`/api/timeseries/${fineJobId}/result?format=csv`} download>
             Export CSV
           </a>
         ) : null}

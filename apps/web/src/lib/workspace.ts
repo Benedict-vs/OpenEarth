@@ -65,7 +65,12 @@ export function applyWorkspace(state: WorkspaceState): void {
     useLayersStore.setState((s) => ({
       layers: s.layers.map((l) =>
         l.id === id
-          ? { ...l, opacity: wl.opacity, visible: wl.visible, vizOverrides: wl.viz_overrides ?? null }
+          ? {
+              ...l,
+              opacity: wl.opacity,
+              visible: wl.visible,
+              vizOverrides: wl.viz_overrides ?? null,
+            }
           : l,
       ),
     }));

@@ -48,7 +48,11 @@ function viewportBounds(map: maplibregl.Map): Bounds | null {
 
 function sameBounds(a: Bounds | null, b: Bounds): boolean {
   return (
-    a !== null && a.west === b.west && a.south === b.south && a.east === b.east && a.north === b.north
+    a !== null &&
+    a.west === b.west &&
+    a.south === b.south &&
+    a.east === b.east &&
+    a.north === b.north
   );
 }
 

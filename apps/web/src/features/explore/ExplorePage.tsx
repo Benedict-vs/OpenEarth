@@ -63,8 +63,7 @@ function WindToggle() {
         {enabled ? "◈ Wind overlay on" : "◈ Show wind overlay"}
       </button>
       <p className="muted wind-note">
-        ERA5 10 m wind at 12:00 UTC on the active date — weather context, not
-        overpass-matched.
+        ERA5 10 m wind at 12:00 UTC on the active date — weather context, not overpass-matched.
       </p>
     </>
   );
