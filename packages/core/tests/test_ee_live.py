@@ -52,6 +52,22 @@ def test_s5p_no2_collection_nonempty() -> None:
     assert ee_call(col.size().getInfo) > 0
 
 
+def test_daily_timeseries_ndvi_over_heidelberg() -> None:
+    from datetime import date
+
+    from openearth.catalog.presets import ROI_PRESETS
+    from openearth.timeseries import daily_timeseries
+
+    roi = ROI_PRESETS["Heidelberg (Germany)"].bbox
+    # One 30-day chunk; validates the real reduceRegion output-key naming
+    # (``value_mean`` / ``value_count``) that offline fakes can't check.
+    frame = daily_timeseries("NDVI", "s2", roi, date(2024, 6, 1), date(2024, 7, 1))
+    assert list(frame.columns) == ["value", "count"]
+    assert not frame.empty  # June over Heidelberg has clear Sentinel-2 scenes
+    assert (frame["count"] > 0).all()
+    assert frame["value"].between(-1, 1).all()  # NDVI physical range
+
+
 def test_overpass_matched_wind_sample() -> None:
     from datetime import UTC, datetime
 

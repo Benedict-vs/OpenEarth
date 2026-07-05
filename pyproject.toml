@@ -68,6 +68,7 @@ module = [
     "openearth.analytics.conversions",
     "openearth.analytics.source_classification",
     "openearth.methane.wind",
+    "openearth.timeseries",
     "openearth_api.services.*",
 ]
 warn_return_any = false
