@@ -1,6 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./client";
-import type { AppConfig, Dataset, RoiPreset, TileResponse, TilesRequest } from "./types";
+import type {
+  AppConfig,
+  Dataset,
+  InspectRequest,
+  InspectResult,
+  RoiPreset,
+  TileResponse,
+  TilesRequest,
+} from "./types";
 
 export function useCatalog() {
   return useQuery({
@@ -29,4 +37,9 @@ export function usePresets() {
  *  is driven from the layer store / remint scheduler, not from components. */
 export function mintTiles(body: TilesRequest): Promise<TileResponse> {
   return apiPost<TileResponse>("/api/tiles", body);
+}
+
+/** Sample the current composite's pixel value at a point (pixel inspector). */
+export function inspectPoint(body: InspectRequest): Promise<InspectResult> {
+  return apiPost<InspectResult>("/api/inspect", body);
 }

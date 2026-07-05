@@ -220,6 +220,146 @@
         "title": "HealthOut",
         "type": "object"
       },
+      "InspectRequest": {
+        "description": "One point sample of the current composite. The composite fields mirror\n``TilesRequest`` (minus ``viz_overrides`` \u2014 a single pixel value has no\ncolour scaling); ``lon``/``lat`` are the sample point in EPSG:4326 degrees.\nThe ``roi`` still governs how the composite is built, not where it is read.",
+        "properties": {
+          "composite": {
+            "default": "mean",
+            "enum": [
+              "mean",
+              "date_window",
+              "single_scene"
+            ],
+            "title": "Composite",
+            "type": "string"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "half_window_days": {
+            "default": 3,
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Half Window Days",
+            "type": "integer"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bbox": "#/components/schemas/BBoxIn",
+                    "polygon": "#/components/schemas/PolygonIn"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/BBoxIn"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PolygonIn"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roi"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "timestamp_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp Ms"
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "lon",
+          "lat"
+        ],
+        "title": "InspectRequest",
+        "type": "object"
+      },
+      "InspectResult": {
+        "description": "A ``value`` of ``null`` means the pixel is masked (no data at that\nlocation) \u2014 not an error. Multiply by ``display_scale`` for display units.",
+        "properties": {
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "display_scale": {
+            "title": "Display Scale",
+            "type": "number"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "value",
+          "band",
+          "unit",
+          "display_scale"
+        ],
+        "title": "InspectResult",
+        "type": "object"
+      },
       "JobCreated": {
         "properties": {
           "job_id": {
@@ -1220,6 +1360,47 @@
         "summary": "Health",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/inspect": {
+      "post": {
+        "operationId": "inspect_route_api_inspect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inspect Route",
+        "tags": [
+          "inspect"
         ]
       }
     },

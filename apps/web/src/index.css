@@ -381,6 +381,96 @@ code {
   margin-top: 2px;
 }
 
+/* ── Pixel inspector ───────────────────────────────────────── */
+
+.inspect-toggle {
+  width: 100%;
+}
+
+.inspect-toggle.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+/* Theme MapLibre's popup (rendered outside the React tree) to match the app. */
+.maplibregl-popup-content {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  padding: 9px 11px;
+}
+
+.maplibregl-popup-close-button {
+  color: var(--muted);
+  font-size: 15px;
+  padding: 0 5px;
+}
+
+.maplibregl-popup-close-button:hover {
+  background: transparent;
+  color: var(--text);
+}
+
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--panel);
+}
+
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--panel);
+}
+
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--panel);
+}
+
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--panel);
+}
+
+.inspect-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 150px;
+}
+
+.inspect-title {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspect-value {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.inspect-value.muted {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.inspect-coords {
+  font-size: 11px;
+}
+
+.inspect-series-btn {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.inspect-hint {
+  font-size: 12px;
+}
+
 /* ── Analysis drawer ───────────────────────────────────────── */
 
 .chart-drawer {

@@ -134,6 +134,38 @@ class ScenesRequest(BaseModel):
     dates: DateRangeIn
 
 
+# ── Inspect (pixel value) ────────────────────────────────────
+
+
+class InspectRequest(BaseModel):
+    """One point sample of the current composite. The composite fields mirror
+    ``TilesRequest`` (minus ``viz_overrides`` — a single pixel value has no
+    colour scaling); ``lon``/``lat`` are the sample point in EPSG:4326 degrees.
+    The ``roi`` still governs how the composite is built, not where it is read.
+    """
+
+    dataset: str
+    product: str
+    roi: RoiIn | None = None
+    composite: CompositeMode = "mean"
+    dates: DateRangeIn | None = None
+    target_date: date | None = None
+    half_window_days: int = Field(default=3, ge=0, le=30)
+    timestamp_ms: int | None = None
+    lon: float
+    lat: float
+
+
+class InspectResult(BaseModel):
+    """A ``value`` of ``null`` means the pixel is masked (no data at that
+    location) — not an error. Multiply by ``display_scale`` for display units."""
+
+    value: float | None
+    band: str
+    unit: str
+    display_scale: float
+
+
 # ── Timeseries ───────────────────────────────────────────────
 
 

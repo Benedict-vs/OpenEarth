@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inspect Route */
+        post: operations["inspect_route_api_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs": {
         parameters: {
             query?: never;
@@ -352,6 +369,56 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
+        };
+        /**
+         * InspectRequest
+         * @description One point sample of the current composite. The composite fields mirror
+         *     ``TilesRequest`` (minus ``viz_overrides`` — a single pixel value has no
+         *     colour scaling); ``lon``/``lat`` are the sample point in EPSG:4326 degrees.
+         *     The ``roi`` still governs how the composite is built, not where it is read.
+         */
+        InspectRequest: {
+            /**
+             * Composite
+             * @default mean
+             * @enum {string}
+             */
+            composite: "mean" | "date_window" | "single_scene";
+            /** Dataset */
+            dataset: string;
+            dates?: components["schemas"]["DateRangeIn"] | null;
+            /**
+             * Half Window Days
+             * @default 3
+             */
+            half_window_days: number;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Product */
+            product: string;
+            /** Roi */
+            roi?: (components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"]) | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Timestamp Ms */
+            timestamp_ms?: number | null;
+        };
+        /**
+         * InspectResult
+         * @description A ``value`` of ``null`` means the pixel is masked (no data at that
+         *     location) — not an error. Multiply by ``display_scale`` for display units.
+         */
+        InspectResult: {
+            /** Band */
+            band: string;
+            /** Display Scale */
+            display_scale: number;
+            /** Unit */
+            unit: string;
+            /** Value */
+            value: number | null;
         };
         /** JobCreated */
         JobCreated: {
@@ -778,6 +845,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthOut"];
+                };
+            };
+        };
+    };
+    inspect_route_api_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -14,6 +14,8 @@ export type VizOverrides = components["schemas"]["VizOverrides"];
 export type RoiPreset = components["schemas"]["RoiPresetOut"];
 export type AppConfig = components["schemas"]["ConfigOut"];
 export type Scene = components["schemas"]["SceneOut"];
+export type InspectRequest = components["schemas"]["InspectRequest"];
+export type InspectResult = components["schemas"]["InspectResult"];
 
 // ── Jobs & timeseries ──────────────────────────────────────
 export type JobCreated = components["schemas"]["JobCreated"];
