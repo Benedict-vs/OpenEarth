@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # OpenEarth Explorer
 
 Interactive Streamlit app for satellite-based environmental analysis. Users select a region (ROI) and time range to explore atmospheric trace gases (Sentinel-5P/TROPOMI), land-surface spectral indices (Sentinel-2), and SAR data (Sentinel-1) via spatial heatmaps, time-series charts, and statistics. A dedicated **Methane Detection** mode combines multi-source data for methane emission analysis.
@@ -8,6 +12,32 @@ Interactive Streamlit app for satellite-based environmental analysis. Users sele
 - **Folium / streamlit-folium** — interactive map + ROI drawing
 - **Altair** — charts
 - **Pandas / NumPy** — data processing
+
+## Commands
+
+```bash
+# Setup (one-time; installs openearth as editable package via `-e .`)
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Run the app
+streamlit run app/main.py
+
+# Syntax smoke-check after edits (the standard verification here — see below)
+python3 -m py_compile app/tabs/spatial_map.py src/openearth/visualization/heatmap.py
+
+# Import core library outside the venv (src-layout)
+PYTHONPATH=src python3 -c "from openearth.providers.s2_registry import S2_REGISTRY"
+```
+
+There is no test suite and no linter/formatter configured (unit tests are a roadmap item). Venv Python is 3.14; `requires-python >= 3.10`.
+
+## Testing & Verification
+
+Nearly all core code builds server-side Earth Engine objects, so it cannot be exercised without EE credentials (`OPENEARTH_EE_PROJECT` env var or project ID entered in the sidebar; interactive auth on first run). Practical verification:
+- `python3 -m py_compile <changed files>` as a quick syntax check
+- Real behavior is verified through the running Streamlit app in a browser
 
 ## Architecture
 
@@ -39,7 +69,8 @@ Dedicated mode combining multiple data sources for methane emission analysis:
 | `app/config.py` | Sidebar UI, ROI_EXAMPLES dict, CH4_DATE_HINTS constants |
 | `app/roi.py` | ROI state management; Folium draw-map widget |
 | `app/analysis.py` | Cached tile/composite builders; color legend rendering; source classification tile helper |
-| `app/errors.py` | EE error classification → user-friendly messages |
+| `app/errors.py` | Streamlit display of classified errors |
+| `src/openearth/errors.py` | Core exception hierarchy (`OpenEarthError` etc.), `classify_ee_error()`, ROI/date validation — UI-independent |
 | `app/wind_overlay.py` | ERA5 wind arrow rendering as Folium DivIcon markers |
 | `app/tabs/spatial_map.py` | Heatmap tab (date/mean toggle, image export, methane multi-layer map, temporal animation) |
 | `app/tabs/time_series.py` | Daily chart, smoothing controls, CSV export |
@@ -51,7 +82,7 @@ Dedicated mode combining multiple data sources for methane emission analysis:
 | `src/openearth/providers/gee_s1.py` | Sentinel-1 GRD collection builder (VV, VH, VV/VH ratio, RVI) |
 | `src/openearth/providers/gee_era5.py` | ERA5-Land hourly wind data provider (`sample_wind_grid()` for u/v at grid points) |
 | `src/openearth/providers/s5p_registry.py` | 6 trace-gas configs (NO2, SO2, CO, O3, CH4, HCHO) |
-| `src/openearth/providers/s2_registry.py` | Spectral-index configs (NDVI, NDWI, EVI, SWIR-1, SWIR-2, RGB) + methane proxies (MBSP, B12_B11, CH4_ANOMALY) |
+| `src/openearth/providers/s2_registry.py` | 18 spectral-index configs + 13 raw bands + RGB + methane proxies (MBSP, B12_B11, CH4_ANOMALY) |
 | `src/openearth/providers/s1_registry.py` | S1 SAR band configs (VV, VH, VV_VH_RATIO, RVI) |
 | `src/openearth/analytics/daily_timeseries.py` | `build_daily_timeseries()` — batched daily ROI stats → DataFrame |
 | `src/openearth/analytics/smoothing.py` | `add_rolling_smooth()` |
