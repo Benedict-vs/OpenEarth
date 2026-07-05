@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MapProvider } from "./map/MapContext";
+import { ExplorePage } from "./features/explore/ExplorePage";
 
 type View = "explore" | "settings";
 
@@ -26,14 +26,7 @@ export function App() {
       </header>
       <main className="main">
         {view === "explore" ? (
-          <MapProvider>
-            <aside className="side-panel">
-              <div className="panel-section">
-                <h3>Catalog</h3>
-                <p className="muted">Catalog browser lands in the next commit.</p>
-              </div>
-            </aside>
-          </MapProvider>
+          <ExplorePage />
         ) : (
           <aside className="side-panel" style={{ width: "100%" }}>
             <div className="panel-section">

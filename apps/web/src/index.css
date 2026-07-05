@@ -142,3 +142,107 @@ textarea:focus {
 .muted {
   color: var(--muted);
 }
+
+/* ── Catalog browser ───────────────────────────────────────── */
+
+.catalog-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catalog-browser label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.product-description {
+  font-size: 12px;
+  margin: 0;
+  max-height: 5.5em;
+  overflow-y: auto;
+}
+
+/* ── Layer panel ───────────────────────────────────────────── */
+
+.layer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.layer-row {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.layer-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.layer-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+button.icon {
+  padding: 1px 7px;
+  line-height: 1.4;
+}
+
+.badge {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.badge.error {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.layer-error {
+  font-size: 12px;
+  margin: 0;
+}
+
+input[type="range"] {
+  width: 100%;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+/* ── Legend ────────────────────────────────────────────────── */
+
+.legend-bar {
+  height: 10px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+.legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-top: 2px;
+}
