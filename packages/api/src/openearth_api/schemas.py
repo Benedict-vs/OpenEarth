@@ -127,6 +127,13 @@ class ThumbnailRequest(TilesRequest):
     width: int = Field(default=1024, ge=64, le=2048)
 
 
+class ScenesRequest(BaseModel):
+    dataset: str
+    product: str
+    roi: RoiIn | None = None
+    dates: DateRangeIn
+
+
 class SceneOut(BaseModel):
     timestamp_ms: int
     datetime_utc: datetime

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any
 
 import diskcache
@@ -62,8 +62,8 @@ def cache_key(op: str, **parts: Any) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def ttl_for(end_date: str) -> int | None:
-    """Cache TTL for a query ending at *end_date* (ISO date).
+def ttl_for(end_date: str | date) -> int | None:
+    """Cache TTL for a query ending at *end_date*.
 
     ``None`` (never expire) for closed historical ranges; a short TTL when
     the range reaches into the present and new scenes may still arrive.

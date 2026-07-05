@@ -22,7 +22,7 @@ from openearth.settings import Settings, get_settings
 from openearth_api import __version__
 from openearth_api.cache import make_cache
 from openearth_api.errors import register_exception_handlers
-from openearth_api.routers import catalog, meta
+from openearth_api.routers import catalog, meta, presets, scenes, tiles
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -77,4 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_exception_handlers(app)
     app.include_router(meta.router, prefix="/api")
     app.include_router(catalog.router, prefix="/api")
+    app.include_router(tiles.router, prefix="/api")
+    app.include_router(scenes.router, prefix="/api")
+    app.include_router(presets.router, prefix="/api")
     return app
