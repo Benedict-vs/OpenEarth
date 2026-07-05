@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter
 
 from openearth.geometry import BBox, PolygonROI
 
@@ -39,6 +39,10 @@ class PolygonIn(BaseModel):
 
 
 RoiIn = Annotated[BBoxIn | PolygonIn, Field(discriminator="kind")]
+
+# Reusable (de)serializer for the discriminated ROI union — used to persist an
+# ROI as JSON and read it back (AOIs, workspace layers store it as a blob).
+ROI_ADAPTER: TypeAdapter[BBoxIn | PolygonIn] = TypeAdapter(RoiIn)
 
 
 class DateRangeIn(BaseModel):
@@ -281,6 +285,66 @@ class JobOut(BaseModel):
     created_at: str
     started_at: str | None
     finished_at: str | None
+
+
+# ── Saved AOIs / workspaces ──────────────────────────────────
+
+
+class AoiIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    roi: RoiIn
+
+
+class AoiOut(BaseModel):
+    id: int
+    name: str
+    roi: RoiIn
+    created_at: str
+
+
+class WorkspaceLayer(BaseModel):
+    """One layer's persisted shape — data identity plus display state, but no
+    mint (tile URLs expire; they are re-minted on load, not restored)."""
+
+    dataset: str
+    product: str
+    label: str
+    opacity: float
+    visible: bool
+    viz_overrides: VizOverrides | None = None
+
+
+class WorkspaceDate(BaseModel):
+    mode: Literal["range", "single"]
+    start: date
+    end: date
+    target_date: date
+    half_window_days: int = Field(ge=0, le=30)
+
+
+class WorkspaceState(BaseModel):
+    """A restorable snapshot of the Explore view. ``v`` is a schema version so
+    Phase 3+ can migrate the shape explicitly instead of guessing at load time;
+    an unknown version fails validation rather than being silently misread."""
+
+    v: Literal[1]
+    layers: list[WorkspaceLayer]
+    roi: RoiIn | None = None
+    date: WorkspaceDate
+    wind: bool
+
+
+class WorkspaceIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    state: WorkspaceState
+
+
+class WorkspaceOut(BaseModel):
+    id: int
+    name: str
+    state: WorkspaceState
+    created_at: str
+    updated_at: str
 
 
 # ── Meta ─────────────────────────────────────────────────────

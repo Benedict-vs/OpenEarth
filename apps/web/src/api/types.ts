@@ -21,6 +21,14 @@ export type ExportGeotiffRequest = components["schemas"]["ExportGeotiffRequest"]
 export type WindField = components["schemas"]["WindFieldOut"];
 export type WindSample = components["schemas"]["WindSampleOut"];
 
+// ── Saved AOIs & workspaces ────────────────────────────────
+export type Aoi = components["schemas"]["AoiOut"];
+export type AoiIn = components["schemas"]["AoiIn"];
+export type Workspace = components["schemas"]["WorkspaceOut"];
+export type WorkspaceIn = components["schemas"]["WorkspaceIn"];
+export type WorkspaceState = components["schemas"]["WorkspaceState"];
+export type WorkspaceLayer = components["schemas"]["WorkspaceLayer"];
+
 // ── Jobs & timeseries ──────────────────────────────────────
 export type JobCreated = components["schemas"]["JobCreated"];
 export type JobOut = components["schemas"]["JobOut"];

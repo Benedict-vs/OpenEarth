@@ -25,6 +25,7 @@ from openearth_api.db import create_db_engine, migrate
 from openearth_api.errors import register_exception_handlers
 from openearth_api.jobs import JobManager
 from openearth_api.routers import (
+    aois,
     catalog,
     export,
     inspect,
@@ -35,6 +36,7 @@ from openearth_api.routers import (
     tiles,
     timeseries,
     wind,
+    workspaces,
 )
 
 if TYPE_CHECKING:
@@ -112,4 +114,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(timeseries.router, prefix="/api")
     app.include_router(export.router, prefix="/api")
     app.include_router(wind.router, prefix="/api")
+    app.include_router(aois.router, prefix="/api")
+    app.include_router(workspaces.router, prefix="/api")
     return app

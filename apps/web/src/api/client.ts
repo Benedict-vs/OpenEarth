@@ -41,6 +41,10 @@ export function apiPost<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "POST", body: JSON.stringify(body) });
 }
 
+export function apiPut<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: "PUT", body: JSON.stringify(body) });
+}
+
 /** POST returning a binary body (e.g. a rendered PNG to download). */
 export async function apiPostBlob(path: string, body: unknown): Promise<Blob> {
   const response = await fetch(path, {

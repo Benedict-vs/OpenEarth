@@ -42,3 +42,23 @@ class Job(SQLModel, table=True):
     created_at: str
     started_at: str | None = None
     finished_at: str | None = None
+
+
+class Aoi(SQLModel, table=True):
+    __tablename__ = "aois"
+
+    # ``id`` is the SQLite rowid alias (autoincrement); None until inserted.
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+    roi_json: str
+    created_at: str
+
+
+class Workspace(SQLModel, table=True):
+    __tablename__ = "workspaces"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+    state_json: str
+    created_at: str
+    updated_at: str

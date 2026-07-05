@@ -44,6 +44,28 @@ _MIGRATIONS: list[tuple[str, ...]] = [
         """,
         "CREATE INDEX ix_jobs_created_at ON jobs (created_at)",
     ),
+    # 2 — saved AOIs + workspaces (Phase 2, stage 8). Both name-unique so a
+    # duplicate save surfaces as a 409, not a silent second row. Workspace
+    # ``state_json`` is a versioned blob (see WorkspaceState) the API owns.
+    (
+        """
+        CREATE TABLE aois (
+            id         INTEGER PRIMARY KEY,
+            name       TEXT NOT NULL UNIQUE,
+            roi_json   TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE workspaces (
+            id         INTEGER PRIMARY KEY,
+            name       TEXT NOT NULL UNIQUE,
+            state_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """,
+    ),
 ]
 
 

@@ -4,6 +4,41 @@
  */
 
 export interface paths {
+    "/api/aois": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Aois */
+        get: operations["list_aois_api_aois_get"];
+        put?: never;
+        /** Create Aoi */
+        post: operations["create_aoi_api_aois_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/aois/{aoi_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Aoi */
+        delete: operations["delete_aoi_api_aois__aoi_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/catalog": {
         parameters: {
             query?: never;
@@ -362,10 +397,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workspaces */
+        get: operations["list_workspaces_api_workspaces_get"];
+        put?: never;
+        /** Create Workspace */
+        post: operations["create_workspace_api_workspaces_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workspace */
+        get: operations["get_workspace_api_workspaces__workspace_id__get"];
+        /**
+         * Update Workspace
+         * @description Replace a workspace's name and state (the header 'Update' action);
+         *     ``created_at`` is preserved. Renaming onto another workspace's name → 409.
+         */
+        put: operations["update_workspace_api_workspaces__workspace_id__put"];
+        post?: never;
+        /** Delete Workspace */
+        delete: operations["delete_workspace_api_workspaces__workspace_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AoiIn */
+        AoiIn: {
+            /** Name */
+            name: string;
+            /** Roi */
+            roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+        };
+        /** AoiOut */
+        AoiOut: {
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Roi */
+            roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+        };
         /** BBoxIn */
         BBoxIn: {
             /** East */
@@ -852,6 +946,87 @@ export interface components {
             /** Wind To Deg */
             wind_to_deg: number;
         };
+        /** WorkspaceDate */
+        WorkspaceDate: {
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Half Window Days */
+            half_window_days: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "range" | "single";
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * Target Date
+             * Format: date
+             */
+            target_date: string;
+        };
+        /** WorkspaceIn */
+        WorkspaceIn: {
+            /** Name */
+            name: string;
+            state: components["schemas"]["WorkspaceState"];
+        };
+        /**
+         * WorkspaceLayer
+         * @description One layer's persisted shape — data identity plus display state, but no
+         *     mint (tile URLs expire; they are re-minted on load, not restored).
+         */
+        WorkspaceLayer: {
+            /** Dataset */
+            dataset: string;
+            /** Label */
+            label: string;
+            /** Opacity */
+            opacity: number;
+            /** Product */
+            product: string;
+            /** Visible */
+            visible: boolean;
+            viz_overrides?: components["schemas"]["VizOverrides"] | null;
+        };
+        /** WorkspaceOut */
+        WorkspaceOut: {
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            state: components["schemas"]["WorkspaceState"];
+            /** Updated At */
+            updated_at: string;
+        };
+        /**
+         * WorkspaceState
+         * @description A restorable snapshot of the Explore view. ``v`` is a schema version so
+         *     Phase 3+ can migrate the shape explicitly instead of guessing at load time;
+         *     an unknown version fails validation rather than being silently misread.
+         */
+        WorkspaceState: {
+            date: components["schemas"]["WorkspaceDate"];
+            /** Layers */
+            layers: components["schemas"]["WorkspaceLayer"][];
+            /** Roi */
+            roi?: (components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"]) | null;
+            /**
+             * V
+             * @constant
+             */
+            v: 1;
+            /** Wind */
+            wind: boolean;
+        };
     };
     responses: never;
     parameters: never;
@@ -861,6 +1036,88 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_aois_api_aois_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AoiOut"][];
+                };
+            };
+        };
+    };
+    create_aoi_api_aois_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AoiIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AoiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_aoi_api_aois__aoi_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                aoi_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_catalog_api_catalog_get: {
         parameters: {
             query?: never;
@@ -1544,6 +1801,154 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WindFieldOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workspaces_api_workspaces_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceOut"][];
+                };
+            };
+        };
+    };
+    create_workspace_api_workspaces_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_api_workspaces__workspace_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workspace_api_workspaces__workspace_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workspace_api_workspaces__workspace_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

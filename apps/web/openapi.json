@@ -1,6 +1,82 @@
 {
   "components": {
     "schemas": {
+      "AoiIn": {
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          }
+        },
+        "required": [
+          "name",
+          "roi"
+        ],
+        "title": "AoiIn",
+        "type": "object"
+      },
+      "AoiOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "roi",
+          "created_at"
+        ],
+        "title": "AoiOut",
+        "type": "object"
+      },
       "BBoxIn": {
         "properties": {
           "east": {
@@ -1378,6 +1454,200 @@
         ],
         "title": "WindSampleOut",
         "type": "object"
+      },
+      "WorkspaceDate": {
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "half_window_days": {
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Half Window Days",
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "range",
+              "single"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "target_date": {
+            "format": "date",
+            "title": "Target Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "start",
+          "end",
+          "target_date",
+          "half_window_days"
+        ],
+        "title": "WorkspaceDate",
+        "type": "object"
+      },
+      "WorkspaceIn": {
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/WorkspaceState"
+          }
+        },
+        "required": [
+          "name",
+          "state"
+        ],
+        "title": "WorkspaceIn",
+        "type": "object"
+      },
+      "WorkspaceLayer": {
+        "description": "One layer's persisted shape \u2014 data identity plus display state, but no\nmint (tile URLs expire; they are re-minted on load, not restored).",
+        "properties": {
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "opacity": {
+            "title": "Opacity",
+            "type": "number"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "visible": {
+            "title": "Visible",
+            "type": "boolean"
+          },
+          "viz_overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VizOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "label",
+          "opacity",
+          "visible"
+        ],
+        "title": "WorkspaceLayer",
+        "type": "object"
+      },
+      "WorkspaceOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/WorkspaceState"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkspaceOut",
+        "type": "object"
+      },
+      "WorkspaceState": {
+        "description": "A restorable snapshot of the Explore view. ``v`` is a schema version so\nPhase 3+ can migrate the shape explicitly instead of guessing at load time;\nan unknown version fails validation rather than being silently misread.",
+        "properties": {
+          "date": {
+            "$ref": "#/components/schemas/WorkspaceDate"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceLayer"
+            },
+            "title": "Layers",
+            "type": "array"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bbox": "#/components/schemas/BBoxIn",
+                    "polygon": "#/components/schemas/PolygonIn"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/BBoxIn"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PolygonIn"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roi"
+          },
+          "v": {
+            "const": 1,
+            "title": "V",
+            "type": "integer"
+          },
+          "wind": {
+            "title": "Wind",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "v",
+          "layers",
+          "date",
+          "wind"
+        ],
+        "title": "WorkspaceState",
+        "type": "object"
       }
     }
   },
@@ -1387,6 +1657,105 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/aois": {
+      "get": {
+        "operationId": "list_aois_api_aois_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AoiOut"
+                  },
+                  "title": "Response List Aois Api Aois Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Aois",
+        "tags": [
+          "aois"
+        ]
+      },
+      "post": {
+        "operationId": "create_aoi_api_aois_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AoiIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AoiOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Aoi",
+        "tags": [
+          "aois"
+        ]
+      }
+    },
+    "/api/aois/{aoi_id}": {
+      "delete": {
+        "operationId": "delete_aoi_api_aois__aoi_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "aoi_id",
+            "required": true,
+            "schema": {
+              "title": "Aoi Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Aoi",
+        "tags": [
+          "aois"
+        ]
+      }
+    },
     "/api/catalog": {
       "get": {
         "operationId": "list_catalog_api_catalog_get",
@@ -2345,6 +2714,196 @@
         "summary": "Wind Field Route",
         "tags": [
           "wind"
+        ]
+      }
+    },
+    "/api/workspaces": {
+      "get": {
+        "operationId": "list_workspaces_api_workspaces_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceOut"
+                  },
+                  "title": "Response List Workspaces Api Workspaces Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Workspaces",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "post": {
+        "operationId": "create_workspace_api_workspaces_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Workspace",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
+    "/api/workspaces/{workspace_id}": {
+      "delete": {
+        "operationId": "delete_workspace_api_workspaces__workspace_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Workspace",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "get": {
+        "operationId": "get_workspace_api_workspaces__workspace_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Workspace",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "put": {
+        "description": "Replace a workspace's name and state (the header 'Update' action);\n``created_at`` is preserved. Renaming onto another workspace's name \u2192 409.",
+        "operationId": "update_workspace_api_workspaces__workspace_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Workspace",
+        "tags": [
+          "workspaces"
         ]
       }
     }

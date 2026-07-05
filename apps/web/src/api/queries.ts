@@ -1,6 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPostBlob } from "./client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiDelete, apiGet, apiPost, apiPostBlob, apiPut } from "./client";
 import type {
+  Aoi,
+  AoiIn,
   AppConfig,
   Dataset,
   ExportGeotiffRequest,
@@ -12,6 +14,8 @@ import type {
   TileResponse,
   TilesRequest,
   WindField,
+  Workspace,
+  WorkspaceIn,
 } from "./types";
 
 export function useCatalog() {
@@ -80,4 +84,62 @@ export function fetchWindField(params: WindFieldParams): Promise<WindField> {
   });
   if (params.nx !== undefined) query.set("nx", String(params.nx));
   return apiGet<WindField>(`/api/wind/field?${query.toString()}`);
+}
+
+// ── Saved AOIs ─────────────────────────────────────────────
+const AOIS_KEY = ["aois"] as const;
+
+export function useAois() {
+  return useQuery({ queryKey: AOIS_KEY, queryFn: () => apiGet<Aoi[]>("/api/aois") });
+}
+
+export function useSaveAoi() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AoiIn) => apiPost<Aoi>("/api/aois", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: AOIS_KEY }),
+  });
+}
+
+export function useDeleteAoi() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/api/aois/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: AOIS_KEY }),
+  });
+}
+
+// ── Workspaces ─────────────────────────────────────────────
+const WORKSPACES_KEY = ["workspaces"] as const;
+
+export function useWorkspaces() {
+  return useQuery({
+    queryKey: WORKSPACES_KEY,
+    queryFn: () => apiGet<Workspace[]>("/api/workspaces"),
+  });
+}
+
+export function useSaveWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: WorkspaceIn) => apiPost<Workspace>("/api/workspaces", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: WORKSPACES_KEY }),
+  });
+}
+
+export function useUpdateWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: WorkspaceIn }) =>
+      apiPut<Workspace>(`/api/workspaces/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: WORKSPACES_KEY }),
+  });
+}
+
+export function useDeleteWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/api/workspaces/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: WORKSPACES_KEY }),
+  });
 }

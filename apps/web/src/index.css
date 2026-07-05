@@ -107,6 +107,81 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* ── Workspace menu (header dropdown) ──────────────────────── */
+
+.workspace-menu {
+  position: relative;
+  margin-left: auto;
+}
+
+.workspace-menu > button.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.workspace-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 260px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspace-action {
+  text-align: left;
+  width: 100%;
+}
+
+.workspace-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.workspace-empty {
+  margin: 2px 6px 6px;
+  font-size: 12px;
+}
+
+.workspace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workspace-item {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.workspace-item .workspace-load {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-item.current .workspace-load {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .main {
   flex: 1;
   display: flex;
@@ -264,6 +339,26 @@ input[type="range"] {
 .roi-summary {
   margin: 0;
   font-size: 12px;
+}
+
+.roi-preset-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.roi-preset-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
 .date-inputs {
