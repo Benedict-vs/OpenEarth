@@ -1,4 +1,4 @@
-.PHONY: sync test test-ee lint fmt typecheck check legacy
+.PHONY: sync test test-ee lint fmt typecheck check legacy api dev gen
 
 sync:            ## Install/refresh the whole dev environment
 	uv sync --all-packages
@@ -24,3 +24,13 @@ check: lint typecheck test  ## Everything CI runs
 
 legacy:          ## Run the frozen v1 Streamlit app
 	cd legacy && uv run --project . streamlit run app/main.py
+
+api:             ## Run the FastAPI dev server
+	uv run uvicorn openearth_api.main:app --reload --port 8000
+
+dev:             ## Run API + web dev servers together
+	./scripts/dev.sh
+
+gen:             ## Regenerate OpenAPI schema + TypeScript API types
+	uv run python scripts/export_openapi.py > apps/web/openapi.json
+	pnpm --dir apps/web gen

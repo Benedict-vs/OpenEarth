@@ -5,10 +5,12 @@ library, a FastAPI backend, and a React/TypeScript/MapLibre GL frontend — with
 defensible methane detection suite at its heart (physics retrieval + ML segmentation + EMIT
 confirmation).
 
-> **Status: Phase 0 (Foundations) — the v2 core library exists; the API and web app land in
-> Phases 1–2.** The original Streamlit app lives on unchanged in [`legacy/`](legacy/) and stays
-> runnable until v2 reaches feature parity. The full plan (methane science spec, architecture,
-> phased roadmap) is in [`docs/`](docs/).
+> **Status: Phase 1 (Map platform MVP) — browse any registered dataset on a MapLibre map with
+> polygon ROIs, layer stacks, and legends; add any public GEE collection from TOML with zero
+> code changes.** Analysis jobs, time series, and exports land in Phase 2. The original
+> Streamlit app lives on unchanged in [`legacy/`](legacy/) and stays runnable until v2 reaches
+> feature parity. The full plan (methane science spec, architecture, phased roadmap) is in
+> [`docs/`](docs/).
 
 ## Data sources
 
@@ -27,11 +29,13 @@ OAuth (`earthengine authenticate`).
 ```
 openearth/
 ├── packages/
-│   └── core/            # openearth-core: EE access, unified dataset catalog, NumPy physics
-│                        #   (api/ and ml/ packages arrive in later phases)
+│   ├── core/            # openearth-core: EE access, unified dataset catalog, NumPy physics
+│   └── api/             # openearth-api: FastAPI — tiles, thumbnails, catalog + custom datasets
+├── apps/
+│   └── web/             # Vite + React + TS + MapLibre GL frontend (pnpm, not a uv member)
 ├── legacy/              # frozen v1 Streamlit app — own pins, not a workspace member
-├── docs/                # architecture, roadmap, (soon) methane methods
-├── scripts/             # LUT generation, DB seeding, dev helpers (arriving with later phases)
+├── docs/                # architecture, roadmap, examples/ (demo TOML dataset)
+├── scripts/             # dev.sh, OpenAPI export (LUT generation & DB seeding arrive later)
 └── pyproject.toml       # uv workspace root + ruff/mypy/pytest config
 ```
 
@@ -39,10 +43,15 @@ openearth/
 
 Requires [uv](https://docs.astral.sh/uv/) (Python 3.13 is pinned via `.python-version`).
 
+Requires [pnpm](https://pnpm.io) and Node ≥ 22 for the web app.
+
 ```bash
-uv sync --all-packages   # whole dev environment, one command
+uv sync --all-packages   # whole Python dev environment, one command
+pnpm --dir apps/web install
+make dev                 # API (uvicorn :8000) + web (vite :5173) together
 make test                # offline unit tests (no Earth Engine needed)
 make lint typecheck      # ruff + mypy --strict
+make gen                 # regenerate OpenAPI schema + TS client types after API changes
 make legacy              # run the frozen v1 Streamlit app
 ```
 
@@ -71,8 +80,8 @@ The v2 core is a port of the v1 library **with the audited defects fixed**:
 
 ## Roadmap (abridged — see `docs/roadmap.md`)
 
-- **Phase 1** — FastAPI + MapLibre map platform: catalog browser, polygon ROIs, layer stacks,
-  "add any GEE dataset via TOML"
+- **Phase 1 ✓** — FastAPI + MapLibre map platform: catalog browser, polygon ROIs, layer stacks,
+  "add any GEE dataset via TOML" (demo: `docs/examples/modis_lst.toml`)
 - **Phase 2** — jobs + SSE progress, time series v2, exports, wind overlay
 - **Phase 3** — Methane Lab: calibrated MBSP/MBMP retrieval, plume masking, IME quantification
   with Monte-Carlo uncertainty, validation against IMEO/SRON events

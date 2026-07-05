@@ -1,0 +1,1145 @@
+{
+  "components": {
+    "schemas": {
+      "BBoxIn": {
+        "properties": {
+          "east": {
+            "title": "East",
+            "type": "number"
+          },
+          "kind": {
+            "const": "bbox",
+            "default": "bbox",
+            "title": "Kind",
+            "type": "string"
+          },
+          "north": {
+            "title": "North",
+            "type": "number"
+          },
+          "south": {
+            "title": "South",
+            "type": "number"
+          },
+          "west": {
+            "title": "West",
+            "type": "number"
+          }
+        },
+        "required": [
+          "west",
+          "south",
+          "east",
+          "north"
+        ],
+        "title": "BBoxIn",
+        "type": "object"
+      },
+      "CacheStatsOut": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "volume_bytes": {
+            "title": "Volume Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "volume_bytes"
+        ],
+        "title": "CacheStatsOut",
+        "type": "object"
+      },
+      "ConfigOut": {
+        "properties": {
+          "cache": {
+            "$ref": "#/components/schemas/CacheStatsOut"
+          },
+          "data_dir": {
+            "title": "Data Dir",
+            "type": "string"
+          },
+          "ee_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ee Error"
+          },
+          "ee_initialized": {
+            "title": "Ee Initialized",
+            "type": "boolean"
+          },
+          "ee_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ee Project"
+          },
+          "tile_ttl_seconds": {
+            "title": "Tile Ttl Seconds",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "ee_project",
+          "ee_initialized",
+          "ee_error",
+          "tile_ttl_seconds",
+          "data_dir",
+          "cache"
+        ],
+        "title": "ConfigOut",
+        "type": "object"
+      },
+      "CustomDatasetIn": {
+        "properties": {
+          "toml": {
+            "title": "Toml",
+            "type": "string"
+          }
+        },
+        "required": [
+          "toml"
+        ],
+        "title": "CustomDatasetIn",
+        "type": "object"
+      },
+      "DatasetOut": {
+        "properties": {
+          "attribution": {
+            "title": "Attribution",
+            "type": "string"
+          },
+          "collection_id": {
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "default_scale_m": {
+            "title": "Default Scale M",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_custom": {
+            "title": "Is Custom",
+            "type": "boolean"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/ProductOut"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "collection_id",
+          "attribution",
+          "default_scale_m",
+          "is_custom",
+          "products"
+        ],
+        "title": "DatasetOut",
+        "type": "object"
+      },
+      "DateRangeIn": {
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "DateRangeIn",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthOut": {
+        "properties": {
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "version"
+        ],
+        "title": "HealthOut",
+        "type": "object"
+      },
+      "LegendOut": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_scale": {
+            "title": "Display Scale",
+            "type": "number"
+          },
+          "is_rgb": {
+            "title": "Is Rgb",
+            "type": "boolean"
+          },
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          },
+          "palette": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Palette",
+            "type": "array"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "min",
+          "max",
+          "unit",
+          "palette",
+          "display_scale",
+          "is_rgb",
+          "description"
+        ],
+        "title": "LegendOut",
+        "type": "object"
+      },
+      "PolygonIn": {
+        "properties": {
+          "coordinates": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Coordinates",
+            "type": "array"
+          },
+          "kind": {
+            "const": "polygon",
+            "default": "polygon",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "coordinates"
+        ],
+        "title": "PolygonIn",
+        "type": "object"
+      },
+      "ProductOut": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_scale": {
+            "title": "Display Scale",
+            "type": "number"
+          },
+          "display_unit": {
+            "title": "Display Unit",
+            "type": "string"
+          },
+          "is_rgb": {
+            "title": "Is Rgb",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "methane_only": {
+            "title": "Methane Only",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "palette": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Palette",
+            "type": "array"
+          },
+          "requires_builder": {
+            "title": "Requires Builder",
+            "type": "boolean"
+          },
+          "valid_max": {
+            "title": "Valid Max",
+            "type": "number"
+          },
+          "valid_min": {
+            "title": "Valid Min",
+            "type": "number"
+          },
+          "vis_max": {
+            "title": "Vis Max",
+            "type": "number"
+          },
+          "vis_min": {
+            "title": "Vis Min",
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "display_unit",
+          "vis_min",
+          "vis_max",
+          "valid_min",
+          "valid_max",
+          "display_scale",
+          "palette",
+          "description",
+          "is_rgb",
+          "methane_only",
+          "requires_builder"
+        ],
+        "title": "ProductOut",
+        "type": "object"
+      },
+      "RoiPresetOut": {
+        "properties": {
+          "bbox": {
+            "$ref": "#/components/schemas/BBoxIn"
+          },
+          "category": {
+            "enum": [
+              "continent",
+              "city",
+              "methane_site"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "date_hint": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  {
+                    "format": "date",
+                    "type": "string"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Hint"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "category",
+          "bbox"
+        ],
+        "title": "RoiPresetOut",
+        "type": "object"
+      },
+      "SceneOut": {
+        "properties": {
+          "datetime_utc": {
+            "format": "date-time",
+            "title": "Datetime Utc",
+            "type": "string"
+          },
+          "timestamp_ms": {
+            "title": "Timestamp Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp_ms",
+          "datetime_utc"
+        ],
+        "title": "SceneOut",
+        "type": "object"
+      },
+      "ScenesRequest": {
+        "properties": {
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "$ref": "#/components/schemas/DateRangeIn"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bbox": "#/components/schemas/BBoxIn",
+                    "polygon": "#/components/schemas/PolygonIn"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/BBoxIn"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PolygonIn"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roi"
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "dates"
+        ],
+        "title": "ScenesRequest",
+        "type": "object"
+      },
+      "ThumbnailRequest": {
+        "properties": {
+          "composite": {
+            "default": "mean",
+            "enum": [
+              "mean",
+              "date_window",
+              "single_scene"
+            ],
+            "title": "Composite",
+            "type": "string"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "half_window_days": {
+            "default": 3,
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Half Window Days",
+            "type": "integer"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bbox": "#/components/schemas/BBoxIn",
+                    "polygon": "#/components/schemas/PolygonIn"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/BBoxIn"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PolygonIn"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roi"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "timestamp_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp Ms"
+          },
+          "viz_overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VizOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "width": {
+            "default": 1024,
+            "maximum": 2048.0,
+            "minimum": 64.0,
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dataset",
+          "product"
+        ],
+        "title": "ThumbnailRequest",
+        "type": "object"
+      },
+      "TileResponse": {
+        "properties": {
+          "attribution": {
+            "title": "Attribution",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "legend": {
+            "$ref": "#/components/schemas/LegendOut"
+          },
+          "tile_url": {
+            "title": "Tile Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tile_url",
+          "expires_at",
+          "attribution",
+          "legend"
+        ],
+        "title": "TileResponse",
+        "type": "object"
+      },
+      "TilesRequest": {
+        "description": "Per-mode requirements (enforced in the service, 422 on violation):\nmean \u2192 ``dates``; date_window \u2192 ``target_date`` (\u00b1 ``half_window_days``);\nsingle_scene \u2192 ``timestamp_ms``.",
+        "properties": {
+          "composite": {
+            "default": "mean",
+            "enum": [
+              "mean",
+              "date_window",
+              "single_scene"
+            ],
+            "title": "Composite",
+            "type": "string"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "half_window_days": {
+            "default": 3,
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Half Window Days",
+            "type": "integer"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bbox": "#/components/schemas/BBoxIn",
+                    "polygon": "#/components/schemas/PolygonIn"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/BBoxIn"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PolygonIn"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roi"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "timestamp_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp Ms"
+          },
+          "viz_overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VizOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dataset",
+          "product"
+        ],
+        "title": "TilesRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VizOverrides": {
+        "properties": {
+          "vis_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vis Max"
+          },
+          "vis_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vis Min"
+          }
+        },
+        "title": "VizOverrides",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "OpenEarth API",
+    "version": "2.0.0a0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/catalog": {
+      "get": {
+        "operationId": "list_catalog_api_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DatasetOut"
+                  },
+                  "title": "Response List Catalog Api Catalog Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Catalog",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/custom": {
+      "post": {
+        "operationId": "create_custom_dataset_api_catalog_custom_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomDatasetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Custom Dataset",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/custom/{dataset_id}": {
+      "delete": {
+        "operationId": "delete_custom_dataset_api_catalog_custom__dataset_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Custom Dataset",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/catalog/{dataset_id}": {
+      "get": {
+        "operationId": "get_catalog_dataset_api_catalog__dataset_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Catalog Dataset",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/config": {
+      "get": {
+        "operationId": "config_api_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Config",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/presets/rois": {
+      "get": {
+        "operationId": "list_roi_presets_api_presets_rois_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RoiPresetOut"
+                  },
+                  "title": "Response List Roi Presets Api Presets Rois Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Roi Presets",
+        "tags": [
+          "presets"
+        ]
+      }
+    },
+    "/api/scenes": {
+      "post": {
+        "operationId": "list_scenes_api_scenes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SceneOut"
+                  },
+                  "title": "Response List Scenes Api Scenes Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Scenes",
+        "tags": [
+          "scenes"
+        ]
+      }
+    },
+    "/api/thumbnail": {
+      "post": {
+        "operationId": "thumbnail_route_api_thumbnail_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThumbnailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Thumbnail Route",
+        "tags": [
+          "render"
+        ]
+      }
+    },
+    "/api/tiles": {
+      "post": {
+        "operationId": "mint_tiles_route_api_tiles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TilesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mint Tiles Route",
+        "tags": [
+          "render"
+        ]
+      }
+    }
+  }
+}

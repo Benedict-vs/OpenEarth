@@ -24,6 +24,10 @@ class InvalidDateRangeError(OpenEarthError, ValueError):
     """Date range is invalid (end not after start, etc.)."""
 
 
+class InvalidDatasetSpecError(OpenEarthError, ValueError):
+    """A user-supplied dataset definition (TOML) is malformed."""
+
+
 class EmptyCollectionError(OpenEarthError):
     """No images found for the requested variable, ROI, and dates."""
 

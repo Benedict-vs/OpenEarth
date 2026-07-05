@@ -10,6 +10,7 @@ import ee
 from openearth.catalog import ProductSpec, resolve_product
 from openearth.catalog.registry import resolve_source
 from openearth.ee.client import ee_call
+from openearth.providers.generic import get_generic_collection
 from openearth.providers.s1 import get_s1_collection
 from openearth.providers.s2 import get_s2_collection
 from openearth.providers.s5p import get_trace_gas_collection
@@ -37,13 +38,19 @@ def get_collection(
     end_date: str | date | datetime,
     source: str,
 ) -> ee.ImageCollection:
-    """Return the filtered ImageCollection for *source*."""
+    """Return the filtered ImageCollection for *source*.
+
+    Built-in dataset ids route to their sensor-specific pipelines; any other
+    id (user-registered TOML datasets) goes through the generic provider.
+    """
     dataset_id = resolve_source(data_key, source)
     if dataset_id == "s1":
         return get_s1_collection(data_key, roi, start_date, end_date)
     if dataset_id == "s2":
         return get_s2_collection(data_key, roi, start_date, end_date)
-    return get_trace_gas_collection(data_key, roi, start_date, end_date)
+    if dataset_id == "s5p":
+        return get_trace_gas_collection(data_key, roi, start_date, end_date)
+    return get_generic_collection(dataset_id, data_key, roi, start_date, end_date)
 
 
 def list_acquisition_times(
