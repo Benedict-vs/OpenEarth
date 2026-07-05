@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ExplorePage } from "./features/explore/ExplorePage";
+import { SettingsPage } from "./features/settings/SettingsPage";
 
 type View = "explore" | "settings";
 
@@ -24,18 +25,7 @@ export function App() {
           </button>
         </nav>
       </header>
-      <main className="main">
-        {view === "explore" ? (
-          <ExplorePage />
-        ) : (
-          <aside className="side-panel" style={{ width: "100%" }}>
-            <div className="panel-section">
-              <h3>Settings</h3>
-              <p className="muted">EE status, cache stats, and custom datasets arrive soon.</p>
-            </div>
-          </aside>
-        )}
-      </main>
+      <main className="main">{view === "explore" ? <ExplorePage /> : <SettingsPage />}</main>
     </div>
   );
 }

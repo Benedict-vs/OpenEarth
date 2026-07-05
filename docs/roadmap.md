@@ -3,7 +3,7 @@
 Each phase has a hard exit criterion; something is usable at the end of every phase. Scope
 violations wait here, not in the codebase.
 
-## Phase 0 — Foundations ✅ (this PR)
+## Phase 0 — Foundations ✅
 
 Monorepo + uv workspace; Streamlit app frozen in `legacy/`; core ported to `packages/core`
 with all audited v1 defects fixed; offline test suite (111 tests, zero EE calls); ruff/mypy
@@ -11,14 +11,18 @@ strict/pre-commit/CI.
 *Exit: CI green; legacy app still launches; pytest green with zero EE calls; no Streamlit
 import anywhere under `packages/`.* ✅
 
-## Phase 1 — Map platform MVP (L)
+## Phase 1 — Map platform MVP ✅ (this PR)
 
-FastAPI (`packages/api`): catalog/tiles/thumbnail/config endpoints, diskcache tier.
-React shell (`apps/web`): MapLibre map, catalog browser, layer panel (opacity/order/toggle
-without refetch), terra-draw polygon + bbox ROIs, presets, date control, legends, tile re-mint
-on expiry. TOML custom-dataset loader.
+FastAPI (`packages/api`): catalog/tiles/thumbnail/scenes/presets/config endpoints, diskcache
+tier, custom-dataset CRUD. Core: TOML dataset loader + registry user-layer + generic provider
+("one new dataset = zero new code"). React shell (`apps/web`): MapLibre map (OpenFreeMap
+basemap), catalog browser, layer panel (opacity/order/toggle without refetch), terra-draw
+polygon + bbox ROIs, presets (methane sites apply date hints), range/single-date control,
+legends, tile re-mint at 75 % TTL + on error bursts; Settings view with EE status, cache
+stats, and a TOML dataset editor.
 *Exit: any registered dataset browsable with polygon ROI; a brand-new GEE dataset added via
-TOML with zero code changes; tiles survive >4 h sessions.*
+TOML with zero code changes (demo: `docs/examples/modis_lst.toml`); tiles survive >4 h
+sessions via automatic re-mint.*
 
 ## Phase 2 — Analysis backbone (L)
 

@@ -276,6 +276,87 @@ input[type="range"] {
   width: 100%;
 }
 
+/* ── Settings ──────────────────────────────────────────────── */
+
+.settings-page {
+  flex: 1;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  overflow-y: auto;
+}
+
+.config-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 18px;
+  margin: 0;
+}
+
+.config-list dt {
+  color: var(--muted);
+}
+
+.config-list dd {
+  margin: 0;
+}
+
+.status-ok {
+  color: #3fb950;
+}
+
+.error-text {
+  color: var(--danger);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.success {
+  color: #3fb950;
+  font-size: 13px;
+}
+
+.dataset-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dataset-editor textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.custom-dataset-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.custom-dataset-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+code {
+  background: var(--panel-2);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
 /* ── Legend ────────────────────────────────────────────────── */
 
 .legend-bar {

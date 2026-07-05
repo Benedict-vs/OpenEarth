@@ -1,0 +1,34 @@
+# Demo custom dataset for the Phase 1 exit criterion:
+# "a brand-new GEE dataset added via TOML with zero code changes".
+# Paste into Settings → Add a dataset, or drop into data/catalog.d/.
+
+[dataset]
+id = "modis_lst"
+title = "MODIS Land Surface Temperature"
+collection_id = "MODIS/061/MOD11A1"
+attribution = "NASA LP DAAC / MODIS"
+default_scale_m = 1000
+
+[products.LST_DAY]
+name = "LST (day)"
+source_band = "LST_Day_1km"
+vis_min = 13000.0   # ~ -11 °C at scale 0.02
+vis_max = 16500.0   # ~ +57 °C
+valid_min = 7500.0
+valid_max = 65535.0
+display_unit = "K"
+display_scale = 0.02
+palette = ["#0b1d51", "#4462c8", "#7fd4e4", "#f8fcc1", "#f4a663", "#a30f0f"]
+description = "1 km daytime land surface temperature. DN × 0.02 = kelvin."
+
+[products.LST_NIGHT]
+name = "LST (night)"
+source_band = "LST_Night_1km"
+vis_min = 12500.0
+vis_max = 15500.0
+valid_min = 7500.0
+valid_max = 65535.0
+display_unit = "K"
+display_scale = 0.02
+palette = ["#0b1d51", "#4462c8", "#7fd4e4", "#f8fcc1", "#f4a663", "#a30f0f"]
+description = "1 km nighttime land surface temperature. DN × 0.02 = kelvin."

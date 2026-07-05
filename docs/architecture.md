@@ -32,6 +32,28 @@ ML training (packages/ml)            ← Phase 5 (torch; the API serves ONNX onl
     explicit and unit-tested (v1 mislabeled the convention),
   - composites, vegetation/water masking, source classification, smoothing.
 
+## Built in Phase 1
+
+- **TOML custom datasets** (`catalog/loader.py` + registry user-layer + `providers/generic.py`):
+  any public GEE ImageCollection becomes a first-class catalog dataset from a TOML file —
+  strict message-first validation, persisted to `data/catalog.d/`, generic provider handles
+  select/expression/RGB + valid-range masking. Built-in `DATASETS` stays import-time frozen.
+- **`openearth-api`** (FastAPI): `/api/catalog` (+custom CRUD), `/api/tiles`
+  (mean | date_window | single_scene composites → direct GEE XYZ URLs + `expires_at` +
+  legend), `/api/thumbnail` (server-fetched PNG, diskcached), `/api/scenes`,
+  `/api/presets/rois`, `/api/health`, `/api/config`. One diskcache tier
+  (sha256 canonical-JSON keys, ALGO_VERSION, ROI rounded 5 dp; closed historical ranges
+  cached forever, open-ended 6 h; tile URLs never cached). Core error taxonomy → HTTP
+  (422/404/429/503/504). `create_app()` does no EE work at creation — the OpenAPI export
+  (and web CI) depends on that; EE init is a non-fatal lifespan attempt + lazy `ensure_ee`.
+- **`apps/web`** (Vite + React + TS, pnpm): thin imperative MapLibre binding (no react-map-gl);
+  zustand stores + TanStack Query; types generated from the committed `openapi.json`
+  (`make gen`, drift-checked in CI). The no-refetch rule: layer controls touch only
+  paint/layout/moveLayer; re-mints swap URLs via `setTiles` on the surviving source.
+  Tile re-mint: pure scheduler fires at 75 % TTL and on ≥3 tile errors/10 s (30 s min-gap,
+  one-in-flight latch). terra-draw rectangle→bbox / polygon ROIs; presets; range ⇄
+  single-date control; Settings (EE status, cache stats, TOML editor).
+
 ## Earth Engine ground rules (design defensively)
 
 | Mechanic | Assumption | Defense |
