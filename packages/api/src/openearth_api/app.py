@@ -21,8 +21,10 @@ from openearth.ee.client import initialize
 from openearth.settings import Settings, get_settings
 from openearth_api import __version__
 from openearth_api.cache import make_cache
+from openearth_api.db import create_db_engine, migrate
 from openearth_api.errors import register_exception_handlers
-from openearth_api.routers import catalog, meta, presets, scenes, tiles
+from openearth_api.jobs import JobManager
+from openearth_api.routers import catalog, jobs, meta, presets, scenes, tiles
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -40,7 +42,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         except ValueError as exc:
             logger.warning("Skipping user dataset %r: %s", spec.id, exc)
 
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
     app.state.cache = make_cache(settings)
+
+    # DB + job manager come up before EE: they are environment-independent and
+    # the interrupted-sweep must run against a migrated schema. Any rows left
+    # active by a prior process are marked ``interrupted`` here.
+    engine = create_db_engine(settings.data_dir / "openearth.db")
+    migrate(engine)
+    app.state.db_engine = engine
+    app.state.jobs = JobManager(engine)
+    app.state.jobs.start()
 
     # Non-fatal EE init attempt so /config reports real status; routes that
     # need EE retry lazily via deps.ensure_ee.
@@ -57,6 +69,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        # Teardown in reverse: drain jobs, dispose the engine, close the cache.
+        await app.state.jobs.stop()
+        engine.dispose()
         app.state.cache.close()
 
 
@@ -80,4 +95,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(tiles.router, prefix="/api")
     app.include_router(scenes.router, prefix="/api")
     app.include_router(presets.router, prefix="/api")
+    app.include_router(jobs.router, prefix="/api")
     return app

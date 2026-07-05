@@ -9,7 +9,7 @@ for geometric validation.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -147,6 +147,30 @@ class RoiPresetOut(BaseModel):
     category: Literal["continent", "city", "methane_site"]
     bbox: BBoxIn
     date_hint: tuple[date, date] | None = None
+
+
+# ── Jobs ─────────────────────────────────────────────────────
+
+JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled", "interrupted"]
+
+
+class JobCreated(BaseModel):
+    job_id: str
+
+
+class JobOut(BaseModel):
+    id: str
+    kind: str
+    status: JobStatus
+    progress_done: int
+    progress_total: int
+    message: str | None
+    # Parsed from the row's small ``result_json`` (e.g. ``{"cache_key": …}``).
+    result: dict[str, Any] | None
+    error: str | None
+    created_at: str
+    started_at: str | None
+    finished_at: str | None
 
 
 # ── Meta ─────────────────────────────────────────────────────

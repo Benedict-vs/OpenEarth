@@ -10,8 +10,10 @@ from openearth.ee.client import initialize
 
 if TYPE_CHECKING:
     import diskcache
+    from sqlalchemy import Engine
 
     from openearth.settings import Settings
+    from openearth_api.jobs import JobManager
 
 
 def get_app_settings(request: Request) -> Settings:
@@ -22,6 +24,16 @@ def get_app_settings(request: Request) -> Settings:
 def get_cache(request: Request) -> diskcache.Cache:
     cache: diskcache.Cache = request.app.state.cache
     return cache
+
+
+def get_db_engine(request: Request) -> Engine:
+    engine: Engine = request.app.state.db_engine
+    return engine
+
+
+def get_jobs(request: Request) -> JobManager:
+    jobs: JobManager = request.app.state.jobs
+    return jobs
 
 
 def ensure_ee(request: Request) -> None:
