@@ -8,11 +8,13 @@ import { useEffect } from "react";
 import { useMapContext } from "../../map/MapContext";
 import { useMintLayer } from "../../map/useMintLayer";
 import { applyLayerOrder, useRasterLayer } from "../../map/useRasterLayer";
+import { useTileRemint } from "../../map/useTileRemint";
 import { useLayersStore, type Layer } from "../../stores/layersStore";
 
 function LayerController({ layer }: { layer: Layer }) {
   useMintLayer(layer);
   useRasterLayer(layer);
+  useTileRemint(layer);
   return null;
 }
 
