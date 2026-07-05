@@ -24,13 +24,15 @@ stats, and a TOML dataset editor.
 TOML with zero code changes (demo: `docs/examples/modis_lst.toml`); tiles survive >4 h
 sessions via automatic re-mint.*
 
-## Phase 2 — Analysis backbone (L)
+## Phase 2 — Analysis backbone ✅
 
 In-process job manager + SSE progress; timeseries v2 (chunked, concurrent, coarse→fine,
-parquet cache); ECharts panel; pixel inspector; GeoTIFF/PNG/CSV exports for every product;
-wind endpoint + arrow overlay; saved workspaces (SQLite).
+parquet-bytes cache); ECharts panel with client-side stat cards; pixel inspector;
+GeoTIFF (fast + windowed `computePixels`) / PNG / CSV exports for every product; wind
+point + field endpoints + arrow overlay; saved AOIs + versioned workspaces (SQLite).
 *Exit: 1-year S5P + S2-index series over a polygon streams progress, lands < 30 s warm;
-GeoTIFF opens georeferenced in QGIS.*
+GeoTIFF opens georeferenced in QGIS.* ✅ *(measured: warm S5P NO₂ ≈6 s, S2 NDVI ≈3 s;
+cached ~instant; both GeoTIFF paths rasterio-verified; E2E golden path green.)*
 
 ## Phase 3 — Methane Lab, physics (XL)
 
