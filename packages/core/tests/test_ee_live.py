@@ -101,3 +101,27 @@ def test_overpass_matched_wind_sample() -> None:
     sample = sample_wind_at(roi, datetime(2024, 7, 15, 7, 24, tzinfo=UTC))
     assert sample.speed_ms >= 0
     assert 0 <= sample.wind_from_deg < 360
+
+
+def test_wind_field_over_permian_basin() -> None:
+    import math
+    from datetime import UTC, datetime
+
+    from openearth.geometry import BBox
+    from openearth.methane.wind import GLOBAL_ERA5_HOURLY_ID, sample_wind_field
+
+    # Permian Basin, West Texas: a small all-land box so ERA5-Land is populated
+    # in every cell (no open-water masking) and the whole field must be finite.
+    bbox = BBox(-103.0, 31.5, -102.0, 32.5)
+    field = sample_wind_field(
+        bbox,
+        datetime(2024, 7, 15, 12, 0, tzinfo=UTC),
+        nx=4,
+        ny=4,
+        fallback_collection_id=GLOBAL_ERA5_HOURLY_ID,
+    )
+    assert (field.nx, field.ny) == (4, 4)
+    assert len(field.u) == 16
+    assert len(field.v) == 16
+    assert all(math.isfinite(x) for x in field.u)
+    assert all(math.isfinite(x) for x in field.v)

@@ -1269,6 +1269,115 @@
         },
         "title": "VizOverrides",
         "type": "object"
+      },
+      "WindFieldOut": {
+        "description": "Per-cell mean 10 m wind on an ``nx \u00d7 ny`` lattice, row-major from the NW\ncorner. A masked cell is ``null`` (JSON has no NaN) \u2014 the client skips it.",
+        "properties": {
+          "bbox": {
+            "$ref": "#/components/schemas/BBoxIn"
+          },
+          "collection_id": {
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "nx": {
+            "title": "Nx",
+            "type": "integer"
+          },
+          "ny": {
+            "title": "Ny",
+            "type": "integer"
+          },
+          "u": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "U",
+            "type": "array"
+          },
+          "v": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "V",
+            "type": "array"
+          },
+          "when": {
+            "format": "date-time",
+            "title": "When",
+            "type": "string"
+          }
+        },
+        "required": [
+          "when",
+          "bbox",
+          "nx",
+          "ny",
+          "u",
+          "v",
+          "collection_id"
+        ],
+        "title": "WindFieldOut",
+        "type": "object"
+      },
+      "WindSampleOut": {
+        "description": "ROI-mean 10 m wind at a single instant (mirrors core ``WindSample``).\n``wind_from_deg`` is the meteorological convention (direction blown FROM).",
+        "properties": {
+          "collection_id": {
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "speed_ms": {
+            "title": "Speed Ms",
+            "type": "number"
+          },
+          "u_ms": {
+            "title": "U Ms",
+            "type": "number"
+          },
+          "v_ms": {
+            "title": "V Ms",
+            "type": "number"
+          },
+          "when": {
+            "format": "date-time",
+            "title": "When",
+            "type": "string"
+          },
+          "wind_from_deg": {
+            "title": "Wind From Deg",
+            "type": "number"
+          },
+          "wind_to_deg": {
+            "title": "Wind To Deg",
+            "type": "number"
+          }
+        },
+        "required": [
+          "when",
+          "u_ms",
+          "v_ms",
+          "speed_ms",
+          "wind_to_deg",
+          "wind_from_deg",
+          "collection_id"
+        ],
+        "title": "WindSampleOut",
+        "type": "object"
       }
     }
   },
@@ -2048,6 +2157,194 @@
         "summary": "Timeseries Result Route",
         "tags": [
           "timeseries"
+        ]
+      }
+    },
+    "/api/wind": {
+      "get": {
+        "operationId": "wind_point_route_api_wind_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lon",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Lon",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Sample instant (ISO 8601; naive is UTC).",
+            "in": "query",
+            "name": "time",
+            "required": true,
+            "schema": {
+              "description": "Sample instant (ISO 8601; naive is UTC).",
+              "format": "date-time",
+              "title": "Time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindSampleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wind Point Route",
+        "tags": [
+          "wind"
+        ]
+      }
+    },
+    "/api/wind/field": {
+      "get": {
+        "operationId": "wind_field_route_api_wind_field_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "west",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "West",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "south",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "South",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "east",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "East",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "north",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "North",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Sample instant (ISO 8601; naive is UTC).",
+            "in": "query",
+            "name": "time",
+            "required": true,
+            "schema": {
+              "description": "Sample instant (ISO 8601; naive is UTC).",
+              "format": "date-time",
+              "title": "Time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "nx",
+            "required": false,
+            "schema": {
+              "default": 24,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Nx",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Rows; default from aspect.",
+            "in": "query",
+            "name": "ny",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 50,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Rows; default from aspect.",
+              "title": "Ny"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindFieldOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wind Field Route",
+        "tags": [
+          "wind"
         ]
       }
     }

@@ -392,6 +392,23 @@ code {
   border-color: var(--accent);
 }
 
+/* ── Wind overlay ──────────────────────────────────────────── */
+
+/* The arrow canvas lives inside MapLibre's canvas container; it must never
+   intercept map interaction. */
+.wind-overlay-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wind-note {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 /* Theme MapLibre's popup (rendered outside the React tree) to match the app. */
 .maplibregl-popup-content {
   background: var(--panel);

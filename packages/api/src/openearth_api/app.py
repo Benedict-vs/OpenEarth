@@ -34,6 +34,7 @@ from openearth_api.routers import (
     scenes,
     tiles,
     timeseries,
+    wind,
 )
 
 if TYPE_CHECKING:
@@ -110,4 +111,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jobs.router, prefix="/api")
     app.include_router(timeseries.router, prefix="/api")
     app.include_router(export.router, prefix="/api")
+    app.include_router(wind.router, prefix="/api")
     return app

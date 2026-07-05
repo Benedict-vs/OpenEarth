@@ -220,6 +220,35 @@ class SceneOut(BaseModel):
     datetime_utc: datetime
 
 
+# ── Wind ─────────────────────────────────────────────────────
+
+
+class WindSampleOut(BaseModel):
+    """ROI-mean 10 m wind at a single instant (mirrors core ``WindSample``).
+    ``wind_from_deg`` is the meteorological convention (direction blown FROM)."""
+
+    when: datetime
+    u_ms: float
+    v_ms: float
+    speed_ms: float
+    wind_to_deg: float
+    wind_from_deg: float
+    collection_id: str
+
+
+class WindFieldOut(BaseModel):
+    """Per-cell mean 10 m wind on an ``nx × ny`` lattice, row-major from the NW
+    corner. A masked cell is ``null`` (JSON has no NaN) — the client skips it."""
+
+    when: datetime
+    bbox: BBoxIn
+    nx: int
+    ny: int
+    u: list[float | None]
+    v: list[float | None]
+    collection_id: str
+
+
 # ── Presets ──────────────────────────────────────────────────
 
 

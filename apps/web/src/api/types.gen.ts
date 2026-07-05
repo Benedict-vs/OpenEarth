@@ -328,6 +328,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/wind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Wind Point Route */
+        get: operations["wind_point_route_api_wind_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/wind/field": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Wind Field Route */
+        get: operations["wind_field_route_api_wind_field_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -770,6 +804,53 @@ export interface components {
             vis_max?: number | null;
             /** Vis Min */
             vis_min?: number | null;
+        };
+        /**
+         * WindFieldOut
+         * @description Per-cell mean 10 m wind on an ``nx × ny`` lattice, row-major from the NW
+         *     corner. A masked cell is ``null`` (JSON has no NaN) — the client skips it.
+         */
+        WindFieldOut: {
+            bbox: components["schemas"]["BBoxIn"];
+            /** Collection Id */
+            collection_id: string;
+            /** Nx */
+            nx: number;
+            /** Ny */
+            ny: number;
+            /** U */
+            u: (number | null)[];
+            /** V */
+            v: (number | null)[];
+            /**
+             * When
+             * Format: date-time
+             */
+            when: string;
+        };
+        /**
+         * WindSampleOut
+         * @description ROI-mean 10 m wind at a single instant (mirrors core ``WindSample``).
+         *     ``wind_from_deg`` is the meteorological convention (direction blown FROM).
+         */
+        WindSampleOut: {
+            /** Collection Id */
+            collection_id: string;
+            /** Speed Ms */
+            speed_ms: number;
+            /** U Ms */
+            u_ms: number;
+            /** V Ms */
+            v_ms: number;
+            /**
+             * When
+             * Format: date-time
+             */
+            when: string;
+            /** Wind From Deg */
+            wind_from_deg: number;
+            /** Wind To Deg */
+            wind_to_deg: number;
         };
     };
     responses: never;
@@ -1390,6 +1471,79 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wind_point_route_api_wind_get: {
+        parameters: {
+            query: {
+                lat: number;
+                lon: number;
+                /** @description Sample instant (ISO 8601; naive is UTC). */
+                time: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WindSampleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wind_field_route_api_wind_field_get: {
+        parameters: {
+            query: {
+                west: number;
+                south: number;
+                east: number;
+                north: number;
+                /** @description Sample instant (ISO 8601; naive is UTC). */
+                time: string;
+                nx?: number;
+                /** @description Rows; default from aspect. */
+                ny?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WindFieldOut"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -18,6 +18,8 @@ export type InspectRequest = components["schemas"]["InspectRequest"];
 export type InspectResult = components["schemas"]["InspectResult"];
 export type ThumbnailRequest = components["schemas"]["ThumbnailRequest"];
 export type ExportGeotiffRequest = components["schemas"]["ExportGeotiffRequest"];
+export type WindField = components["schemas"]["WindFieldOut"];
+export type WindSample = components["schemas"]["WindSampleOut"];
 
 // ── Jobs & timeseries ──────────────────────────────────────
 export type JobCreated = components["schemas"]["JobCreated"];
