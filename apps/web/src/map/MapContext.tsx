@@ -16,7 +16,7 @@ interface MapContextValue {
 
 const MapContext = createContext<MapContextValue>({ map: null, ready: false });
 
-export function MapProvider({ children }: { children: ReactNode }) {
+export function MapProvider({ children, south }: { children: ReactNode; south?: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState<MapContextValue>({ map: null, ready: false });
 
@@ -42,7 +42,12 @@ export function MapProvider({ children }: { children: ReactNode }) {
 
   return (
     <MapContext.Provider value={value}>
-      <div ref={containerRef} className="map-container" data-testid="map" />
+      {/* The map and an optional region below it (the analysis drawer) share a
+          column so the map flexes as the drawer opens and closes. */}
+      <div className="map-column">
+        <div ref={containerRef} className="map-container" data-testid="map" />
+        {south}
+      </div>
       {children}
     </MapContext.Provider>
   );

@@ -1,6 +1,7 @@
 import { MapProvider } from "../../map/MapContext";
 import { useTerraDraw } from "../../map/useTerraDraw";
 import { CatalogBrowser } from "./CatalogBrowser";
+import { ChartPanel } from "./ChartPanel";
 import { DateControl } from "./DateControl";
 import { LayerEngine } from "./LayerEngine";
 import { LayerPanel } from "./LayerPanel";
@@ -33,7 +34,7 @@ function ExplorePanel() {
 
 export function ExplorePage() {
   return (
-    <MapProvider>
+    <MapProvider south={<ChartPanel />}>
       <LayerEngine />
       <ExplorePanel />
     </MapProvider>
