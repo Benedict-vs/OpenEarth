@@ -1,7 +1,8 @@
 <!-- docs/plan.md — the v2 master plan, approved 2026-07-04/05.
      Architecture decisions in here are SETTLED; sessions should implement
      within them, not re-litigate them. Live phase status: docs/roadmap.md.
-     Phase 0 (Foundations) is COMPLETE — merged to main 2026-07-05. -->
+     Phase 0 (Foundations) COMPLETE — merged to main 2026-07-05.
+     Phase 1 (Map platform MVP) COMPLETE — branch v2/phase1-map-mvp, 2026-07-05. -->
 
 # OpenEarth v2 — Complete Overhaul Plan
 
