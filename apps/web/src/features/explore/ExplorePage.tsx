@@ -1,22 +1,41 @@
 import { MapProvider } from "../../map/MapContext";
+import { useTerraDraw } from "../../map/useTerraDraw";
 import { CatalogBrowser } from "./CatalogBrowser";
+import { DateControl } from "./DateControl";
 import { LayerEngine } from "./LayerEngine";
 import { LayerPanel } from "./LayerPanel";
+import { RoiToolbar } from "./RoiToolbar";
+
+/** Inside MapProvider so its hooks can reach the map instance. */
+function ExplorePanel() {
+  const draw = useTerraDraw();
+  return (
+    <aside className="side-panel">
+      <div className="panel-section">
+        <h3>Region of interest</h3>
+        <RoiToolbar draw={draw} />
+      </div>
+      <div className="panel-section">
+        <h3>Dates</h3>
+        <DateControl />
+      </div>
+      <div className="panel-section">
+        <h3>Catalog</h3>
+        <CatalogBrowser />
+      </div>
+      <div className="panel-section">
+        <h3>Layers</h3>
+        <LayerPanel />
+      </div>
+    </aside>
+  );
+}
 
 export function ExplorePage() {
   return (
     <MapProvider>
       <LayerEngine />
-      <aside className="side-panel">
-        <div className="panel-section">
-          <h3>Catalog</h3>
-          <CatalogBrowser />
-        </div>
-        <div className="panel-section">
-          <h3>Layers</h3>
-          <LayerPanel />
-        </div>
-      </aside>
+      <ExplorePanel />
     </MapProvider>
   );
 }
