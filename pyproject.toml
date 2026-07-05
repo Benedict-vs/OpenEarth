@@ -47,7 +47,7 @@ packages = ["openearth", "openearth_api"]
 exclude = ["legacy/"]
 
 [[tool.mypy.overrides]]
-module = ["ee", "ee.*", "diskcache", "diskcache.*"]
+module = ["ee", "ee.*", "diskcache", "diskcache.*", "rasterio", "rasterio.*"]
 ignore_missing_imports = true
 
 # SQLModel/SQLAlchemy return Any from Session.get / exec chains; "returning
@@ -69,6 +69,7 @@ module = [
     "openearth.analytics.source_classification",
     "openearth.methane.wind",
     "openearth.timeseries",
+    "openearth.export",
     "openearth_api.services.*",
 ]
 warn_return_any = false

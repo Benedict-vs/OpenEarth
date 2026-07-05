@@ -188,6 +188,106 @@
         "title": "DateRangeIn",
         "type": "object"
       },
+      "ExportGeotiffRequest": {
+        "description": "A GeoTIFF export of the current composite. Composite fields mirror\n``TilesRequest`` (minus ``viz_overrides`` \u2014 raw values, no colour scaling);\n``scale_m`` overrides the dataset's native metres-per-pixel. ``roi`` is\nrequired \u2014 a global native-resolution export is unbounded compute.",
+        "properties": {
+          "composite": {
+            "default": "mean",
+            "enum": [
+              "mean",
+              "date_window",
+              "single_scene"
+            ],
+            "title": "Composite",
+            "type": "string"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "half_window_days": {
+            "default": 3,
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Half Window Days",
+            "type": "integer"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          },
+          "scale_m": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale M"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "timestamp_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp Ms"
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "roi"
+        ],
+        "title": "ExportGeotiffRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1339,6 +1439,128 @@
         "summary": "Config",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/export/geotiff": {
+      "post": {
+        "operationId": "export_geotiff_route_api_export_geotiff_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportGeotiffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Geotiff Route",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/png": {
+      "post": {
+        "operationId": "export_png_route_api_export_png_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThumbnailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Png Route",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/{job_id}/download": {
+      "get": {
+        "operationId": "export_download_route_api_export__job_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/tiff": {}
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Job not finished"
+          },
+          "410": {
+            "description": "Exported file removed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Download Route",
+        "tags": [
+          "export"
         ]
       }
     },

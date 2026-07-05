@@ -26,6 +26,7 @@ from openearth_api.errors import register_exception_handlers
 from openearth_api.jobs import JobManager
 from openearth_api.routers import (
     catalog,
+    export,
     inspect,
     jobs,
     meta,
@@ -52,6 +53,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning("Skipping user dataset %r: %s", spec.id, exc)
 
     settings.data_dir.mkdir(parents=True, exist_ok=True)
+    (settings.data_dir / "exports").mkdir(parents=True, exist_ok=True)
     app.state.cache = make_cache(settings)
 
     # DB + job manager come up before EE: they are environment-independent and
@@ -107,4 +109,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(presets.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
     app.include_router(timeseries.router, prefix="/api")
+    app.include_router(export.router, prefix="/api")
     return app

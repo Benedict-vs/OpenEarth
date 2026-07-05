@@ -89,6 +89,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/export/geotiff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export Geotiff Route */
+        post: operations["export_geotiff_route_api_export_geotiff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/export/png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export Png Route */
+        post: operations["export_png_route_api_export_png_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/export/{job_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Download Route */
+        get: operations["export_download_route_api_export__job_id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -354,6 +405,39 @@ export interface components {
              * Format: date
              */
             start: string;
+        };
+        /**
+         * ExportGeotiffRequest
+         * @description A GeoTIFF export of the current composite. Composite fields mirror
+         *     ``TilesRequest`` (minus ``viz_overrides`` — raw values, no colour scaling);
+         *     ``scale_m`` overrides the dataset's native metres-per-pixel. ``roi`` is
+         *     required — a global native-resolution export is unbounded compute.
+         */
+        ExportGeotiffRequest: {
+            /**
+             * Composite
+             * @default mean
+             * @enum {string}
+             */
+            composite: "mean" | "date_window" | "single_scene";
+            /** Dataset */
+            dataset: string;
+            dates?: components["schemas"]["DateRangeIn"] | null;
+            /**
+             * Half Window Days
+             * @default 3
+             */
+            half_window_days: number;
+            /** Product */
+            product: string;
+            /** Roi */
+            roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+            /** Scale M */
+            scale_m?: number | null;
+            /** Target Date */
+            target_date?: string | null;
+            /** Timestamp Ms */
+            timestamp_ms?: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -825,6 +909,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigOut"];
+                };
+            };
+        };
+    };
+    export_geotiff_route_api_export_geotiff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportGeotiffRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_png_route_api_export_png_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThumbnailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_download_route_api_export__job_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/tiff": unknown;
+                };
+            };
+            /** @description Job not finished */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Exported file removed */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

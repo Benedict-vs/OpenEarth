@@ -134,6 +134,27 @@ class ScenesRequest(BaseModel):
     dates: DateRangeIn
 
 
+# ── Export ───────────────────────────────────────────────────
+
+
+class ExportGeotiffRequest(BaseModel):
+    """A GeoTIFF export of the current composite. Composite fields mirror
+    ``TilesRequest`` (minus ``viz_overrides`` — raw values, no colour scaling);
+    ``scale_m`` overrides the dataset's native metres-per-pixel. ``roi`` is
+    required — a global native-resolution export is unbounded compute.
+    """
+
+    dataset: str
+    product: str
+    roi: RoiIn
+    composite: CompositeMode = "mean"
+    dates: DateRangeIn | None = None
+    target_date: date | None = None
+    half_window_days: int = Field(default=3, ge=0, le=30)
+    timestamp_ms: int | None = None
+    scale_m: int | None = Field(default=None, ge=1)
+
+
 # ── Inspect (pixel value) ────────────────────────────────────
 
 

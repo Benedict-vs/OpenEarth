@@ -471,6 +471,97 @@ code {
   font-size: 12px;
 }
 
+/* ── Export dialog ─────────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.export-dialog {
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.export-summary {
+  margin: 0;
+  font-size: 12px;
+}
+
+.export-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.export-tabs button {
+  flex: 1;
+  font-size: 12px;
+}
+
+.export-tabs button.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.export-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 96px;
+}
+
+.export-pane p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.export-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.export-download {
+  text-align: center;
+  text-decoration: none;
+}
+
+/* Anchors styled as .primary buttons need the button box model. */
+a.primary {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent);
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
+a.primary:hover {
+  border-color: var(--muted);
+}
+
 /* ── Analysis drawer ───────────────────────────────────────── */
 
 .chart-drawer {

@@ -68,6 +68,29 @@ def test_daily_timeseries_ndvi_over_heidelberg() -> None:
     assert frame["value"].between(-1, 1).all()  # NDVI physical range
 
 
+def test_export_geotiff_ndvi_fast_path(tmp_path: object) -> None:
+    from pathlib import Path
+
+    import numpy as np
+    import rasterio
+
+    from openearth.catalog import get_product
+    from openearth.catalog.presets import ROI_PRESETS
+    from openearth.composites import build_mean_composite
+    from openearth.export import export_geotiff
+
+    roi = ROI_PRESETS["Heidelberg (Germany)"].bbox
+    image = build_mean_composite("NDVI", roi, *HEIDELBERG_DATES, source="s2")
+    dest = Path(str(tmp_path)) / "ndvi.tif"
+    # A coarse 200 m grid keeps the payload tiny → the getDownloadURL fast path.
+    export_geotiff(image, get_product("s2", "NDVI"), roi, 200, dest)
+
+    with rasterio.open(dest) as src:
+        assert src.crs.to_epsg() == 4326
+        assert src.count == 1
+        assert np.isfinite(src.read(1)).any()  # some valid NDVI pixels landed
+
+
 def test_overpass_matched_wind_sample() -> None:
     from datetime import UTC, datetime
 

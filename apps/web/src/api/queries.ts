@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiGet, apiPost } from "./client";
+import { apiGet, apiPost, apiPostBlob } from "./client";
 import type {
   AppConfig,
   Dataset,
+  ExportGeotiffRequest,
   InspectRequest,
   InspectResult,
+  JobCreated,
   RoiPreset,
+  ThumbnailRequest,
   TileResponse,
   TilesRequest,
 } from "./types";
@@ -42,4 +45,14 @@ export function mintTiles(body: TilesRequest): Promise<TileResponse> {
 /** Sample the current composite's pixel value at a point (pixel inspector). */
 export function inspectPoint(body: InspectRequest): Promise<InspectResult> {
   return apiPost<InspectResult>("/api/inspect", body);
+}
+
+/** Submit a GeoTIFF export; the returned job streams window progress over SSE. */
+export function submitGeotiffExport(body: ExportGeotiffRequest): Promise<JobCreated> {
+  return apiPost<JobCreated>("/api/export/geotiff", body);
+}
+
+/** Render the composite to a PNG for download (synchronous). */
+export function exportPngBlob(body: ThumbnailRequest): Promise<Blob> {
+  return apiPostBlob("/api/export/png", body);
 }

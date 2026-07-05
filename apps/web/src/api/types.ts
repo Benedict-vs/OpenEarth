@@ -16,6 +16,8 @@ export type AppConfig = components["schemas"]["ConfigOut"];
 export type Scene = components["schemas"]["SceneOut"];
 export type InspectRequest = components["schemas"]["InspectRequest"];
 export type InspectResult = components["schemas"]["InspectResult"];
+export type ThumbnailRequest = components["schemas"]["ThumbnailRequest"];
+export type ExportGeotiffRequest = components["schemas"]["ExportGeotiffRequest"];
 
 // ── Jobs & timeseries ──────────────────────────────────────
 export type JobCreated = components["schemas"]["JobCreated"];
