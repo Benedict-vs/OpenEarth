@@ -26,6 +26,19 @@ def _isolated_user_registry() -> Iterator[None]:
     clear_user_datasets()
 
 
+@pytest.fixture(autouse=True)
+def _reset_sse_appstatus() -> Iterator[None]:
+    # sse-starlette caches a class-level asyncio.Event for graceful shutdown;
+    # left set, it stays bound to the first SSE test's (now-closed) event loop
+    # and later SSE tests fail with "bound to a different event loop". Reset it
+    # so each test's EventSourceResponse binds to its own loop.
+    from sse_starlette.sse import AppStatus
+
+    AppStatus.should_exit_event = None
+    yield
+    AppStatus.should_exit_event = None
+
+
 @pytest.fixture
 def test_settings(tmp_path: Path) -> Settings:
     return Settings(_env_file=None, ee_project=None, data_dir=tmp_path / "data")

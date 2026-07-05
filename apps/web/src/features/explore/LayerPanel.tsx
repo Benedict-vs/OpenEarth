@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatCountdown } from "../../lib/time";
 import { useLayersStore, type Layer } from "../../stores/layersStore";
+import { ExportButton } from "./ExportDialog";
 import { Legend } from "./Legend";
 
 function useNow(intervalMs: number): number {
@@ -60,6 +61,7 @@ function LayerRow({ layer, isTop, isBottom }: { layer: Layer; isTop: boolean; is
         >
           ↓
         </button>
+        <ExportButton layer={layer} />
         <button className="icon" title="Remove layer" onClick={() => removeLayer(layer.id)}>
           ×
         </button>

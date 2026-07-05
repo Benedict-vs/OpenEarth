@@ -4,6 +4,41 @@
  */
 
 export interface paths {
+  "/api/aois": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Aois */
+    get: operations["list_aois_api_aois_get"];
+    put?: never;
+    /** Create Aoi */
+    post: operations["create_aoi_api_aois_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/aois/{aoi_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete Aoi */
+    delete: operations["delete_aoi_api_aois__aoi_id__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/catalog": {
     parameters: {
       query?: never;
@@ -89,6 +124,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/export/geotiff": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Export Geotiff Route */
+    post: operations["export_geotiff_route_api_export_geotiff_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/export/png": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Export Png Route */
+    post: operations["export_png_route_api_export_png_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/export/{job_id}/download": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Export Download Route */
+    get: operations["export_download_route_api_export__job_id__download_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/health": {
     parameters: {
       query?: never;
@@ -98,6 +184,75 @@ export interface paths {
     };
     /** Health */
     get: operations["health_api_health_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/inspect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Inspect Route */
+    post: operations["inspect_route_api_inspect_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/jobs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Jobs */
+    get: operations["list_jobs_api_jobs_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/jobs/{job_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Job */
+    get: operations["get_job_api_jobs__job_id__get"];
+    put?: never;
+    post?: never;
+    /** Cancel Job */
+    delete: operations["cancel_job_api_jobs__job_id__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/jobs/{job_id}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Job Events */
+    get: operations["job_events_api_jobs__job_id__events_get"];
     put?: never;
     post?: never;
     delete?: never;
@@ -174,10 +329,137 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/timeseries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Submit Timeseries Route */
+    post: operations["submit_timeseries_route_api_timeseries_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/timeseries/{job_id}/result": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Timeseries Result Route */
+    get: operations["timeseries_result_route_api_timeseries__job_id__result_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/wind": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Wind Point Route */
+    get: operations["wind_point_route_api_wind_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/wind/field": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Wind Field Route */
+    get: operations["wind_field_route_api_wind_field_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/workspaces": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Workspaces */
+    get: operations["list_workspaces_api_workspaces_get"];
+    put?: never;
+    /** Create Workspace */
+    post: operations["create_workspace_api_workspaces_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/workspaces/{workspace_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Workspace */
+    get: operations["get_workspace_api_workspaces__workspace_id__get"];
+    /**
+     * Update Workspace
+     * @description Replace a workspace's name and state (the header 'Update' action);
+     *     ``created_at`` is preserved. Renaming onto another workspace's name → 409.
+     */
+    put: operations["update_workspace_api_workspaces__workspace_id__put"];
+    post?: never;
+    /** Delete Workspace */
+    delete: operations["delete_workspace_api_workspaces__workspace_id__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** AoiIn */
+    AoiIn: {
+      /** Name */
+      name: string;
+      /** Roi */
+      roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+    };
+    /** AoiOut */
+    AoiOut: {
+      /** Created At */
+      created_at: string;
+      /** Id */
+      id: number;
+      /** Name */
+      name: string;
+      /** Roi */
+      roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+    };
     /** BBoxIn */
     BBoxIn: {
       /** East */
@@ -252,6 +534,39 @@ export interface components {
        */
       start: string;
     };
+    /**
+     * ExportGeotiffRequest
+     * @description A GeoTIFF export of the current composite. Composite fields mirror
+     *     ``TilesRequest`` (minus ``viz_overrides`` — raw values, no colour scaling);
+     *     ``scale_m`` overrides the dataset's native metres-per-pixel. ``roi`` is
+     *     required — a global native-resolution export is unbounded compute.
+     */
+    ExportGeotiffRequest: {
+      /**
+       * Composite
+       * @default mean
+       * @enum {string}
+       */
+      composite: "mean" | "date_window" | "single_scene";
+      /** Dataset */
+      dataset: string;
+      dates?: components["schemas"]["DateRangeIn"] | null;
+      /**
+       * Half Window Days
+       * @default 3
+       */
+      half_window_days: number;
+      /** Product */
+      product: string;
+      /** Roi */
+      roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+      /** Scale M */
+      scale_m?: number | null;
+      /** Target Date */
+      target_date?: string | null;
+      /** Timestamp Ms */
+      timestamp_ms?: number | null;
+    };
     /** HTTPValidationError */
     HTTPValidationError: {
       /** Detail */
@@ -266,6 +581,91 @@ export interface components {
       status: "ok";
       /** Version */
       version: string;
+    };
+    /**
+     * InspectRequest
+     * @description One point sample of the current composite. The composite fields mirror
+     *     ``TilesRequest`` (minus ``viz_overrides`` — a single pixel value has no
+     *     colour scaling); ``lon``/``lat`` are the sample point in EPSG:4326 degrees.
+     *     The ``roi`` still governs how the composite is built, not where it is read.
+     */
+    InspectRequest: {
+      /**
+       * Composite
+       * @default mean
+       * @enum {string}
+       */
+      composite: "mean" | "date_window" | "single_scene";
+      /** Dataset */
+      dataset: string;
+      dates?: components["schemas"]["DateRangeIn"] | null;
+      /**
+       * Half Window Days
+       * @default 3
+       */
+      half_window_days: number;
+      /** Lat */
+      lat: number;
+      /** Lon */
+      lon: number;
+      /** Product */
+      product: string;
+      /** Roi */
+      roi?: (components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"]) | null;
+      /** Target Date */
+      target_date?: string | null;
+      /** Timestamp Ms */
+      timestamp_ms?: number | null;
+    };
+    /**
+     * InspectResult
+     * @description A ``value`` of ``null`` means the pixel is masked (no data at that
+     *     location) — not an error. Multiply by ``display_scale`` for display units.
+     */
+    InspectResult: {
+      /** Band */
+      band: string;
+      /** Display Scale */
+      display_scale: number;
+      /** Unit */
+      unit: string;
+      /** Value */
+      value: number | null;
+    };
+    /** JobCreated */
+    JobCreated: {
+      /** Job Id */
+      job_id: string;
+    };
+    /** JobOut */
+    JobOut: {
+      /** Created At */
+      created_at: string;
+      /** Error */
+      error: string | null;
+      /** Finished At */
+      finished_at: string | null;
+      /** Id */
+      id: string;
+      /** Kind */
+      kind: string;
+      /** Message */
+      message: string | null;
+      /** Progress Done */
+      progress_done: number;
+      /** Progress Total */
+      progress_total: number;
+      /** Result */
+      result: {
+        [key: string]: unknown;
+      } | null;
+      /** Started At */
+      started_at: string | null;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
     };
     /** LegendOut */
     LegendOut: {
@@ -431,6 +831,48 @@ export interface components {
       timestamp_ms?: number | null;
       viz_overrides?: components["schemas"]["VizOverrides"] | null;
     };
+    /** TimeseriesPoint */
+    TimeseriesPoint: {
+      /** Count */
+      count: number;
+      /** Date */
+      date: string;
+      /** Value */
+      value: number;
+    };
+    /**
+     * TimeseriesRequest
+     * @description ROI is required — a global reduceRegion series is unbounded compute
+     *     (plan.md). ``scale`` picks native resolution or the 4× coarse preview.
+     */
+    TimeseriesRequest: {
+      /** Dataset */
+      dataset: string;
+      dates: components["schemas"]["DateRangeIn"];
+      /** Product */
+      product: string;
+      /** Roi */
+      roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+      /**
+       * Scale
+       * @default native
+       * @enum {string}
+       */
+      scale: "coarse" | "native";
+    };
+    /** TimeseriesResultOut */
+    TimeseriesResultOut: {
+      /** Band */
+      band: string;
+      /** Display Scale */
+      display_scale: number;
+      /** Points */
+      points: components["schemas"]["TimeseriesPoint"][];
+      /** Scale M */
+      scale_m: number;
+      /** Unit */
+      unit: string;
+    };
     /** ValidationError */
     ValidationError: {
       /** Context */
@@ -451,6 +893,134 @@ export interface components {
       /** Vis Min */
       vis_min?: number | null;
     };
+    /**
+     * WindFieldOut
+     * @description Per-cell mean 10 m wind on an ``nx × ny`` lattice, row-major from the NW
+     *     corner. A masked cell is ``null`` (JSON has no NaN) — the client skips it.
+     */
+    WindFieldOut: {
+      bbox: components["schemas"]["BBoxIn"];
+      /** Collection Id */
+      collection_id: string;
+      /** Nx */
+      nx: number;
+      /** Ny */
+      ny: number;
+      /** U */
+      u: (number | null)[];
+      /** V */
+      v: (number | null)[];
+      /**
+       * When
+       * Format: date-time
+       */
+      when: string;
+    };
+    /**
+     * WindSampleOut
+     * @description ROI-mean 10 m wind at a single instant (mirrors core ``WindSample``).
+     *     ``wind_from_deg`` is the meteorological convention (direction blown FROM).
+     */
+    WindSampleOut: {
+      /** Collection Id */
+      collection_id: string;
+      /** Speed Ms */
+      speed_ms: number;
+      /** U Ms */
+      u_ms: number;
+      /** V Ms */
+      v_ms: number;
+      /**
+       * When
+       * Format: date-time
+       */
+      when: string;
+      /** Wind From Deg */
+      wind_from_deg: number;
+      /** Wind To Deg */
+      wind_to_deg: number;
+    };
+    /** WorkspaceDate */
+    WorkspaceDate: {
+      /**
+       * End
+       * Format: date
+       */
+      end: string;
+      /** Half Window Days */
+      half_window_days: number;
+      /**
+       * Mode
+       * @enum {string}
+       */
+      mode: "range" | "single";
+      /**
+       * Start
+       * Format: date
+       */
+      start: string;
+      /**
+       * Target Date
+       * Format: date
+       */
+      target_date: string;
+    };
+    /** WorkspaceIn */
+    WorkspaceIn: {
+      /** Name */
+      name: string;
+      state: components["schemas"]["WorkspaceState"];
+    };
+    /**
+     * WorkspaceLayer
+     * @description One layer's persisted shape — data identity plus display state, but no
+     *     mint (tile URLs expire; they are re-minted on load, not restored).
+     */
+    WorkspaceLayer: {
+      /** Dataset */
+      dataset: string;
+      /** Label */
+      label: string;
+      /** Opacity */
+      opacity: number;
+      /** Product */
+      product: string;
+      /** Visible */
+      visible: boolean;
+      viz_overrides?: components["schemas"]["VizOverrides"] | null;
+    };
+    /** WorkspaceOut */
+    WorkspaceOut: {
+      /** Created At */
+      created_at: string;
+      /** Id */
+      id: number;
+      /** Name */
+      name: string;
+      state: components["schemas"]["WorkspaceState"];
+      /** Updated At */
+      updated_at: string;
+    };
+    /**
+     * WorkspaceState
+     * @description A restorable snapshot of the Explore view. ``v`` is a schema version so
+     *     Phase 3+ can migrate the shape explicitly instead of guessing at load time;
+     *     an unknown version fails validation rather than being silently misread.
+     */
+    WorkspaceState: {
+      date: components["schemas"]["WorkspaceDate"];
+      /** Layers */
+      layers: components["schemas"]["WorkspaceLayer"][];
+      /** Roi */
+      roi?: (components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"]) | null;
+      /**
+       * V
+       * @constant
+       */
+      v: 1;
+      /** Wind */
+      wind: boolean;
+    };
   };
   responses: never;
   parameters: never;
@@ -460,6 +1030,88 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  list_aois_api_aois_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AoiOut"][];
+        };
+      };
+    };
+  };
+  create_aoi_api_aois_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AoiIn"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AoiOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_aoi_api_aois__aoi_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aoi_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   list_catalog_api_catalog_get: {
     parameters: {
       query?: never;
@@ -593,6 +1245,117 @@ export interface operations {
       };
     };
   };
+  export_geotiff_route_api_export_geotiff_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExportGeotiffRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JobCreated"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  export_png_route_api_export_png_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ThumbnailRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "image/png": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  export_download_route_api_export__job_id__download_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "image/tiff": unknown;
+        };
+      };
+      /** @description Job not finished */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Exported file removed */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   health_api_health_get: {
     parameters: {
       query?: never;
@@ -609,6 +1372,163 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HealthOut"];
+        };
+      };
+    };
+  };
+  inspect_route_api_inspect_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["InspectRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InspectResult"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_jobs_api_jobs_get: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JobOut"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_job_api_jobs__job_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JobOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  cancel_job_api_jobs__job_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JobOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  job_events_api_jobs__job_id__events_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
     };
@@ -720,6 +1640,309 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["TileResponse"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  submit_timeseries_route_api_timeseries_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TimeseriesRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JobCreated"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  timeseries_result_route_api_timeseries__job_id__result_get: {
+    parameters: {
+      query?: {
+        format?: "json" | "csv" | "parquet";
+      };
+      header?: never;
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TimeseriesResultOut"];
+          "application/vnd.apache.parquet": unknown;
+          "text/csv": unknown;
+        };
+      };
+      /** @description Job not finished */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Cached result evicted */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  wind_point_route_api_wind_get: {
+    parameters: {
+      query: {
+        lat: number;
+        lon: number;
+        /** @description Sample instant (ISO 8601; naive is UTC). */
+        time: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WindSampleOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  wind_field_route_api_wind_field_get: {
+    parameters: {
+      query: {
+        west: number;
+        south: number;
+        east: number;
+        north: number;
+        /** @description Sample instant (ISO 8601; naive is UTC). */
+        time: string;
+        nx?: number;
+        /** @description Rows; default from aspect. */
+        ny?: number | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WindFieldOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_workspaces_api_workspaces_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceOut"][];
+        };
+      };
+    };
+  };
+  create_workspace_api_workspaces_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WorkspaceIn"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_workspace_api_workspaces__workspace_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_workspace_api_workspaces__workspace_id__put: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WorkspaceIn"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_workspace_api_workspaces__workspace_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        workspace_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Validation Error */
       422: {

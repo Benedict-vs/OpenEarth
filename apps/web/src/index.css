@@ -107,15 +107,99 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* ── Workspace menu (header dropdown) ──────────────────────── */
+
+.workspace-menu {
+  position: relative;
+  margin-left: auto;
+}
+
+.workspace-menu > button.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.workspace-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 260px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspace-action {
+  text-align: left;
+  width: 100%;
+}
+
+.workspace-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.workspace-empty {
+  margin: 2px 6px 6px;
+  font-size: 12px;
+}
+
+.workspace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workspace-item {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.workspace-item .workspace-load {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-item.current .workspace-load {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .main {
   flex: 1;
   display: flex;
   min-height: 0;
 }
 
+.map-column {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .map-container {
   flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
 .side-panel {
@@ -257,6 +341,26 @@ input[type="range"] {
   font-size: 12px;
 }
 
+.roi-preset-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.roi-preset-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
 .date-inputs {
   display: flex;
   gap: 8px;
@@ -370,4 +474,301 @@ code {
   justify-content: space-between;
   font-size: 11px;
   margin-top: 2px;
+}
+
+/* ── Pixel inspector ───────────────────────────────────────── */
+
+.inspect-toggle {
+  width: 100%;
+}
+
+.inspect-toggle.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+/* ── Wind overlay ──────────────────────────────────────────── */
+
+/* The arrow canvas lives inside MapLibre's canvas container; it must never
+   intercept map interaction. */
+.wind-overlay-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wind-note {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+/* Theme MapLibre's popup (rendered outside the React tree) to match the app. */
+.maplibregl-popup-content {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  padding: 9px 11px;
+}
+
+.maplibregl-popup-close-button {
+  color: var(--muted);
+  font-size: 15px;
+  padding: 0 5px;
+}
+
+.maplibregl-popup-close-button:hover {
+  background: transparent;
+  color: var(--text);
+}
+
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--panel);
+}
+
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--panel);
+}
+
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--panel);
+}
+
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--panel);
+}
+
+.inspect-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 150px;
+}
+
+.inspect-title {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspect-value {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.inspect-value.muted {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.inspect-coords {
+  font-size: 11px;
+}
+
+.inspect-series-btn {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.inspect-hint {
+  font-size: 12px;
+}
+
+/* ── Export dialog ─────────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.export-dialog {
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.export-summary {
+  margin: 0;
+  font-size: 12px;
+}
+
+.export-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.export-tabs button {
+  flex: 1;
+  font-size: 12px;
+}
+
+.export-tabs button.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.export-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 96px;
+}
+
+.export-pane p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.export-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.export-download {
+  text-align: center;
+  text-decoration: none;
+}
+
+/* Anchors styled as .primary buttons need the button box model. */
+a.primary {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent);
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
+a.primary:hover {
+  border-color: var(--muted);
+}
+
+/* ── Analysis drawer ───────────────────────────────────────── */
+
+.chart-drawer {
+  flex-shrink: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.chart-drawer-head strong {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.chart-drawer-head select {
+  max-width: 220px;
+  min-width: 0;
+}
+
+.chart-drawer-spacer {
+  flex: 1;
+}
+
+.csv-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.csv-link:hover {
+  text-decoration: underline;
+}
+
+.chart-body {
+  padding: 2px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.chart-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.series-chart {
+  width: 100%;
+  height: 260px;
+}
+
+.chart-hint {
+  padding: 22px 0;
+  text-align: center;
+}
+
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.stat-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.stat-sub {
+  font-size: 11px;
+  color: var(--muted);
 }

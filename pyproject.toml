@@ -14,6 +14,7 @@ exclude = ["legacy"]
 [dependency-groups]
 dev = [
     "pytest>=8.3,<9",
+    "pytest-asyncio>=0.24,<1",
     "pytest-cov>=6,<8",
     "ruff>=0.9",
     "mypy>=1.14,<2",
@@ -46,8 +47,14 @@ packages = ["openearth", "openearth_api"]
 exclude = ["legacy/"]
 
 [[tool.mypy.overrides]]
-module = ["ee", "ee.*", "diskcache", "diskcache.*"]
+module = ["ee", "ee.*", "diskcache", "diskcache.*", "rasterio", "rasterio.*"]
 ignore_missing_imports = true
+
+# SQLModel/SQLAlchemy return Any from Session.get / exec chains; "returning
+# Any" is inherent to the ORM there, not a defect in our annotations.
+[[tool.mypy.overrides]]
+module = ["openearth_api.db", "openearth_api.jobs"]
+warn_return_any = false
 
 # Modules that wrap Earth Engine chains: ee's own methods return Any, so
 # "returning Any" is inherent there, not a defect in our annotations.
@@ -61,6 +68,8 @@ module = [
     "openearth.analytics.conversions",
     "openearth.analytics.source_classification",
     "openearth.methane.wind",
+    "openearth.timeseries",
+    "openearth.export",
     "openearth_api.services.*",
 ]
 warn_return_any = false
@@ -69,7 +78,11 @@ warn_return_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["packages/core/tests", "packages/api/tests"]
-addopts = "-ra -m 'not ee'"
+# importlib mode: core and api both have a test_timeseries.py; without it
+# pytest's basename-based import would collide (no __init__.py in test dirs).
+addopts = "-ra -m 'not ee' --import-mode=importlib"
+# Strict mode: async tests are opt-in via @pytest.mark.asyncio, no auto-collection.
+asyncio_mode = "strict"
 markers = [
     "ee: live Earth Engine tests (need OPENEARTH_EE_TESTS=1 and real auth; never run in CI)",
 ]

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ExplorePage } from "./features/explore/ExplorePage";
+import { WorkspaceMenu } from "./features/explore/WorkspaceMenu";
 import { SettingsPage } from "./features/settings/SettingsPage";
 
 type View = "explore" | "settings";
@@ -24,6 +25,7 @@ export function App() {
             Settings
           </button>
         </nav>
+        {view === "explore" ? <WorkspaceMenu /> : null}
       </header>
       <main className="main">{view === "explore" ? <ExplorePage /> : <SettingsPage />}</main>
     </div>

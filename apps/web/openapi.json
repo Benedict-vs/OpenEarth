@@ -1,6 +1,82 @@
 {
   "components": {
     "schemas": {
+      "AoiIn": {
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          }
+        },
+        "required": [
+          "name",
+          "roi"
+        ],
+        "title": "AoiIn",
+        "type": "object"
+      },
+      "AoiOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "roi",
+          "created_at"
+        ],
+        "title": "AoiOut",
+        "type": "object"
+      },
       "BBoxIn": {
         "properties": {
           "east": {
@@ -188,6 +264,106 @@
         "title": "DateRangeIn",
         "type": "object"
       },
+      "ExportGeotiffRequest": {
+        "description": "A GeoTIFF export of the current composite. Composite fields mirror\n``TilesRequest`` (minus ``viz_overrides`` \u2014 raw values, no colour scaling);\n``scale_m`` overrides the dataset's native metres-per-pixel. ``roi`` is\nrequired \u2014 a global native-resolution export is unbounded compute.",
+        "properties": {
+          "composite": {
+            "default": "mean",
+            "enum": [
+              "mean",
+              "date_window",
+              "single_scene"
+            ],
+            "title": "Composite",
+            "type": "string"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "half_window_days": {
+            "default": 3,
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Half Window Days",
+            "type": "integer"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          },
+          "scale_m": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale M"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "timestamp_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp Ms"
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "roi"
+        ],
+        "title": "ExportGeotiffRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -218,6 +394,266 @@
           "version"
         ],
         "title": "HealthOut",
+        "type": "object"
+      },
+      "InspectRequest": {
+        "description": "One point sample of the current composite. The composite fields mirror\n``TilesRequest`` (minus ``viz_overrides`` \u2014 a single pixel value has no\ncolour scaling); ``lon``/``lat`` are the sample point in EPSG:4326 degrees.\nThe ``roi`` still governs how the composite is built, not where it is read.",
+        "properties": {
+          "composite": {
+            "default": "mean",
+            "enum": [
+              "mean",
+              "date_window",
+              "single_scene"
+            ],
+            "title": "Composite",
+            "type": "string"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "half_window_days": {
+            "default": 3,
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Half Window Days",
+            "type": "integer"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bbox": "#/components/schemas/BBoxIn",
+                    "polygon": "#/components/schemas/PolygonIn"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/BBoxIn"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PolygonIn"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roi"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "timestamp_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp Ms"
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "lon",
+          "lat"
+        ],
+        "title": "InspectRequest",
+        "type": "object"
+      },
+      "InspectResult": {
+        "description": "A ``value`` of ``null`` means the pixel is masked (no data at that\nlocation) \u2014 not an error. Multiply by ``display_scale`` for display units.",
+        "properties": {
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "display_scale": {
+            "title": "Display Scale",
+            "type": "number"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "value",
+          "band",
+          "unit",
+          "display_scale"
+        ],
+        "title": "InspectResult",
+        "type": "object"
+      },
+      "JobCreated": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "JobCreated",
+        "type": "object"
+      },
+      "JobOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "progress_done": {
+            "title": "Progress Done",
+            "type": "integer"
+          },
+          "progress_total": {
+            "title": "Progress Total",
+            "type": "integer"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "interrupted"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "progress_done",
+          "progress_total",
+          "message",
+          "result",
+          "error",
+          "created_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "JobOut",
         "type": "object"
       },
       "LegendOut": {
@@ -732,6 +1168,116 @@
         "title": "TilesRequest",
         "type": "object"
       },
+      "TimeseriesPoint": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "value",
+          "count"
+        ],
+        "title": "TimeseriesPoint",
+        "type": "object"
+      },
+      "TimeseriesRequest": {
+        "description": "ROI is required \u2014 a global reduceRegion series is unbounded compute\n(plan.md). ``scale`` picks native resolution or the 4\u00d7 coarse preview.",
+        "properties": {
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "$ref": "#/components/schemas/DateRangeIn"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          },
+          "scale": {
+            "default": "native",
+            "enum": [
+              "coarse",
+              "native"
+            ],
+            "title": "Scale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "roi",
+          "dates"
+        ],
+        "title": "TimeseriesRequest",
+        "type": "object"
+      },
+      "TimeseriesResultOut": {
+        "properties": {
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "display_scale": {
+            "title": "Display Scale",
+            "type": "number"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/TimeseriesPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "scale_m": {
+            "title": "Scale M",
+            "type": "integer"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "points",
+          "unit",
+          "display_scale",
+          "scale_m",
+          "band"
+        ],
+        "title": "TimeseriesResultOut",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -799,6 +1345,309 @@
         },
         "title": "VizOverrides",
         "type": "object"
+      },
+      "WindFieldOut": {
+        "description": "Per-cell mean 10 m wind on an ``nx \u00d7 ny`` lattice, row-major from the NW\ncorner. A masked cell is ``null`` (JSON has no NaN) \u2014 the client skips it.",
+        "properties": {
+          "bbox": {
+            "$ref": "#/components/schemas/BBoxIn"
+          },
+          "collection_id": {
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "nx": {
+            "title": "Nx",
+            "type": "integer"
+          },
+          "ny": {
+            "title": "Ny",
+            "type": "integer"
+          },
+          "u": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "U",
+            "type": "array"
+          },
+          "v": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "V",
+            "type": "array"
+          },
+          "when": {
+            "format": "date-time",
+            "title": "When",
+            "type": "string"
+          }
+        },
+        "required": [
+          "when",
+          "bbox",
+          "nx",
+          "ny",
+          "u",
+          "v",
+          "collection_id"
+        ],
+        "title": "WindFieldOut",
+        "type": "object"
+      },
+      "WindSampleOut": {
+        "description": "ROI-mean 10 m wind at a single instant (mirrors core ``WindSample``).\n``wind_from_deg`` is the meteorological convention (direction blown FROM).",
+        "properties": {
+          "collection_id": {
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "speed_ms": {
+            "title": "Speed Ms",
+            "type": "number"
+          },
+          "u_ms": {
+            "title": "U Ms",
+            "type": "number"
+          },
+          "v_ms": {
+            "title": "V Ms",
+            "type": "number"
+          },
+          "when": {
+            "format": "date-time",
+            "title": "When",
+            "type": "string"
+          },
+          "wind_from_deg": {
+            "title": "Wind From Deg",
+            "type": "number"
+          },
+          "wind_to_deg": {
+            "title": "Wind To Deg",
+            "type": "number"
+          }
+        },
+        "required": [
+          "when",
+          "u_ms",
+          "v_ms",
+          "speed_ms",
+          "wind_to_deg",
+          "wind_from_deg",
+          "collection_id"
+        ],
+        "title": "WindSampleOut",
+        "type": "object"
+      },
+      "WorkspaceDate": {
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "half_window_days": {
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Half Window Days",
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "range",
+              "single"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "target_date": {
+            "format": "date",
+            "title": "Target Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "start",
+          "end",
+          "target_date",
+          "half_window_days"
+        ],
+        "title": "WorkspaceDate",
+        "type": "object"
+      },
+      "WorkspaceIn": {
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/WorkspaceState"
+          }
+        },
+        "required": [
+          "name",
+          "state"
+        ],
+        "title": "WorkspaceIn",
+        "type": "object"
+      },
+      "WorkspaceLayer": {
+        "description": "One layer's persisted shape \u2014 data identity plus display state, but no\nmint (tile URLs expire; they are re-minted on load, not restored).",
+        "properties": {
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "opacity": {
+            "title": "Opacity",
+            "type": "number"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "visible": {
+            "title": "Visible",
+            "type": "boolean"
+          },
+          "viz_overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VizOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "label",
+          "opacity",
+          "visible"
+        ],
+        "title": "WorkspaceLayer",
+        "type": "object"
+      },
+      "WorkspaceOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/WorkspaceState"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkspaceOut",
+        "type": "object"
+      },
+      "WorkspaceState": {
+        "description": "A restorable snapshot of the Explore view. ``v`` is a schema version so\nPhase 3+ can migrate the shape explicitly instead of guessing at load time;\nan unknown version fails validation rather than being silently misread.",
+        "properties": {
+          "date": {
+            "$ref": "#/components/schemas/WorkspaceDate"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceLayer"
+            },
+            "title": "Layers",
+            "type": "array"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bbox": "#/components/schemas/BBoxIn",
+                    "polygon": "#/components/schemas/PolygonIn"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/BBoxIn"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PolygonIn"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roi"
+          },
+          "v": {
+            "const": 1,
+            "title": "V",
+            "type": "integer"
+          },
+          "wind": {
+            "title": "Wind",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "v",
+          "layers",
+          "date",
+          "wind"
+        ],
+        "title": "WorkspaceState",
+        "type": "object"
       }
     }
   },
@@ -808,6 +1657,105 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/aois": {
+      "get": {
+        "operationId": "list_aois_api_aois_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AoiOut"
+                  },
+                  "title": "Response List Aois Api Aois Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Aois",
+        "tags": [
+          "aois"
+        ]
+      },
+      "post": {
+        "operationId": "create_aoi_api_aois_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AoiIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AoiOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Aoi",
+        "tags": [
+          "aois"
+        ]
+      }
+    },
+    "/api/aois/{aoi_id}": {
+      "delete": {
+        "operationId": "delete_aoi_api_aois__aoi_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "aoi_id",
+            "required": true,
+            "schema": {
+              "title": "Aoi Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Aoi",
+        "tags": [
+          "aois"
+        ]
+      }
+    },
     "/api/catalog": {
       "get": {
         "operationId": "list_catalog_api_catalog_get",
@@ -972,6 +1920,128 @@
         ]
       }
     },
+    "/api/export/geotiff": {
+      "post": {
+        "operationId": "export_geotiff_route_api_export_geotiff_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportGeotiffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Geotiff Route",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/png": {
+      "post": {
+        "operationId": "export_png_route_api_export_png_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThumbnailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Png Route",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/{job_id}/download": {
+      "get": {
+        "operationId": "export_download_route_api_export__job_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/tiff": {}
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Job not finished"
+          },
+          "410": {
+            "description": "Exported file removed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Download Route",
+        "tags": [
+          "export"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "health_api_health_get",
@@ -990,6 +2060,218 @@
         "summary": "Health",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/inspect": {
+      "post": {
+        "operationId": "inspect_route_api_inspect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inspect Route",
+        "tags": [
+          "inspect"
+        ]
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "operationId": "list_jobs_api_jobs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobOut"
+                  },
+                  "title": "Response List Jobs Api Jobs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Jobs",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "delete": {
+        "operationId": "cancel_job_api_jobs__job_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Job",
+        "tags": [
+          "jobs"
+        ]
+      },
+      "get": {
+        "operationId": "get_job_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}/events": {
+      "get": {
+        "operationId": "job_events_api_jobs__job_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Job Events",
+        "tags": [
+          "jobs"
         ]
       }
     },
@@ -1138,6 +2420,490 @@
         "summary": "Mint Tiles Route",
         "tags": [
           "render"
+        ]
+      }
+    },
+    "/api/timeseries": {
+      "post": {
+        "operationId": "submit_timeseries_route_api_timeseries_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimeseriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Timeseries Route",
+        "tags": [
+          "timeseries"
+        ]
+      }
+    },
+    "/api/timeseries/{job_id}/result": {
+      "get": {
+        "operationId": "timeseries_result_route_api_timeseries__job_id__result_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "json",
+              "enum": [
+                "json",
+                "csv",
+                "parquet"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeseriesResultOut"
+                }
+              },
+              "application/vnd.apache.parquet": {},
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Job not finished"
+          },
+          "410": {
+            "description": "Cached result evicted"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Timeseries Result Route",
+        "tags": [
+          "timeseries"
+        ]
+      }
+    },
+    "/api/wind": {
+      "get": {
+        "operationId": "wind_point_route_api_wind_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lon",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Lon",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Sample instant (ISO 8601; naive is UTC).",
+            "in": "query",
+            "name": "time",
+            "required": true,
+            "schema": {
+              "description": "Sample instant (ISO 8601; naive is UTC).",
+              "format": "date-time",
+              "title": "Time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindSampleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wind Point Route",
+        "tags": [
+          "wind"
+        ]
+      }
+    },
+    "/api/wind/field": {
+      "get": {
+        "operationId": "wind_field_route_api_wind_field_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "west",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "West",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "south",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "South",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "east",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "East",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "north",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "North",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Sample instant (ISO 8601; naive is UTC).",
+            "in": "query",
+            "name": "time",
+            "required": true,
+            "schema": {
+              "description": "Sample instant (ISO 8601; naive is UTC).",
+              "format": "date-time",
+              "title": "Time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "nx",
+            "required": false,
+            "schema": {
+              "default": 24,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Nx",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Rows; default from aspect.",
+            "in": "query",
+            "name": "ny",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 50,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Rows; default from aspect.",
+              "title": "Ny"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindFieldOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wind Field Route",
+        "tags": [
+          "wind"
+        ]
+      }
+    },
+    "/api/workspaces": {
+      "get": {
+        "operationId": "list_workspaces_api_workspaces_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceOut"
+                  },
+                  "title": "Response List Workspaces Api Workspaces Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Workspaces",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "post": {
+        "operationId": "create_workspace_api_workspaces_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Workspace",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
+    "/api/workspaces/{workspace_id}": {
+      "delete": {
+        "operationId": "delete_workspace_api_workspaces__workspace_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Workspace",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "get": {
+        "operationId": "get_workspace_api_workspaces__workspace_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Workspace",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "put": {
+        "description": "Replace a workspace's name and state (the header 'Update' action);\n``created_at`` is preserved. Renaming onto another workspace's name \u2192 409.",
+        "operationId": "update_workspace_api_workspaces__workspace_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Workspace",
+        "tags": [
+          "workspaces"
         ]
       }
     }

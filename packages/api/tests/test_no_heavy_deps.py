@@ -1,8 +1,9 @@
-"""The API must never import UI frameworks, torch, or Phase-2+ stacks.
+"""The API must never import UI frameworks, torch, or ML stacks.
 
 Mirrors core's ``test_no_ui_deps.py``: import every ``openearth_api``
 submodule, then assert none of the forbidden top-level packages made it
-into ``sys.modules``.
+into ``sys.modules``. (SQLModel and sse-starlette became first-class API
+dependencies in Phase 2 — the DB/job layer — so they are no longer barred.)
 """
 
 from __future__ import annotations
@@ -19,8 +20,6 @@ FORBIDDEN = (
     "folium",
     "branca",
     "altair",
-    "sqlmodel",
-    "sse_starlette",
 )
 
 

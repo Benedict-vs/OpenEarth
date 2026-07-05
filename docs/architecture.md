@@ -54,6 +54,46 @@ ML training (packages/ml)            ← Phase 5 (torch; the API serves ONNX onl
   one-in-flight latch). terra-draw rectangle→bbox / polygon ROIs; presets; range ⇄
   single-date control; Settings (EE status, cache stats, TOML editor).
 
+## Built in Phase 2
+
+- **In-process job manager + SSE** (`jobs.py`): one event-loop DB writer, a per-job consumer
+  coroutine, cooperative cancellation; `GET /jobs`, `/jobs/{id}`, `DELETE /jobs/{id}`,
+  `/jobs/{id}/events` (sse-starlette, 15 s ping). Runners execute off-loop via
+  `asyncio.to_thread`; progressive `points` events are live previews, the full result is
+  refetched on `done`. `MAX_RUNNING_JOBS = 4` is the only brake beyond the core EE semaphore.
+  SQLite is WAL, schema owned by `PRAGMA user_version` DDL batches in `db.py` (never edited,
+  only appended).
+- **Timeseries v2** (`services/timeseries.py`): chunked, concurrent per-period `reduceRegion`
+  reductions streamed as progressive `points` previews (coarse→fine fill), then a parquet
+  result cached as bytes in the one diskcache tier. `POST /timeseries` (job) +
+  `GET /timeseries/{id}/result?format=json|csv|parquet`. ROI required (a global series is
+  unbounded compute); `scale=coarse` reduces at 4× native for a fast preview. Stats
+  (mean/σ/min/max/trend/coverage) are computed **client-side** from the delivered points — no
+  `/stats` endpoint.
+- **`ee/pixels.py`** — `computePixels` chip fetch on an explicit EPSG:4326 grid with
+  self-limited tiling (pure grid math offline-tested; only `fetch_window` touches EE). Pulled
+  forward from Phase 3 because exports need it; the retrieval chips reuse it unchanged.
+- **Exports for every product**: `POST /export/geotiff` (job → single-shot `getDownloadURL`
+  below 32 MB, windowed `computePixels` assembly above; `GET /export/{id}/download`),
+  synchronous `POST /export/png`, and CSV via the timeseries result. GeoTIFFs are EPSG:4326,
+  georeferenced (verified in QGIS over a basemap).
+- **Pixel inspector** (`POST /inspect`): one masked-safe point sample of the current
+  composite; the panel mini-series reuses `/timeseries` with a small bbox (one engine, one
+  cache — no bespoke endpoint).
+- **Wind**: `GET /wind` (ROI-mean 10 m ERA5) and `GET /wind/field` (nx×ny lattice, one
+  `reduceRegions`, ERA5-Land with global-ERA5 water fallback); a canvas arrow overlay pinned
+  to geography, labeled with its fixed sampled instant (noon UTC of the active date — browsing
+  context, not overpass-matched; Phase 3's Methane Lab does that properly).
+- **Saved AOIs + versioned workspaces** (migration 2: `aois`, `workspaces`): plain-CRUD
+  routers (409 on duplicate name). A workspace `state` is a versioned pydantic schema
+  (`WorkspaceState {v, layers, roi, date, wind}`) persisted as a validated JSON blob, so an
+  unknown version is rejected on the way in rather than misread at load. Web: "Save AOI…" +
+  a saved group in the ROI presets; a header workspace menu (save/update/load/delete) whose
+  `applyWorkspace` seeds the stores and re-adds layers through the existing mint reaction — no
+  second mint path.
+- **Web analysis UI**: ECharts time-series panel (coarse→fine fill + client-side stat cards),
+  pixel inspector, GeoTIFF/PNG/CSV export controls, wind arrow overlay.
+
 ## Earth Engine ground rules (design defensively)
 
 | Mechanic | Assumption | Defense |
@@ -61,9 +101,9 @@ ML training (packages/ml)            ← Phase 5 (torch; the API serves ONNX onl
 | `getMapId` tile URLs | valid ~4 h (undocumented) | `TileRef.expires_at`; clients re-mint at 75 % TTL |
 | Concurrent requests | ~40/user across tiles + compute | global semaphore (8) in `ee/client.py` |
 | `getInfo` | 0.5–5 s, occasional 429/5xx | tenacity retry + backoff + jitter on classified transients |
-| `computePixels` | ≤ ~48 MB/response | (Phase 3) self-limit 1024² px × ≤6 float32 bands, tile locally |
+| `computePixels` | ≤ ~48 MB/response | self-limit 1024² px × ≤6 float32 bands, tile locally (`ee/pixels.py`) |
 | `getThumbURL` | practical ~2048 px/side | cosine-corrected `geo_dimensions` |
-| `getDownloadURL` | small areas only | fast path only; large exports assemble computePixels tiles (Phase 2) |
+| `getDownloadURL` | small areas only | fast path < 32 MB; larger exports assemble `computePixels` windows |
 
 ## Rules that keep the build honest
 
