@@ -3,8 +3,9 @@ import { ExplorePage } from "./features/explore/ExplorePage";
 import { WorkspaceMenu } from "./features/explore/WorkspaceMenu";
 import { MethanePage } from "./features/methane/MethanePage";
 import { SettingsPage } from "./features/settings/SettingsPage";
+import { TimelapsePage } from "./features/timelapse/TimelapsePage";
 
-type View = "explore" | "methane" | "settings";
+type View = "explore" | "methane" | "timelapse" | "settings";
 
 export function App() {
   const [view, setView] = useState<View>("explore");
@@ -23,6 +24,12 @@ export function App() {
             Methane Lab
           </button>
           <button
+            className={view === "timelapse" ? "active" : ""}
+            onClick={() => setView("timelapse")}
+          >
+            Timelapse
+          </button>
+          <button
             className={view === "settings" ? "active" : ""}
             onClick={() => setView("settings")}
           >
@@ -34,6 +41,7 @@ export function App() {
       <main className="main">
         {view === "explore" ? <ExplorePage /> : null}
         {view === "methane" ? <MethanePage /> : null}
+        {view === "timelapse" ? <TimelapsePage /> : null}
         {view === "settings" ? <SettingsPage /> : null}
       </main>
     </div>

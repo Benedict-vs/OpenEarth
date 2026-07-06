@@ -61,6 +61,14 @@ export interface Hotspot {
 export type ValidationImport = components["schemas"]["ValidationImportOut"];
 export type Validation = components["schemas"]["ValidationOut"];
 
+// ── Timelapse Studio ───────────────────────────────────────
+export type TimelapseRequest = components["schemas"]["TimelapseRequest"];
+export type TimelapseCreated = components["schemas"]["TimelapseCreated"];
+export type Render = components["schemas"]["RenderOut"];
+export type RenderDetail = components["schemas"]["RenderDetailOut"];
+export type StepConfig = components["schemas"]["StepIn"];
+export type AnnotationsConfig = components["schemas"]["AnnotationsIn"];
+
 /** The Monte-Carlo Q histogram embedded in a detection's `result` blob. */
 export interface MethaneHistogram {
   edges: number[];
@@ -78,6 +86,13 @@ export interface JobProgressData {
 }
 export interface JobPointsData {
   points: TimeseriesPoint[];
+}
+/** A timelapse render's per-frame preview event (see services/timelapse.py). */
+export interface JobFrameData {
+  /** Dense movie index of a rendered frame, or null for a skipped window. */
+  index: number | null;
+  status: "rendered" | "empty" | "failed";
+  total: number;
 }
 export interface JobDoneData {
   status: string;
