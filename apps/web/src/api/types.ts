@@ -36,6 +36,37 @@ export type TimeseriesRequest = components["schemas"]["TimeseriesRequest"];
 export type TimeseriesResult = components["schemas"]["TimeseriesResultOut"];
 export type TimeseriesPoint = components["schemas"]["TimeseriesPoint"];
 
+// ── Methane Lab ────────────────────────────────────────────
+export type Site = components["schemas"]["SiteOut"];
+export type SiteIn = components["schemas"]["SiteIn"];
+export type SitePatch = components["schemas"]["SitePatch"];
+export type SceneInfo = components["schemas"]["SceneInfoOut"];
+export type AnalyzeRequest = components["schemas"]["AnalyzeRequest"];
+export type Detection = components["schemas"]["DetectionOut"];
+export type DetectionDetail = components["schemas"]["DetectionDetailOut"];
+export type DetectionPatch = components["schemas"]["DetectionPatch"];
+export type ScreeningRequest = components["schemas"]["ScreeningRequest"];
+export type ReferenceEvent = components["schemas"]["ReferenceEventOut"];
+
+/** Screening hotspots arrive in the job's (untyped) SSE result, not a schema. */
+export interface Hotspot {
+  lat: number;
+  lon: number;
+  mean_enh_ppb: number;
+  max_enh_ppb: number;
+  score: number;
+  weeks_flagged: number;
+  weeks_observed: number;
+}
+export type ValidationImport = components["schemas"]["ValidationImportOut"];
+export type Validation = components["schemas"]["ValidationOut"];
+
+/** The Monte-Carlo Q histogram embedded in a detection's `result` blob. */
+export interface MethaneHistogram {
+  edges: number[];
+  counts: number[];
+}
+
 // SSE payloads are streamed, not part of the OpenAPI schema, so they are
 // hand-typed here to match the wire format pinned in
 // docs/phase2-execution-plan.md ("SSE wire format"). Keep them in sync with

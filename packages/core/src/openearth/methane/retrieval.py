@@ -28,8 +28,10 @@ if TYPE_CHECKING:
     from openearth.geometry import BBox
     from openearth.methane.scenes import S2Scene
 
-# B11/B12 drive the retrieval; B04/B03/B02 are the UI's RGB context (5 ≤ MAX_BANDS).
-CHIP_BANDS = ("B11", "B12", "B04", "B03", "B02")
+# B11/B12 drive the retrieval; B4/B3/B2 are the UI's RGB context (5 ≤ MAX_BANDS).
+# S2_HARMONIZED band ids are unpadded (B4, not B04) — verified against the live
+# collection's Available bands list.
+CHIP_BANDS = ("B11", "B12", "B4", "B3", "B2")
 
 # Explicit fill for EE-masked pixels — set before the fetch, mapped to NaN after
 # (never treat a legitimate DN 0 as fill).

@@ -56,6 +56,17 @@ export async function apiPostBlob(path: string, body: unknown): Promise<Blob> {
   return response.blob();
 }
 
+export function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+}
+
 export function apiDelete(path: string): Promise<void> {
   return request<void>(path, { method: "DELETE" });
+}
+
+/** POST a multipart form (e.g. a file upload); does not set Content-Type by hand. */
+export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
+  const response = await fetch(path, { method: "POST", body: form });
+  if (!response.ok) throw await errorFrom(response);
+  return (await response.json()) as T;
 }

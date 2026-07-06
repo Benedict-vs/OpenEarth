@@ -1,0 +1,152 @@
+/** React-query hooks + plain calls for the Methane Lab API. */
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm } from "./client";
+import type {
+  AnalyzeRequest,
+  Detection,
+  DetectionDetail,
+  DetectionPatch,
+  JobCreated,
+  ReferenceEvent,
+  SceneInfo,
+  ScreeningRequest,
+  Site,
+  SiteIn,
+  SitePatch,
+  Validation,
+  ValidationImport,
+} from "./types";
+
+const SITES_KEY = ["methane", "sites"] as const;
+const EVENTS_KEY = ["methane", "events"] as const;
+const detectionsKey = (siteId: number | null) => ["methane", "detections", siteId] as const;
+
+// ── Sites ──
+
+export function useSites() {
+  return useQuery({ queryKey: SITES_KEY, queryFn: () => apiGet<Site[]>("/api/methane/sites") });
+}
+
+export function useCreateSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SiteIn) => apiPost<Site>("/api/methane/sites", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: SITES_KEY }),
+  });
+}
+
+export function usePatchSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: SitePatch }) =>
+      apiPatch<Site>(`/api/methane/sites/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: SITES_KEY }),
+  });
+}
+
+export function useDeleteSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/api/methane/sites/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: SITES_KEY }),
+  });
+}
+
+// ── Scenes ──
+
+export function useSiteScenes(siteId: number | null, start: string, end: string, maxCloud = 80) {
+  return useQuery({
+    queryKey: ["methane", "scenes", siteId, start, end, maxCloud],
+    enabled: siteId != null,
+    queryFn: () => {
+      const q = new URLSearchParams({ start, end, max_cloud: String(maxCloud) });
+      return apiGet<SceneInfo[]>(`/api/methane/sites/${siteId}/scenes?${q.toString()}`);
+    },
+  });
+}
+
+// ── Analyze / screening (jobs) ──
+
+export function submitAnalyze(body: AnalyzeRequest): Promise<JobCreated> {
+  return apiPost<JobCreated>("/api/methane/analyze", body);
+}
+
+export function submitScreening(body: ScreeningRequest): Promise<JobCreated> {
+  return apiPost<JobCreated>("/api/methane/screening", body);
+}
+
+// ── Detections ──
+
+export function useDetections(siteId: number | null) {
+  return useQuery({
+    queryKey: detectionsKey(siteId),
+    queryFn: () => {
+      const q = siteId != null ? `?site_id=${siteId}` : "";
+      return apiGet<Detection[]>(`/api/methane/detections${q}`);
+    },
+  });
+}
+
+export function useDetectionDetail(detId: string | null) {
+  return useQuery({
+    queryKey: ["methane", "detection", detId],
+    enabled: detId != null,
+    queryFn: () => apiGet<DetectionDetail>(`/api/methane/detections/${detId}`),
+  });
+}
+
+export function usePatchDetection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: DetectionPatch }) =>
+      apiPatch<DetectionDetail>(`/api/methane/detections/${id}`, body),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ["methane", "detections"] });
+      void qc.invalidateQueries({ queryKey: ["methane", "detection", vars.id] });
+    },
+  });
+}
+
+export function useDeleteDetection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/methane/detections/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["methane", "detections"] }),
+  });
+}
+
+export function overlayUrl(detId: string, vmax?: number): string {
+  const q = vmax != null ? `?vmax=${vmax}` : "";
+  return `/api/methane/detections/${detId}/overlay.png${q}`;
+}
+
+// ── Validation ──
+
+export function useValidationEvents() {
+  return useQuery({
+    queryKey: EVENTS_KEY,
+    queryFn: () => apiGet<ReferenceEvent[]>("/api/methane/validation/events"),
+  });
+}
+
+export function useImportValidation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, source, fmt }: { file: File; source: string; fmt: "csv" | "geojson" }) => {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("source", source);
+      form.append("fmt", fmt);
+      return apiPostForm<ValidationImport>("/api/methane/validation/import", form);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: EVENTS_KEY }),
+  });
+}
+
+export function useValidateDetection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiPost<Validation>(`/api/methane/detections/${id}/validate`, {}),
+    onSuccess: (_data, id) => qc.invalidateQueries({ queryKey: ["methane", "detection", id] }),
+  });
+}

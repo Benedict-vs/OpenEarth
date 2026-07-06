@@ -115,5 +115,5 @@ def test_fill_to_reflectance_maps_sentinel_to_nan() -> None:
     assert np.isnan(bands["B12"][0, 0])
     assert bands["B11"][1, 1] == pytest.approx(0.2)
     # Reflectances land in the expected physical band.
-    finite = bands["B04"][np.isfinite(bands["B04"])]
+    finite = bands["B4"][np.isfinite(bands["B4"])]
     assert np.all((finite >= 0.0) & (finite < 1.5))

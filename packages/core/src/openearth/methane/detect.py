@@ -59,7 +59,7 @@ class DetectionResult:
     delta_r: NDArray[np.float64]  # MBSP or MBMP fractional signal
     delta_omega: NDArray[np.float64]  # mol/m²
     xch4_ppb: NDArray[np.float64]
-    rgb: NDArray[np.float32]  # (H,W,3) B04/B03/B02 TOA reflectance — UI context
+    rgb: NDArray[np.float32]  # (H,W,3) B4/B3/B2 TOA reflectance — UI context
     plume: PlumeMask
     emission: EmissionEstimate
     wind: WindSample
@@ -185,7 +185,7 @@ def analyze(
     target_chip = fetch_chip(target, bbox)
     grid = target_chip.grid
     rgb = np.stack(
-        [target_chip.bands["B04"], target_chip.bands["B03"], target_chip.bands["B02"]], axis=-1
+        [target_chip.bands["B4"], target_chip.bands["B3"], target_chip.bands["B2"]], axis=-1
     ).astype(np.float32)
 
     # ── Step 4: sample wind (×3) ──
