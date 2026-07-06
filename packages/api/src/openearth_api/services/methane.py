@@ -11,8 +11,11 @@ is its runner.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import math
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -28,18 +31,25 @@ from openearth.methane.detect import analyze
 from openearth.methane.ime import McParams
 from openearth.methane.plume import mask_outline_geojson
 from openearth.methane.scenes import list_scenes
+from openearth.methane.tropomi import screen_region
+from openearth.methane.validation import ReferenceEvent as CoreReferenceEvent
+from openearth.methane.validation import match_detection, parse_events
 from openearth_api.cache import cache_key
-from openearth_api.models import Detection, Site, utcnow_iso
+from openearth_api.models import Detection, ReferenceEvent, Site, utcnow_iso
 from openearth_api.schemas import (
     AnalyzeRequest,
     DetectionDetailOut,
     DetectionOut,
     DetectionPatch,
     JobCreated,
+    ReferenceEventOut,
     SceneInfoOut,
+    ScreeningRequest,
     SiteIn,
     SiteOut,
     SitePatch,
+    ValidationImportOut,
+    ValidationOut,
 )
 from openearth_api.services.methane_render import render_overlay_png
 
@@ -500,3 +510,142 @@ def overlay_png(
     png = render_overlay_png(path, vmin, vmax)
     cache.set(key, png)
     return png
+
+
+# ── S5P screening job ──
+
+
+async def submit_screening(req: ScreeningRequest, jobs: JobManager) -> JobCreated:
+    """Validate the bbox, then submit the ``methane_screening`` job.
+
+    The hotspot list (≤ top_n) fits comfortably in the job's ``result_json``;
+    there is no separate artifact.
+    """
+    bbox = req.roi.to_domain()  # 422 on malformed geometry
+
+    def runner(ctx: JobContext) -> dict[str, Any]:
+        hotspots = screen_region(
+            bbox,
+            req.start,
+            req.end,
+            background_days=req.background_days,
+            cell_deg=req.cell_deg,
+            sigma_thresh=req.sigma_thresh,
+            top_n=req.top_n,
+            on_progress=lambda i, n, label: ctx.progress(i, n, label),
+            cancel=ctx.cancelled,
+        )
+        return {
+            "hotspots": [
+                {
+                    "lat": h.lat,
+                    "lon": h.lon,
+                    "mean_enh_ppb": h.mean_enh_ppb,
+                    "max_enh_ppb": h.max_enh_ppb,
+                    "score": h.score,
+                    "weeks_flagged": h.weeks_flagged,
+                    "weeks_observed": h.weeks_observed,
+                }
+                for h in hotspots
+            ]
+        }
+
+    job_id = await jobs.submit("methane_screening", req.model_dump(mode="json"), runner)
+    return JobCreated(job_id=job_id)
+
+
+# ── Validation: reference-event import + cross-match ──
+
+
+def _count_records(data: bytes, fmt: str) -> int:
+    """Count parseable-shape records so ``skipped = total − imported``."""
+    if fmt == "csv":
+        return sum(1 for _ in csv.DictReader(io.StringIO(data.decode("utf-8-sig"))))
+    doc = json.loads(data.decode("utf-8"))
+    features = doc.get("features", []) if isinstance(doc, dict) else []
+    return sum(1 for f in features if (f.get("geometry") or {}).get("type") == "Point")
+
+
+def import_events(engine: Engine, data: bytes, source: str, fmt: str) -> ValidationImportOut:
+    if fmt not in ("csv", "geojson"):
+        raise HTTPException(422, "fmt must be 'csv' or 'geojson'.")
+    events = parse_events(data, fmt=fmt, source=source)  # type: ignore[arg-type]
+    total = _count_records(data, fmt)
+    now = utcnow_iso()
+    with Session(engine) as session:
+        for event in events:
+            session.add(
+                ReferenceEvent(
+                    source=event.source,
+                    event_time_utc=event.event_time_utc,
+                    lat=event.lat,
+                    lon=event.lon,
+                    q_kg_h=event.q_kg_h,
+                    q_sigma_kg_h=event.q_sigma_kg_h,
+                    raw_json=json.dumps(event.raw, default=str),
+                    imported_at=now,
+                )
+            )
+        session.commit()
+    return ValidationImportOut(imported=len(events), skipped=max(0, total - len(events)))
+
+
+def list_events(engine: Engine) -> list[ReferenceEventOut]:
+    with Session(engine) as session:
+        rows = session.exec(
+            select(ReferenceEvent).order_by(ReferenceEvent.event_time_utc.desc())  # type: ignore[attr-defined]
+        ).all()
+        return [
+            ReferenceEventOut(
+                id=r.id,  # type: ignore[arg-type]
+                source=r.source,
+                event_time_utc=r.event_time_utc,
+                lat=r.lat,
+                lon=r.lon,
+                q_kg_h=r.q_kg_h,
+                q_sigma_kg_h=r.q_sigma_kg_h,
+                imported_at=r.imported_at,
+            )
+            for r in rows
+        ]
+
+
+def _detection_center(row: Detection) -> tuple[float, float]:
+    """(lat, lon) of the detection from its stored overlay bounds (grid corners)."""
+    bounds = json.loads(row.result_json).get("overlay_bounds")
+    if not bounds:
+        raise HTTPException(422, "Detection has no geometry to validate against.")
+    lons = [c[0] for c in bounds]
+    lats = [c[1] for c in bounds]
+    return (sum(lats) / len(lats), sum(lons) / len(lons))
+
+
+def validate_detection(engine: Engine, det_id: str) -> ValidationOut:
+    """Cross-match a detection against all imported reference events; persist the verdict."""
+    with Session(engine) as session:
+        row = _require_detection(session, det_id)
+        det_lat, det_lon = _detection_center(row)
+        det_time = datetime.fromisoformat(row.scene_time_utc)
+        event_rows = session.exec(select(ReferenceEvent)).all()
+        events = [
+            CoreReferenceEvent(
+                source=e.source,
+                event_time_utc=e.event_time_utc,
+                lat=e.lat,
+                lon=e.lon,
+                q_kg_h=e.q_kg_h,
+                q_sigma_kg_h=e.q_sigma_kg_h,
+                raw={},
+            )
+            for e in event_rows
+        ]
+        verdict, matched_idx = match_detection(det_lat, det_lon, det_time, events)
+        matched_ids = [e.id for i, e in enumerate(event_rows) if i in set(matched_idx) and e.id]
+        result = ValidationOut(verdict=verdict, matched_event_ids=matched_ids)  # type: ignore[arg-type]
+        row.validation_json = json.dumps(
+            {"verdict": verdict, "matched_event_ids": matched_ids, "validated_at": utcnow_iso()}
+        )
+        row.updated_at = utcnow_iso()
+        session.add(row)
+        session.commit()
+    return result

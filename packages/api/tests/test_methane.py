@@ -293,3 +293,77 @@ def test_tiles_methane_ref_unlocks_anomaly(
     # Without methane_ref it still 422s.
     del body["methane_ref"]
     assert client.post("/api/tiles", json=body).status_code == 422
+
+
+# ── Screening job (Stage 9) ──
+
+
+def test_screening_job(client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    from openearth.methane.tropomi import Hotspot
+    from openearth_api.services import methane as svc_mod
+
+    app.dependency_overrides[ensure_ee] = lambda: None
+    monkeypatch.setattr(
+        svc_mod,
+        "screen_region",
+        lambda *a, **k: [Hotspot(38.5, 53.9, 40.0, 55.0, 4.2, 3, 3)],
+    )
+    resp = client.post(
+        "/api/methane/screening",
+        json={"roi": KORPEZHE, "start": "2023-06-01", "end": "2023-07-01"},
+    )
+    assert resp.status_code == 200
+    job_id = resp.json()["job_id"]
+    _wait_status(client, job_id, "succeeded")
+    result = client.get(f"/api/jobs/{job_id}").json()["result"]
+    assert result["hotspots"][0]["mean_enh_ppb"] == pytest.approx(40.0)
+    assert result["hotspots"][0]["weeks_flagged"] == 3
+
+
+# ── Validation (Stage 9) ──
+
+
+def test_validation_import_and_cross_match(client: TestClient, analyze_ready: None) -> None:
+    # Import a small CSV of reference events (one near the Korpezhe detection).
+    csv = (
+        b"lat,lon,date,rate\n"
+        b"38.5,53.9,2018-06-19,11.2\n"  # coincident in space+time
+        b"0.0,0.0,2000-01-01,1.0\n"  # far away
+    )
+    imp = client.post(
+        "/api/methane/validation/import",
+        files={"file": ("events.csv", csv, "text/csv")},
+        data={"source": "imeo", "fmt": "csv"},
+    )
+    assert imp.status_code == 200
+    assert imp.json() == {"imported": 2, "skipped": 0}
+
+    events = client.get("/api/methane/validation/events").json()
+    assert len(events) == 2
+
+    # Run an analysis to get a detection near (38.5, 53.9), then validate it.
+    site_id = client.get("/api/methane/sites").json()[0]["id"]
+    job = client.post(
+        "/api/methane/analyze",
+        json={"site_id": site_id, "target_scene_id": "20180619T074619_x", "method": "mbsp"},
+    ).json()
+    _wait_status(client, job["job_id"], "succeeded")
+    det_id = client.get(f"/api/jobs/{job['job_id']}").json()["result"]["detection_id"]
+
+    verdict = client.post(f"/api/methane/detections/{det_id}/validate").json()
+    assert verdict["verdict"] == "confirmed"
+    assert len(verdict["matched_event_ids"]) == 1
+
+    # The verdict is persisted on the detection detail.
+    detail = client.get(f"/api/methane/detections/{det_id}").json()
+    assert detail["validation"]["verdict"] == "confirmed"
+
+
+def test_validation_import_counts_skipped(client: TestClient) -> None:
+    csv = b"lat,lon,date,rate\n38.5,53.9,2018-06-19,10\n,53.9,2018-06-19,10\n"
+    imp = client.post(
+        "/api/methane/validation/import",
+        files={"file": ("e.csv", csv, "text/csv")},
+        data={"source": "manual", "fmt": "csv"},
+    )
+    assert imp.json() == {"imported": 1, "skipped": 1}

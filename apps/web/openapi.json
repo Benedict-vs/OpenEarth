@@ -207,6 +207,34 @@
         "title": "BBoxIn",
         "type": "object"
       },
+      "Body_import_validation_api_methane_validation_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "fmt": {
+            "enum": [
+              "csv",
+              "geojson"
+            ],
+            "title": "Fmt",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "source",
+          "fmt"
+        ],
+        "title": "Body_import_validation_api_methane_validation_import_post",
+        "type": "object"
+      },
       "CacheStatsOut": {
         "properties": {
           "count": {
@@ -1299,6 +1327,68 @@
         "title": "ProductOut",
         "type": "object"
       },
+      "ReferenceEventOut": {
+        "properties": {
+          "event_time_utc": {
+            "title": "Event Time Utc",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "imported_at": {
+            "title": "Imported At",
+            "type": "string"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number"
+          },
+          "q_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Kg H"
+          },
+          "q_sigma_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Sigma Kg H"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "event_time_utc",
+          "lat",
+          "lon",
+          "q_kg_h",
+          "q_sigma_kg_h",
+          "imported_at"
+        ],
+        "title": "ReferenceEventOut",
+        "type": "object"
+      },
       "RoiPresetOut": {
         "properties": {
           "bbox": {
@@ -1468,6 +1558,58 @@
           "dates"
         ],
         "title": "ScenesRequest",
+        "type": "object"
+      },
+      "ScreeningRequest": {
+        "description": "S5P Tier-1 screening over a bbox. ``top_n`` hotspots fit the job result.",
+        "properties": {
+          "background_days": {
+            "default": 30,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Background Days",
+            "type": "integer"
+          },
+          "cell_deg": {
+            "default": 0.05,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Cell Deg",
+            "type": "number"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "roi": {
+            "$ref": "#/components/schemas/BBoxIn"
+          },
+          "sigma_thresh": {
+            "default": 2.0,
+            "minimum": 0.0,
+            "title": "Sigma Thresh",
+            "type": "number"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "top_n": {
+            "default": 50,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Top N",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "roi",
+          "start",
+          "end"
+        ],
+        "title": "ScreeningRequest",
         "type": "object"
       },
       "SiteIn": {
@@ -2064,6 +2206,51 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "ValidationImportOut": {
+        "properties": {
+          "imported": {
+            "title": "Imported",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "imported",
+          "skipped"
+        ],
+        "title": "ValidationImportOut",
+        "type": "object"
+      },
+      "ValidationOut": {
+        "properties": {
+          "matched_event_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Matched Event Ids",
+            "type": "array"
+          },
+          "verdict": {
+            "enum": [
+              "confirmed",
+              "plausible",
+              "unvalidated",
+              "contradicted"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verdict",
+          "matched_event_ids"
+        ],
+        "title": "ValidationOut",
         "type": "object"
       },
       "VizOverrides": {
@@ -3389,6 +3576,89 @@
         ]
       }
     },
+    "/api/methane/detections/{det_id}/validate": {
+      "post": {
+        "operationId": "validate_detection_api_methane_detections__det_id__validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "det_id",
+            "required": true,
+            "schema": {
+              "title": "Det Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Detection",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/screening": {
+      "post": {
+        "operationId": "submit_screening_api_methane_screening_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreeningRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Screening",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
     "/api/methane/sites": {
       "get": {
         "operationId": "list_sites_api_methane_sites_get",
@@ -3609,6 +3879,72 @@
           }
         },
         "summary": "List Site Scenes",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/validation/events": {
+      "get": {
+        "operationId": "list_validation_events_api_methane_validation_events_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReferenceEventOut"
+                  },
+                  "title": "Response List Validation Events Api Methane Validation Events Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Validation Events",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/validation/import": {
+      "post": {
+        "operationId": "import_validation_api_methane_validation_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_validation_api_methane_validation_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationImportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Validation",
         "tags": [
           "methane"
         ]

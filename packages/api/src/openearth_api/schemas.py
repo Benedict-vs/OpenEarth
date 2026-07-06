@@ -454,6 +454,49 @@ class DetectionCreated(BaseModel):
     detection_id: str
 
 
+class ScreeningRequest(BaseModel):
+    """S5P Tier-1 screening over a bbox. ``top_n`` hotspots fit the job result."""
+
+    roi: BBoxIn
+    start: date
+    end: date
+    background_days: int = Field(default=30, ge=1, le=365)
+    cell_deg: float = Field(default=0.05, gt=0.0, le=1.0)
+    sigma_thresh: float = Field(default=2.0, ge=0.0)
+    top_n: int = Field(default=50, ge=1, le=500)
+
+
+class HotspotOut(BaseModel):
+    lat: float
+    lon: float
+    mean_enh_ppb: float
+    max_enh_ppb: float
+    score: float
+    weeks_flagged: int
+    weeks_observed: int
+
+
+class ReferenceEventOut(BaseModel):
+    id: int
+    source: str
+    event_time_utc: str
+    lat: float
+    lon: float
+    q_kg_h: float | None
+    q_sigma_kg_h: float | None
+    imported_at: str
+
+
+class ValidationImportOut(BaseModel):
+    imported: int
+    skipped: int
+
+
+class ValidationOut(BaseModel):
+    verdict: Literal["confirmed", "plausible", "unvalidated", "contradicted"]
+    matched_event_ids: list[int]
+
+
 # ── Meta ─────────────────────────────────────────────────────
 
 

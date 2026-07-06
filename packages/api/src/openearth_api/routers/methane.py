@@ -7,10 +7,10 @@ download only read the DB/disk/cache and stay EE-free.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import diskcache
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 
 from openearth.settings import Settings
@@ -22,10 +22,14 @@ from openearth_api.schemas import (
     DetectionOut,
     DetectionPatch,
     JobCreated,
+    ReferenceEventOut,
     SceneInfoOut,
+    ScreeningRequest,
     SiteIn,
     SiteOut,
     SitePatch,
+    ValidationImportOut,
+    ValidationOut,
 )
 from openearth_api.services import methane as svc
 
@@ -142,3 +146,35 @@ def detection_array(det_id: str, engine: EngineDep, settings: SettingsDep) -> Fi
     return FileResponse(
         path, media_type="application/octet-stream", filename=f"detection_{det_id}.npz"
     )
+
+
+# ── Screening ──
+
+
+@router.post("/methane/screening", dependencies=[Depends(ensure_ee)])
+async def submit_screening(body: ScreeningRequest, jobs: JobsDep) -> JobCreated:
+    return await svc.submit_screening(body, jobs)
+
+
+# ── Validation ──
+
+
+@router.post("/methane/validation/import")
+async def import_validation(
+    engine: EngineDep,
+    file: Annotated[UploadFile, File()],
+    source: Annotated[str, Form()],
+    fmt: Annotated[Literal["csv", "geojson"], Form()],
+) -> ValidationImportOut:
+    data = await file.read()
+    return svc.import_events(engine, data, source, fmt)
+
+
+@router.get("/methane/validation/events")
+def list_validation_events(engine: EngineDep) -> list[ReferenceEventOut]:
+    return svc.list_events(engine)
+
+
+@router.post("/methane/detections/{det_id}/validate")
+def validate_detection(det_id: str, engine: EngineDep) -> ValidationOut:
+    return svc.validate_detection(engine, det_id)

@@ -348,6 +348,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/methane/detections/{det_id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Detection */
+        post: operations["validate_detection_api_methane_detections__det_id__validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/methane/screening": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Screening */
+        post: operations["submit_screening_api_methane_screening_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/methane/sites": {
         parameters: {
             query?: never;
@@ -395,6 +429,40 @@ export interface paths {
         get: operations["list_site_scenes_api_methane_sites__site_id__scenes_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/methane/validation/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Validation Events */
+        get: operations["list_validation_events_api_methane_validation_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/methane/validation/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Validation */
+        post: operations["import_validation_api_methane_validation_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -655,6 +723,18 @@ export interface components {
             south: number;
             /** West */
             west: number;
+        };
+        /** Body_import_validation_api_methane_validation_import_post */
+        Body_import_validation_api_methane_validation_import_post: {
+            /** File */
+            file: string;
+            /**
+             * Fmt
+             * @enum {string}
+             */
+            fmt: "csv" | "geojson";
+            /** Source */
+            source: string;
         };
         /** CacheStatsOut */
         CacheStatsOut: {
@@ -1015,6 +1095,25 @@ export interface components {
             /** Vis Min */
             vis_min: number;
         };
+        /** ReferenceEventOut */
+        ReferenceEventOut: {
+            /** Event Time Utc */
+            event_time_utc: string;
+            /** Id */
+            id: number;
+            /** Imported At */
+            imported_at: string;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Q Kg H */
+            q_kg_h: number | null;
+            /** Q Sigma Kg H */
+            q_sigma_kg_h: number | null;
+            /** Source */
+            source: string;
+        };
         /** RoiPresetOut */
         RoiPresetOut: {
             bbox: components["schemas"]["BBoxIn"];
@@ -1078,6 +1177,43 @@ export interface components {
             product: string;
             /** Roi */
             roi?: (components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"]) | null;
+        };
+        /**
+         * ScreeningRequest
+         * @description S5P Tier-1 screening over a bbox. ``top_n`` hotspots fit the job result.
+         */
+        ScreeningRequest: {
+            /**
+             * Background Days
+             * @default 30
+             */
+            background_days: number;
+            /**
+             * Cell Deg
+             * @default 0.05
+             */
+            cell_deg: number;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            roi: components["schemas"]["BBoxIn"];
+            /**
+             * Sigma Thresh
+             * @default 2
+             */
+            sigma_thresh: number;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * Top N
+             * @default 50
+             */
+            top_n: number;
         };
         /** SiteIn */
         SiteIn: {
@@ -1253,6 +1389,23 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** ValidationImportOut */
+        ValidationImportOut: {
+            /** Imported */
+            imported: number;
+            /** Skipped */
+            skipped: number;
+        };
+        /** ValidationOut */
+        ValidationOut: {
+            /** Matched Event Ids */
+            matched_event_ids: number[];
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "confirmed" | "plausible" | "unvalidated" | "contradicted";
         };
         /** VizOverrides */
         VizOverrides: {
@@ -2128,6 +2281,70 @@ export interface operations {
             };
         };
     };
+    validate_detection_api_methane_detections__det_id__validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                det_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_screening_api_methane_screening_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScreeningRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_sites_api_methane_sites_get: {
         parameters: {
             query?: never;
@@ -2267,6 +2484,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SceneInfoOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_validation_events_api_methane_validation_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferenceEventOut"][];
+                };
+            };
+        };
+    };
+    import_validation_api_methane_validation_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_validation_api_methane_validation_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationImportOut"];
                 };
             };
             /** @description Validation Error */
