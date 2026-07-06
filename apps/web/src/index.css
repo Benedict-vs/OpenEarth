@@ -1448,3 +1448,84 @@ button.ghost {
   background: var(--panel-2);
   color: var(--muted);
 }
+
+/* ── Compare view ─────────────────────────────────────────── */
+.compare-view {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+.compare-maps {
+  position: absolute;
+  inset: 0;
+}
+.compare-map {
+  position: absolute;
+  inset: 0;
+}
+.maplibregl-compare {
+  background-color: var(--accent);
+}
+.maplibregl-compare .compare-swiper-vertical,
+.maplibregl-compare .compare-swiper-horizontal {
+  background-color: var(--accent);
+}
+.compare-controls {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  background: rgba(13, 17, 23, 0.92);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(720px, 92vw);
+}
+.compare-controls-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.compare-linked,
+.compare-independent {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.compare-independent {
+  gap: 20px;
+}
+.compare-side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.compare-side-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.compare-layer-picker {
+  display: flex;
+  gap: 6px;
+}
+.compare-dates {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.compare-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
