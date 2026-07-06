@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Generate the committed CH4 absorption LUT (``ch4_lut_v1.npz``).
+"""Generate the committed CH4 absorption LUT (``ch4_lut_v2.npz``).
 
 Run manually, once, with network access:
 
@@ -48,13 +48,19 @@ CH4_ISO_GLOBAL_IDS = [32, 33, 34, 35]
 BAND_NU_RANGES = {"B11": (5896.0, 6547.0), "B12": (4260.0, 4862.0)}
 
 WAVENUMBER_STEP = 0.005  # cm⁻¹
-TEMPERATURE_K = 288.15
-PRESSURE_ATM = 1.0
+# Curtis–Godson effective conditions for a well-mixed vertical column, replacing
+# the v1 single-layer surface values (T = 288.15 K, p = 1 atm). A surface line
+# shape over-broadens the Voigt cores and, with partially saturated lines,
+# inflates the band-averaged absorption. The absorber-weighted mean pressure of
+# a well-mixed column is ∫p dp / ∫dp = P0/2 ≈ 0.51 atm; T is the mass-weighted
+# tropospheric mean of the US Standard Atmosphere (~255 K).
+TEMPERATURE_K = 255.0
+PRESSURE_ATM = 0.51
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRF_CSV = REPO_ROOT / "scripts" / "data" / "s2_srf_b11_b12.csv"
 LUT_OUT = (
-    REPO_ROOT / "packages" / "core" / "src" / "openearth" / "methane" / "data" / "ch4_lut_v1.npz"
+    REPO_ROOT / "packages" / "core" / "src" / "openearth" / "methane" / "data" / "ch4_lut_v2.npz"
 )
 
 # The ΔΩ × AMF grid the runtime interpolates over.
@@ -242,6 +248,12 @@ def main() -> None:
         ),
         "temperature_k": TEMPERATURE_K,
         "pressure_atm": PRESSURE_ATM,
+        "effective_conditions": (
+            "curtis_godson: absorber-weighted mean pressure P0/2 ≈ 0.51 atm and "
+            "mass-weighted tropospheric mean T ≈ 255 K (US Standard Atmosphere) for a "
+            "well-mixed column, replacing the v1 single-layer surface values "
+            "(288.15 K, 1 atm) that over-broadened the Voigt lines"
+        ),
         "wavenumber_step_cm_inv": WAVENUMBER_STEP,
         "band_nu_ranges_cm_inv": BAND_NU_RANGES,
         "omega_background_mol_m2": OMEGA_CH4_BACKGROUND_MOL_M2,
@@ -255,7 +267,7 @@ def main() -> None:
         amf=AMF_GRID,
         m_s2a=grids["s2a"],
         m_s2b=grids["s2b"],
-        version="1",
+        version="2",
         provenance=json.dumps(provenance),
     )
     print(f"Wrote {args.out} ({args.out.stat().st_size / 1024:.0f} KiB)")

@@ -1,7 +1,7 @@
 """Load the committed CH4 absorption LUT and convert MBSP/MBMP fractional
 signal ΔR to a methane column enhancement ΔΩ (and ΔXCH4).
 
-The LUT (``methane/data/ch4_lut_v1.npz``) is generated offline by
+The LUT (``methane/data/ch4_lut_v2.npz``) is generated offline by
 ``scripts/generate_ch4_lut.py`` (HITRAN + Sentinel-2 SRFs) and shipped inside
 the package; nothing here touches Earth Engine or HAPI. This module is pure
 NumPy and passes mypy strict with no exemptions.
@@ -27,7 +27,7 @@ from numpy.typing import NDArray
 from openearth.methane.constants import OMEGA_AIR_MOL_M2
 
 _METHANE_PACKAGE = "openearth.methane"
-_LUT_FILENAME = "ch4_lut_v1.npz"
+_LUT_FILENAME = "ch4_lut_v2.npz"
 
 # Map the compact npz array keys to full SPACECRAFT_NAME values used everywhere
 # else (S2Scene.spacecraft, retrieval, the API).
@@ -63,7 +63,7 @@ def _load_lut_cached(path_str: str) -> CH4Lut:
 
 
 def load_lut(path: Path | None = None) -> CH4Lut:
-    """Load the CH4 LUT (cached). *path* defaults to the packaged ``ch4_lut_v1.npz``."""
+    """Load the CH4 LUT (cached). *path* defaults to the packaged ``ch4_lut_v2.npz``."""
     resolved = path if path is not None else _packaged_lut_path()
     return _load_lut_cached(str(resolved))
 

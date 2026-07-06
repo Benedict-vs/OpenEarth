@@ -46,14 +46,17 @@ retrieval literature.
 ## 2. Column conversion — the CH4 absorption LUT
 
 The fractional signal ΔR is mapped to a methane **column enhancement** ΔΩ (mol/m²) through a
-precomputed lookup table, `methane/data/ch4_lut_v1.npz`.
+precomputed lookup table, `methane/data/ch4_lut_v2.npz`.
 
 **Physics (`scripts/generate_ch4_lut.py`, run once with network):** Beer–Lambert band
 transmittance, no scattering.
 
-- CH4 absorption cross sections σ(ν) from **HITRAN** via HAPI `absorptionCoefficient_Voigt`
-  (main isotopologues, T = 288.15 K, p = 1 atm), on 0.005 cm⁻¹ grids spanning B11
-  (≈ 5946–6497 cm⁻¹) and B12 (≈ 4310–4812 cm⁻¹) ± 50 cm⁻¹.
+- CH4 absorption cross sections σ(ν) from **HITRAN** via HAPI `absorptionCoefficient_Voigt`,
+  on 0.005 cm⁻¹ grids spanning B11 (≈ 5946–6497 cm⁻¹) and B12 (≈ 4310–4812 cm⁻¹) ± 50 cm⁻¹.
+  The Voigt lines are evaluated at **Curtis–Godson effective conditions** for a well-mixed
+  column — `p = 0.51 atm` (the absorber-weighted mean pressure `∫p dp / ∫dp = P₀/2`) and
+  `T = 255 K` (the mass-weighted tropospheric mean of the US Standard Atmosphere) — rather than
+  single-layer surface values, which over-broaden the line cores (see the anchor note).
 - Slant optical depth `τ(ν; ΔΩ, AMF) = (Ω₀ + ΔΩ) · AMF · N_A · 1e−4 · σ(ν)`, with the
   background column `Ω₀ = 0.65 mol/m²` (1875 ppb) and `AMF = 1/cos θ_sun + 1/cos θ_view`.
 - SRF-weighted band transmittance `T_b = ∫ SRF_b · e^{−τ} dν / ∫ SRF_b dν`, using the ESA
@@ -69,10 +72,15 @@ The LUT tabulates `m_MBSP` over ΔΩ ∈ [−0.5, 2.0] (251 points) × AMF ∈ [
 ppb is `ΔΩ / Ω_air · 1e9` with the dry-air column `Ω_air = 3.567e5 mol/m²`.
 
 **Anchor (verified in `test_varon_anchor`):** at AMF = 1/cos 40° + 1 ≈ 2.305 and a doubled
-background (ΔΩ = 0.65 mol/m²), the LUT gives `m_MBSP ≈ −0.037` (S2A) / `−0.028` (S2B), within
-±30 % of Varon's published −0.029 / −0.022 (our model omits scattering, other gases, and
-radiance weighting), and with the correct S2A/S2B ordering (`|m_S2A| > |m_S2B|`, ratio 1.33 vs
-the published 1.32).
+background (ΔΩ = 0.65 mol/m²), the LUT gives `m_MBSP ≈ −0.031` (S2A) / `−0.024` (S2B), within
+~9 % of Varon's published −0.029 / −0.022 and with the correct S2A/S2B ordering
+(`|m_S2A| > |m_S2B|`, ratio 1.33 vs the published 1.32). The earlier single-layer LUT (v1, at
+surface T = 288.15 K, p = 1 atm) gave `−0.037` / `−0.028` — biased ~25 % high because at
+surface pressure the Voigt lines are over-broadened, and with the partially saturated line
+cores that inflates the band-averaged absorption. Evaluating the cross sections at
+Curtis–Godson effective column conditions (T = 255 K, p = 0.51 atm) removes most of that bias;
+the small residual reflects the forward model's remaining simplifications (Beer–Lambert only —
+no multiple scattering or interfering gases).
 
 **MBMP inversion** is per-pass: `ΔΩ_MBMP = invert(ΔR_target; AMF_t, sat_t) −
 invert(ΔR_ref; AMF_r, sat_r)`. Inverting each pass with its own AMF and spacecraft (then
@@ -160,18 +168,31 @@ is a human PATCH only).
   the retrieval noise.
 - **ERA5 vs local wind** — reanalysis 10 m wind is coarse (~11 km, hourly); U_eff error
   dominates the budget for slow, well-defined plumes.
-- **LUT physics** — Beer–Lambert only (no multiple scattering, aerosols, or interfering gases);
-  the ±30 % anchor agreement reflects this.
+- **LUT physics** — Beer–Lambert only (no multiple scattering, aerosols, or interfering gases),
+  with the vertical column collapsed to Curtis–Godson effective conditions rather than a
+  layered profile; the ~9 % anchor agreement reflects these simplifications.
 
 ## 8. Reproduction results (Phase 3 exit gate)
 
 `OPENEARTH_EE_TESTS=1 uv run python scripts/validate_events.py` reproduces two documented
-super-emitter events against live Earth Engine (values verified against Varon et al. 2021):
+super-emitter events against live Earth Engine (values verified against Varon et al. 2021),
+using the v2 (Curtis–Godson) LUT:
 
 | Event | Method | Published | Ours | Verdict |
 |---|---|---|---|---|
-| Korpezhe, Turkmenistan, 2018-06-19 | MBMP (ref 2018-06-24) | 11.2 ± 5.2 t/h | 9.6 ± 5.4 t/h | ✅ within ±50 %, σ overlaps |
-| Hassi Messaoud blowout (Nov 2019 – Jan 2020) | MBSP, mean of 3 scenes | mean 9.3 ± 5.5 t/h | 8.3 t/h (6.0, 13.1, 5.7) | ✅ within ±50 % |
+| Korpezhe, Turkmenistan, 2018-06-19 | MBMP (ref 2018-06-24) | 11.2 ± 5.2 t/h | 5.4 ± 2.1 t/h | ⚠ point estimate below the ±50 % window, σ overlaps |
+| Hassi Messaoud blowout (Nov 2019 – Jan 2020) | MBSP, mean of 3 scenes | mean 9.3 ± 5.5 t/h | 9.3 t/h (8.3, 13.9, 5.8) | ✅ within ±50 %, near-exact |
 
 Korpezhe's reference is pinned (its auto pick is the unusable same overpass); Hassi Messaoud is
 a continuous blowout, so single-scene MBSP at the well is averaged over three cloud-free scenes.
+
+**Note on the v2 LUT and Korpezhe.** The v2 LUT anchors ~3× closer to Varon's published
+fractional signal (~8 % vs ~26 %) and makes the Hassi Messaoud mean near-exact, but it moves
+Korpezhe's MBMP point estimate from 9.6 → 5.4 t/h, just below the strict ±50 % window. The cause
+is a masking sensitivity, not a bias: the shallower v2 inversion amplifies the off-plume ΔΩ
+variance faster than the coherent plume edges, so Korpezhe's robust-σ threshold drops ~38 low-
+enhancement edge pixels (mask 50 → 12 px; per-pixel ΔΩ actually *rises*). Korpezhe is exactly the
+fragile case flagged in §7 — an intermittent source imaged against a different-date reference —
+and its σ band (5.4 ± 2.1) still overlaps the published 11.2 ± 5.2. We keep the physically
+better, anchor-validated v2 LUT and report Korpezhe as **MARGINAL** rather than tuning the mask
+to force a clean pass.

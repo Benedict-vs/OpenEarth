@@ -24,7 +24,7 @@ def lut() -> conversion.CH4Lut:
 
 
 def test_lut_structure(lut: conversion.CH4Lut) -> None:
-    assert lut.version == "1"
+    assert lut.version == "2"
     assert lut.delta_omega.shape == (251,)
     assert lut.amf.shape == (9,)
     for name in ("Sentinel-2A", "Sentinel-2B"):
@@ -42,6 +42,10 @@ def test_provenance_parses(lut: conversion.CH4Lut) -> None:
     assert "hitran_fetch_date" in prov
     assert prov["omega_background_mol_m2"] == pytest.approx(OMEGA_CH4_BACKGROUND_MOL_M2)
     assert prov["hitran_isotopologue_global_ids"]
+    # v2 evaluates cross sections at Curtis–Godson effective column conditions.
+    assert prov["temperature_k"] == pytest.approx(255.0)
+    assert prov["pressure_atm"] == pytest.approx(0.51)
+    assert "curtis_godson" in prov["effective_conditions"]
 
 
 def test_load_lut_is_cached(lut: conversion.CH4Lut) -> None:
@@ -85,8 +89,11 @@ def test_varon_anchor(lut: conversion.CH4Lut) -> None:
 
     m_a = m_mbsp("Sentinel-2A")
     m_b = m_mbsp("Sentinel-2B")
-    assert m_a == pytest.approx(-0.029, rel=0.30)
-    assert m_b == pytest.approx(-0.022, rel=0.30)
+    # v2 (Curtis–Godson effective T/p) lands within ~9 % of Varon; the tolerance
+    # is tight enough to catch a regression to the surface-condition v1 LUT
+    # (which was ~26 % high and would fail here).
+    assert m_a == pytest.approx(-0.029, rel=0.15)
+    assert m_b == pytest.approx(-0.022, rel=0.15)
     assert abs(m_a) > abs(m_b)
 
 

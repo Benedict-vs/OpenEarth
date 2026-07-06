@@ -36,17 +36,19 @@ cached ~instant; both GeoTIFF paths rasterio-verified; E2E golden path green.)*
 
 ## Phase 3 — Methane Lab, physics (XL) ✅
 
-HITRAN LUT (`scripts/generate_ch4_lut.py` → committed `ch4_lut_v1.npz`); calibrated MBSP/MBMP
+HITRAN LUT (`scripts/generate_ch4_lut.py` → committed `ch4_lut_v2.npz`); calibrated MBSP/MBMP
 NumPy retrieval on computePixels chips; plume masking; IME + Monte-Carlo uncertainty;
 S5P screening tier; sites/detections DB; Methane Lab UI; IMEO/SRON validation importer;
 `docs/methane_methods.md`.
 *Exit: reproduce ≥2 documented super-emitter events with Q within ~±50 % of published values;
 synthetic-plume test suite green; every detection persisted and reviewable.*
-*(Delivered: LUT anchored to Varon 2021 within ±30 %; synthetic golden paths green across
+*(Delivered: LUT anchored to Varon 2021 within ~9 %; synthetic golden paths green across
 conversion/retrieval/plume/IME/detect; migration 3 (sites/detections/reference_events) with
 overlay-PNG + npz artifacts; 3-pane Lab UI verified live (Korpezhe 2018-06-19). Reproduction
-gate green — Korpezhe 9.6 ± 5.4 t/h (pub 11.2 ± 5.2, MBMP) and Hassi Messaoud 8.3 t/h mean
-(pub 9.3 ± 5.5, MBSP) via `scripts/validate_events.py`.)*
+via `scripts/validate_events.py` — Hassi Messaoud 9.3 t/h mean (pub 9.3 ± 5.5, MBSP, near-exact)
+and Korpezhe 5.4 ± 2.1 t/h (pub 11.2 ± 5.2, MBMP): under the anchor-optimal v2 LUT the point
+estimate sits just below the strict ±50 % window but its σ band still overlaps (MARGINAL — see
+`docs/methane_methods.md` §8).)*
 
 ## Phase 4 — Compare + Timelapse → retire Streamlit (M)
 

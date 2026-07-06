@@ -26,7 +26,8 @@ if TYPE_CHECKING:
     from openearth.settings import Settings
 
 # Bump when cached artifact semantics change (rendering math, defaults, …).
-ALGO_VERSION = 1
+# 2: CH4 LUT v2 (Curtis–Godson effective T/p) changed methane ΔΩ/ΔXCH4 outputs.
+ALGO_VERSION = 2
 
 # Open-ended date ranges keep collecting new scenes upstream; closed
 # historical ranges are immutable.
