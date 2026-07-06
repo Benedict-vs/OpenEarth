@@ -1,6 +1,6 @@
 """Overpass-matched ERA5 wind sampling with explicit direction conventions.
 
-Fixes two v1 defects (``legacy/src/openearth/providers/gee_era5.py``):
+Fixes two defects in the retired v1 ERA5 provider:
 
 1. **Direction convention.** v1 computed ``atan2(u, v)`` and labeled it
    "meteorological direction". ``atan2(u, v)`` is the azimuth the wind blows

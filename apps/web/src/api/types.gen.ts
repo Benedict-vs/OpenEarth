@@ -537,6 +537,76 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/timelapse": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Renders */
+    get: operations["list_renders_api_timelapse_get"];
+    put?: never;
+    /** Submit Timelapse */
+    post: operations["submit_timelapse_api_timelapse_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/timelapse/{render_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Render */
+    get: operations["get_render_api_timelapse__render_id__get"];
+    put?: never;
+    post?: never;
+    /** Delete Render */
+    delete: operations["delete_render_api_timelapse__render_id__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/timelapse/{render_id}/download": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Download Movie */
+    get: operations["download_movie_api_timelapse__render_id__download_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/timelapse/{render_id}/frames/{index}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Frame */
+    get: operations["get_frame_api_timelapse__render_id__frames__index__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/timeseries": {
     parameters: {
       query?: never;
@@ -686,6 +756,26 @@ export interface components {
       source_lonlat?: [number, number] | null;
       /** Target Scene Id */
       target_scene_id: string;
+    };
+    /** AnnotationsIn */
+    AnnotationsIn: {
+      /** Attribution */
+      attribution?: string | null;
+      /**
+       * Colorbar
+       * @default true
+       */
+      colorbar: boolean;
+      /**
+       * Date Label
+       * @default true
+       */
+      date_label: boolean;
+      /**
+       * Scale Bar
+       * @default true
+       */
+      scale_bar: boolean;
     };
     /** AoiIn */
     AoiIn: {
@@ -1108,6 +1198,84 @@ export interface components {
       /** Source */
       source: string;
     };
+    /**
+     * RenderDetailOut
+     * @description A render row plus its parsed ``manifest.json`` (``None`` until finished).
+     */
+    RenderDetailOut: {
+      /** Created At */
+      created_at: string;
+      /** Dataset */
+      dataset: string;
+      /**
+       * Format
+       * @enum {string}
+       */
+      format: "mp4" | "gif" | "webm";
+      /** Fps */
+      fps: number;
+      /** Frame Count */
+      frame_count: number | null;
+      /** Id */
+      id: string;
+      /** Manifest */
+      manifest: {
+        [key: string]: unknown;
+      } | null;
+      /** Movie Bytes */
+      movie_bytes: number | null;
+      /** Params */
+      params: {
+        [key: string]: unknown;
+      };
+      /** Product */
+      product: string;
+      /** Roi */
+      roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "running" | "succeeded" | "failed" | "cancelled";
+      /** Title */
+      title: string;
+      /** Updated At */
+      updated_at: string;
+    };
+    /**
+     * RenderOut
+     * @description Gallery row: SQL-only, no manifest parse.
+     */
+    RenderOut: {
+      /** Created At */
+      created_at: string;
+      /** Dataset */
+      dataset: string;
+      /**
+       * Format
+       * @enum {string}
+       */
+      format: "mp4" | "gif" | "webm";
+      /** Fps */
+      fps: number;
+      /** Frame Count */
+      frame_count: number | null;
+      /** Id */
+      id: string;
+      /** Movie Bytes */
+      movie_bytes: number | null;
+      /** Product */
+      product: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "running" | "succeeded" | "failed" | "cancelled";
+      /** Title */
+      title: string;
+      /** Updated At */
+      updated_at: string;
+    };
     /** RoiPresetOut */
     RoiPresetOut: {
       bbox: components["schemas"]["BBoxIn"];
@@ -1249,8 +1417,32 @@ export interface components {
       /** Notes */
       notes?: string | null;
     };
+    /**
+     * StepIn
+     * @description How the date range is sliced into frames (mirrors core ``frame_windows``).
+     */
+    StepIn: {
+      /**
+       * Interval Days
+       * @default 16
+       */
+      interval_days: number;
+      /**
+       * Mode
+       * @default interval
+       * @enum {string}
+       */
+      mode: "interval" | "monthly" | "quarterly";
+      /** Window Days */
+      window_days?: number | null;
+    };
     /** ThumbnailRequest */
     ThumbnailRequest: {
+      /**
+       * Auto Range
+       * @default false
+       */
+      auto_range: boolean;
       /**
        * Composite
        * @default mean
@@ -1302,6 +1494,11 @@ export interface components {
      */
     TilesRequest: {
       /**
+       * Auto Range
+       * @default false
+       */
+      auto_range: boolean;
+      /**
        * Composite
        * @default mean
        * @enum {string}
@@ -1325,6 +1522,50 @@ export interface components {
       /** Timestamp Ms */
       timestamp_ms?: number | null;
       viz_overrides?: components["schemas"]["VizOverrides"] | null;
+    };
+    /** TimelapseCreated */
+    TimelapseCreated: {
+      /** Job Id */
+      job_id: string;
+      /** Render Id */
+      render_id: string;
+    };
+    /**
+     * TimelapseRequest
+     * @description A timelapse render request. ``roi`` is required — no global timelapse.
+     */
+    TimelapseRequest: {
+      annotations?: components["schemas"]["AnnotationsIn"];
+      /** Dataset */
+      dataset: string;
+      dates: components["schemas"]["DateRangeIn"];
+      /**
+       * Format
+       * @default mp4
+       * @enum {string}
+       */
+      format: "mp4" | "gif" | "webm";
+      /**
+       * Fps
+       * @default 6
+       */
+      fps: number;
+      /**
+       * Max Dim
+       * @default 1080
+       */
+      max_dim: number;
+      /** Product */
+      product: string;
+      /** Roi */
+      roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+      step?: components["schemas"]["StepIn"];
+      /** Title */
+      title?: string | null;
+      /** Vis Max */
+      vis_max?: number | null;
+      /** Vis Min */
+      vis_min?: number | null;
     };
     /** TimeseriesPoint */
     TimeseriesPoint: {
@@ -2647,6 +2888,186 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["TileResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_renders_api_timelapse_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RenderOut"][];
+        };
+      };
+    };
+  };
+  submit_timelapse_api_timelapse_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TimelapseRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TimelapseCreated"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_render_api_timelapse__render_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        render_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RenderDetailOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_render_api_timelapse__render_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        render_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  download_movie_api_timelapse__render_id__download_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        render_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+          "image/gif": unknown;
+          "video/mp4": unknown;
+          "video/webm": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_frame_api_timelapse__render_id__frames__index__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        render_id: string;
+        index: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+          "image/png": unknown;
         };
       };
       /** @description Validation Error */

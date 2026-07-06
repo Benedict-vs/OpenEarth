@@ -108,6 +108,10 @@ class TilesRequest(BaseModel):
     half_window_days: int = Field(default=3, ge=0, le=30)
     timestamp_ms: int | None = None
     viz_overrides: VizOverrides | None = None
+    # Data-adaptive vis range: compute the scale from the composite's own
+    # percentiles (``compute_vis_range``) instead of the catalog default. Ignored
+    # for RGB products and when an explicit ``viz_overrides`` range is supplied.
+    auto_range: bool = False
     # Reference window that unlocks the CH4_ANOMALY quicklook (a builder product
     # that 422s without it): the target is the composite's ``target_date``.
     methane_ref: DateRangeIn | None = None
@@ -495,6 +499,70 @@ class ValidationImportOut(BaseModel):
 class ValidationOut(BaseModel):
     verdict: Literal["confirmed", "plausible", "unvalidated", "contradicted"]
     matched_event_ids: list[int]
+
+
+# ── Timelapse ────────────────────────────────────────────────
+
+
+class StepIn(BaseModel):
+    """How the date range is sliced into frames (mirrors core ``frame_windows``)."""
+
+    mode: Literal["interval", "monthly", "quarterly"] = "interval"
+    interval_days: int = Field(default=16, ge=1, le=366)
+    window_days: int | None = Field(default=None, ge=1, le=366)
+
+
+class AnnotationsIn(BaseModel):
+    date_label: bool = True
+    colorbar: bool = True
+    scale_bar: bool = True
+    attribution: str | None = None
+
+
+class TimelapseRequest(BaseModel):
+    """A timelapse render request. ``roi`` is required — no global timelapse."""
+
+    title: str | None = Field(default=None, max_length=200)
+    dataset: str
+    product: str
+    roi: RoiIn
+    dates: DateRangeIn
+    step: StepIn = Field(default_factory=StepIn)
+    fps: int = Field(default=6, ge=1, le=30)
+    format: Literal["mp4", "gif", "webm"] = "mp4"
+    max_dim: int = Field(default=1080, ge=64, le=1920)
+    annotations: AnnotationsIn = Field(default_factory=AnnotationsIn)
+    vis_min: float | None = None
+    vis_max: float | None = None
+
+
+class TimelapseCreated(BaseModel):
+    job_id: str
+    render_id: str
+
+
+class RenderOut(BaseModel):
+    """Gallery row: SQL-only, no manifest parse."""
+
+    id: str
+    title: str
+    dataset: str
+    product: str
+    status: Literal["running", "succeeded", "failed", "cancelled"]
+    frame_count: int | None
+    fps: int
+    format: Literal["mp4", "gif", "webm"]
+    movie_bytes: int | None
+    created_at: str
+    updated_at: str
+
+
+class RenderDetailOut(RenderOut):
+    """A render row plus its parsed ``manifest.json`` (``None`` until finished)."""
+
+    roi: RoiIn
+    params: dict[str, Any]
+    manifest: dict[str, Any] | None
 
 
 # ── Meta ─────────────────────────────────────────────────────

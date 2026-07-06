@@ -180,6 +180,39 @@ def test_legend_reflects_spec_and_overrides(client: TestClient, seams: dict[str,
     assert seams["mint"]["vis_min"] == 1.0
 
 
+def test_auto_range_computes_and_flows_to_mint_and_legend(
+    client: TestClient, seams: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tiles_service, "compute_vis_range", lambda *a, **k: (0.11, 0.42))
+    base = {"dataset": "s5p", "product": "NO2", "roi": HEIDELBERG, "dates": DATES}
+
+    legend = client.post("/api/tiles", json={**base, "auto_range": True}).json()["legend"]
+    assert (legend["min"], legend["max"]) == (0.11, 0.42)
+    assert (seams["mint"]["vis_min"], seams["mint"]["vis_max"]) == (0.11, 0.42)
+
+
+def test_auto_range_yields_to_explicit_overrides(
+    client: TestClient, seams: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An explicit range wins over auto_range (compute_vis_range must not run).
+    def boom(*_a: Any, **_k: Any) -> tuple[float, float]:
+        raise AssertionError("compute_vis_range should not be called")
+
+    monkeypatch.setattr(tiles_service, "compute_vis_range", boom)
+    legend = client.post(
+        "/api/tiles",
+        json={
+            "dataset": "s5p",
+            "product": "NO2",
+            "roi": HEIDELBERG,
+            "dates": DATES,
+            "auto_range": True,
+            "viz_overrides": {"vis_min": 1.0, "vis_max": 9.0},
+        },
+    ).json()["legend"]
+    assert (legend["min"], legend["max"]) == (1.0, 9.0)
+
+
 def test_unknown_dataset_and_product_are_404(client: TestClient, seams: dict[str, Any]) -> None:
     for payload in (
         {"dataset": "nope", "product": "NDVI", "dates": DATES},

@@ -124,3 +124,27 @@ class ReferenceEvent(SQLModel, table=True):
     q_sigma_kg_h: float | None = None
     raw_json: str
     imported_at: str
+
+
+# ── Phase 4 (timelapse) ──────────────────────────────────────
+
+# A render's lifecycle. The runner owns the transitions from ``running``.
+RenderStatus = Literal["running", "succeeded", "failed", "cancelled"]
+
+
+class Render(SQLModel, table=True):
+    __tablename__ = "renders"
+
+    id: str = Field(primary_key=True)  # uuid4 hex
+    title: str
+    dataset: str
+    product: str
+    params_json: str
+    roi_json: str
+    status: str  # RenderStatus
+    frame_count: int | None = None
+    fps: int
+    format: str  # 'mp4'|'gif'|'webm'
+    movie_bytes: int | None = None
+    created_at: str
+    updated_at: str

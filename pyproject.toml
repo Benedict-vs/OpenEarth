@@ -9,7 +9,6 @@ package = false
 
 [tool.uv.workspace]
 members = ["packages/*"]
-exclude = ["legacy"]
 
 [dependency-groups]
 dev = [
@@ -31,7 +30,6 @@ lut = ["hitran-api>=1.2", "openpyxl>=3.1"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["legacy"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "PT"]
@@ -48,7 +46,6 @@ strict = true
 python_version = "3.12"
 mypy_path = "packages/core/src:packages/api/src"
 packages = ["openearth", "openearth_api"]
-exclude = ["legacy/"]
 
 [[tool.mypy.overrides]]
 module = [
@@ -56,6 +53,7 @@ module = [
     "ee.*",
     "diskcache",
     "diskcache.*",
+    "imageio_ffmpeg",
     "rasterio",
     "rasterio.*",
     "scipy",

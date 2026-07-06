@@ -3,6 +3,7 @@ import { useInspector } from "../../map/useInspector";
 import { useTerraDraw } from "../../map/useTerraDraw";
 import { WindOverlay } from "../../map/WindOverlay";
 import { useWindStore } from "../../stores/windStore";
+import { AnimationBar } from "./AnimationBar";
 import { CatalogBrowser } from "./CatalogBrowser";
 import { ChartPanel } from "./ChartPanel";
 import { DateControl } from "./DateControl";
@@ -31,6 +32,10 @@ function ExplorePanel() {
       <div className="panel-section">
         <h3>Layers</h3>
         <LayerPanel />
+      </div>
+      <div className="panel-section">
+        <h3>Animate</h3>
+        <AnimationBar />
       </div>
       <div className="panel-section">
         <h3>Inspect</h3>

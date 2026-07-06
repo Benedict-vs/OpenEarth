@@ -199,20 +199,25 @@ def thumb_url(
     *,
     vis_min: float | None = None,
     vis_max: float | None = None,
-    dimensions: int = 1024,
+    dimensions: int | str = 1024,
     img_format: str = "png",
 ) -> str:
     """Return a server-rendered thumbnail URL for *image* over *roi*.
 
-    Pixel dimensions preserve the ROI's real-world aspect ratio
-    (cosine-corrected). *img_format* must be ``"png"`` or ``"jpg"``.
+    An ``int`` *dimensions* is treated as the longest edge and cosine-corrected
+    into an explicit ``"WxH"`` (preserving the ROI's real-world aspect ratio); a
+    ``"WxH"`` string is passed to Earth Engine verbatim — the timelapse renderer
+    needs exact (even) pixel sizes shared across every frame. *img_format* must
+    be ``"png"`` or ``"jpg"``.
     """
     from openearth.geometry import BBox as _BBox
 
     params = vis_params(spec, vis_min=vis_min, vis_max=vis_max)
     bbox = roi if isinstance(roi, _BBox) else roi.bounds
     params["region"] = roi.to_ee_geometry()
-    params["dimensions"] = geo_dimensions(bbox, dimensions)
+    params["dimensions"] = (
+        geo_dimensions(bbox, dimensions) if isinstance(dimensions, int) else dimensions
+    )
     params["format"] = img_format
     return ee_call(image.getThumbURL, params)
 

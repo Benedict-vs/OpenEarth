@@ -73,11 +73,15 @@ touches the EE-browsing/parity stack, so it can run alongside Phase 4.
 Out of scope here (noted in methods §7): multiple scattering/aerosols, site-elevation surface
 pressure (P₀ axis), EMIT per-pixel co-location (Phase 6).
 
-## Phase 4 — Compare + Timelapse → retire Streamlit (M)
+## Phase 4 — Compare + Timelapse → retire Streamlit (M) ✅
 
 maplibre-gl-compare view; frame-player animation (server-rendered frames, zero flicker);
 Timelapse Studio (MP4/GIF/WebM + gallery); parity sweep.
-*Exit: parity checklist ticked; `legacy/` deleted in one commit; README rewritten.*
+*Exit: parity checklist ticked; `legacy/` deleted in one commit; README rewritten.* ✅
+*As-built: `timelapse.py` (frame stepping + Pillow annotations + `render_frames`/`encode_movie`
+via imageio-ffmpeg); migration 4 `renders` + timelapse job/gallery routes; Timelapse Studio,
+Explore animation (browse + frame playback), and the Compare view; auto vis-range gap closed;
+`legacy/` deleted (branch v2/phase4-compare-timelapse).*
 
 ## Phase 5 — ML segmentation (L)
 

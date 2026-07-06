@@ -18,10 +18,10 @@ from openearth.composites import (
     build_methane_anomaly_composite,
     build_single_scene,
 )
-from openearth.ee.render import mint_tile_url
+from openearth.ee.render import compute_vis_range, mint_tile_url
 from openearth.errors import validate_date_range
 from openearth.geometry import BBox
-from openearth_api.schemas import TileResponse, TilesRequest
+from openearth_api.schemas import TileResponse, TilesRequest, VizOverrides
 from openearth_api.services.legend import legend_for
 
 if TYPE_CHECKING:
@@ -122,10 +122,22 @@ def build_image(req: TilesRequest, roi: ROI, spec: ProductSpec) -> ee.Image:
     return build_single_scene(req.product, roi, req.timestamp_ms, source=req.dataset)
 
 
+def _has_explicit_range(viz: VizOverrides | None) -> bool:
+    return viz is not None and (viz.vis_min is not None or viz.vis_max is not None)
+
+
 def mint_tiles(req: TilesRequest) -> TileResponse:
     dataset, spec, roi = resolve_request(req)
     image = build_image(req, roi, spec)
+
     viz = req.viz_overrides
+    # Auto-range: derive the scale from the composite's own percentiles unless
+    # it is RGB or the caller pinned an explicit range. The computed range flows
+    # to both the tile mint and the legend so the UI shows what it rendered.
+    if req.auto_range and not spec.is_rgb and not _has_explicit_range(viz):
+        vmin, vmax = compute_vis_range(image, spec, roi)
+        viz = VizOverrides(vis_min=vmin, vis_max=vmax)
+
     ref = mint_tile_url(
         image,
         spec,

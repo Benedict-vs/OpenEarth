@@ -5,7 +5,10 @@
      Phase 1 (Map platform MVP) COMPLETE — branch v2/phase1-map-mvp, 2026-07-05.
      Phase 2 (Analysis backbone) COMPLETE — branch v2/phase2-analysis, 2026-07-05.
      Phase 3 (Methane Lab, physics) COMPLETE — branch v2/phase3-methane-lab, 2026-07-06;
-       plan docs/phase3-execution-plan.md; exit gate green (scripts/validate_events.py). -->
+       plan docs/phase3-execution-plan.md; exit gate green (scripts/validate_events.py).
+     Phase 4 (Compare + Timelapse → retire Streamlit) COMPLETE — branch
+       v2/phase4-compare-timelapse, 2026-07-06; plan docs/phase4-execution-plan.md;
+       parity checklist docs/parity-checklist.md; legacy/ deleted. -->
 
 # OpenEarth v2 — Complete Overhaul Plan
 

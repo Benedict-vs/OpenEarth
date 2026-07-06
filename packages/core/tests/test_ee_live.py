@@ -161,6 +161,50 @@ def test_fetch_chip_korpezhe() -> None:
     assert float(finite.max()) < 1.5
 
 
+def test_render_timelapse_two_frames_over_heidelberg(tmp_path: object) -> None:
+    from datetime import date
+    from pathlib import Path
+
+    from PIL import Image
+
+    from openearth.catalog.presets import ROI_PRESETS
+    from openearth.timelapse import (
+        AnnotationOptions,
+        encode_movie,
+        frame_windows,
+        render_frames,
+    )
+
+    roi = ROI_PRESETS["Heidelberg (Germany)"].bbox
+    # Two monthly windows over a small ROI → two real EE thumb fetches.
+    windows = frame_windows(date(2024, 6, 1), date(2024, 7, 31), mode="monthly")
+    assert len(windows) == 2
+
+    out_dir = Path(str(tmp_path)) / "render"
+    manifest = render_frames(
+        "s2",
+        "NDVI",
+        roi,
+        windows,
+        out_dir=out_dir,
+        max_dim=256,
+        even_dims=True,
+        vis_min=None,  # exercise the compute_vis_range path on the middle window
+        vis_max=None,
+        annotations=AnnotationOptions(),
+    )
+    assert manifest.rendered_count >= 1
+    assert manifest.width % 2 == 0
+    assert manifest.height % 2 == 0
+    with Image.open(manifest.frame_paths[0]) as im:
+        assert im.size == (manifest.width, manifest.height)
+
+    movie = out_dir / "movie.mp4"
+    encode_movie(manifest.frame_paths, movie, fmt="mp4", fps=4)
+    assert movie.exists()
+    assert movie.stat().st_size > 0
+
+
 def test_screen_region_turkmenistan() -> None:
     from datetime import date
 

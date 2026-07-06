@@ -45,19 +45,19 @@ def _table_names(engine: Any) -> set[str]:
 
 def test_migration3_on_fresh_db(tmp_path: Path) -> None:
     engine = create_db_engine(tmp_path / "fresh.db")
-    assert migrate(engine) == len(_MIGRATIONS) == 3
+    assert migrate(engine) == len(_MIGRATIONS)
     assert {"sites", "detections", "reference_events"} <= _table_names(engine)
 
 
 def test_migration3_on_v2_db(tmp_path: Path) -> None:
     engine = create_db_engine(tmp_path / "v2.db")
-    # Bring the DB up to exactly version 2, then let migrate() apply only #3.
+    # Bring the DB up to exactly version 2, then let migrate() apply the rest.
     with engine.begin() as conn:
         for batch in _MIGRATIONS[:2]:
             for stmt in batch:
                 conn.exec_driver_sql(stmt)
         conn.exec_driver_sql("PRAGMA user_version = 2")
-    assert migrate(engine) == 3
+    assert migrate(engine) == len(_MIGRATIONS)
     assert {"sites", "detections", "reference_events"} <= _table_names(engine)
 
 

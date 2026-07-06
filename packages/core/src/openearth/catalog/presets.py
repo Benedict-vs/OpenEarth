@@ -1,7 +1,7 @@
 """ROI presets and methane watch sites (ported from the v1 app config).
 
 These seed the v2 sites/presets database tables (``scripts/seed_db.py``);
-the values are verbatim from ``legacy/app/config.py``.
+the values are carried over verbatim from the retired v1 app config.
 """
 
 from __future__ import annotations

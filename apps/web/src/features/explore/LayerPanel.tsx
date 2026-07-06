@@ -28,7 +28,8 @@ function StatusBadge({ layer, now }: { layer: Layer; now: number }) {
 }
 
 function LayerRow({ layer, isTop, isBottom }: { layer: Layer; isTop: boolean; isBottom: boolean }) {
-  const { removeLayer, setOpacity, toggleVisible, moveLayer } = useLayersStore.getState();
+  const { removeLayer, setOpacity, toggleVisible, toggleAutoRange, moveLayer } =
+    useLayersStore.getState();
   const now = useNow(1000);
 
   return (
@@ -60,6 +61,14 @@ function LayerRow({ layer, isTop, isBottom }: { layer: Layer; isTop: boolean; is
           onClick={() => moveLayer(layer.id, -1)}
         >
           ↓
+        </button>
+        <button
+          className={layer.autoRange ? "icon active" : "icon"}
+          title="Auto vis-range from the composite's percentiles"
+          disabled={layer.mint?.legend.is_rgb ?? false}
+          onClick={() => toggleAutoRange(layer.id)}
+        >
+          A
         </button>
         <ExportButton layer={layer} />
         <button className="icon" title="Remove layer" onClick={() => removeLayer(layer.id)}>

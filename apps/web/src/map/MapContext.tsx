@@ -8,13 +8,15 @@ import maplibregl from "maplibre-gl";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { BASEMAP_STYLES, DEFAULT_BASEMAP } from "./basemap";
 
-interface MapContextValue {
+export interface MapContextValue {
   map: maplibregl.Map | null;
   /** True once the style has loaded — sources/layers may only be added then. */
   ready: boolean;
 }
 
-const MapContext = createContext<MapContextValue>({ map: null, ready: false });
+/** Exported so the Compare view can wrap each side's controllers around its
+ *  own manually-created map (the plugin needs both map objects up front). */
+export const MapContext = createContext<MapContextValue>({ map: null, ready: false });
 
 export function MapProvider({ children, south }: { children: ReactNode; south?: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);

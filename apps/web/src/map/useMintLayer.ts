@@ -24,7 +24,7 @@ interface DateParams {
 }
 
 export function buildTilesRequest(
-  layer: Pick<Layer, "dataset" | "product" | "vizOverrides">,
+  layer: Pick<Layer, "dataset" | "product" | "vizOverrides" | "autoRange">,
   roi: TilesRequest["roi"],
   dates: DateParams,
 ): TilesRequest {
@@ -34,6 +34,7 @@ export function buildTilesRequest(
       product: layer.product,
       roi: roi ?? null,
       viz_overrides: layer.vizOverrides ?? null,
+      auto_range: layer.autoRange,
       composite: "date_window",
       target_date: dates.targetDate,
       half_window_days: dates.halfWindowDays,
@@ -44,6 +45,7 @@ export function buildTilesRequest(
     product: layer.product,
     roi: roi ?? null,
     viz_overrides: layer.vizOverrides ?? null,
+    auto_range: layer.autoRange,
     composite: "mean",
     dates: { start: dates.start, end: dates.end },
     half_window_days: dates.halfWindowDays,
@@ -119,7 +121,12 @@ export function useMintLayer(layer: Layer): void {
 
   const paramsKey = JSON.stringify(
     buildTilesRequest(
-      { dataset: layer.dataset, product: layer.product, vizOverrides: layer.vizOverrides },
+      {
+        dataset: layer.dataset,
+        product: layer.product,
+        vizOverrides: layer.vizOverrides,
+        autoRange: layer.autoRange,
+      },
       roi,
       { mode, start, end, targetDate, halfWindowDays },
     ),
