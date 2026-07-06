@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 # Bump when cached artifact semantics change (rendering math, defaults, …).
 # 2: CH4 LUT v2 (Curtis–Godson effective T/p) changed methane ΔΩ/ΔXCH4 outputs.
-ALGO_VERSION = 2
+ALGO_VERSION = 3
 
 # Open-ended date ranges keep collecting new scenes upstream; closed
 # historical ranges are immutable.

@@ -36,7 +36,7 @@ cached ~instant; both GeoTIFF paths rasterio-verified; E2E golden path green.)*
 
 ## Phase 3 — Methane Lab, physics (XL) ✅
 
-HITRAN LUT (`scripts/generate_ch4_lut.py` → committed `ch4_lut_v2.npz`); calibrated MBSP/MBMP
+HITRAN LUT (`scripts/generate_ch4_lut.py` → committed `ch4_lut_v3.npz`); calibrated MBSP/MBMP
 NumPy retrieval on computePixels chips; plume masking; IME + Monte-Carlo uncertainty;
 S5P screening tier; sites/detections DB; Methane Lab UI; IMEO/SRON validation importer;
 `docs/methane_methods.md`.

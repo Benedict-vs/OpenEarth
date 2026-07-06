@@ -45,7 +45,7 @@ OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; neve
   - `methane/` — the physics suite (theory in `docs/methane_methods.md`). `wind.py` (ERA5;
     `wind_to_deg`/`wind_from_deg` distinct tested conventions; `sample_wind_at` +
     `sample_wind_field`). `constants.py` (cited literature + declared modeling constants),
-    `conversion.py` (loads committed `data/ch4_lut_v2.npz`; ΔR→ΔΩ→ΔXCH4 — pure, strict mypy),
+    `conversion.py` (loads committed `data/ch4_lut_v3.npz`; ΔR→ΔΩ→ΔXCH4 — pure, strict mypy),
     `scenes.py` (S2 L1C search + `pick_reference`, which excludes the same-overpass tile),
     `retrieval.py` (calibrated MBSP/MBMP on `computePixels` chips; bands are unpadded B4/B3/B2),
     `plume.py` (robust-σ threshold + components + outline), `ime.py` (IME + seeded joint MC),

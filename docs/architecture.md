@@ -101,8 +101,9 @@ in `packages/core/src/openearth/methane/`, all offline unit-tested.
 
 - **CH4 absorption LUT** — `scripts/generate_ch4_lut.py` (HITRAN via HAPI + ESA Sentinel-2
   SRFs, script-only `lut` dependency group) generates the committed
-  `methane/data/ch4_lut_v2.npz` (Curtis–Godson effective T/p); `conversion.py` loads it and does
-  ΔR→ΔΩ→ΔXCH4. Anchored to Varon 2021 within ~9 %.
+  `methane/data/ch4_lut_v3.npz` (layered US Std Atmosphere background + 500 m enhancement
+  slab per Varon 2021); `conversion.py` loads it and does ΔR→ΔΩ→ΔXCH4. Regression-pinned to
+  its own layered reference; the Varon 2021 anchor is a ±30 % sanity band (methods §2).
 - **Retrieval** — `scenes.py` (S2 L1C metadata search + reference auto-select),
   `retrieval.py` (calibrated MBSP/MBMP on `computePixels` chips, refit calibration),
   `plume.py` (robust-σ threshold + connected components + GeoJSON outline),

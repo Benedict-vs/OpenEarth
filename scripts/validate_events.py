@@ -52,11 +52,10 @@ PASS, MARGINAL, FAIL = "PASS", "⚠ MARGINAL", "FAIL"
 def korpezhe() -> tuple[float, float, str, str]:
     """Korpezhe 2018-06-19 — published 11.2 ± 5.2 t/h (GHGSat-D: 11.6 ± 8.8).
 
-    PASS: Q ∈ [5.6, 16.8] t/h (published ±50 %) with σ overlapping. Under the
-    v2 (Curtis–Godson) LUT the shallower inversion shrinks this intermittent
-    source's MBMP plume mask, so the point estimate sits just below the ±50 %
-    window while the σ band still overlaps the published value — reported
-    MARGINAL, not FAIL (see docs/methane_methods.md §8).
+    PASS: Q ∈ [5.6, 16.8] t/h (published ±50 %) with σ overlapping. This
+    intermittent, pinned-reference event sits near a mask-size cliff, so its
+    point estimate is LUT-shape sensitive and its MC band is wide (see the
+    LUT history note in docs/methane_methods.md §8).
     """
     bbox = BBox(53.94, 38.47, 53.99, 38.51)
     result = analyze(
