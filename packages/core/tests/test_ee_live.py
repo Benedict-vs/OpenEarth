@@ -125,3 +125,17 @@ def test_wind_field_over_permian_basin() -> None:
     assert len(field.v) == 16
     assert all(math.isfinite(x) for x in field.u)
     assert all(math.isfinite(x) for x in field.v)
+
+
+def test_list_scenes_korpezhe_june_2018() -> None:
+    from openearth.catalog.presets import METHANE_SITES
+    from openearth.methane.scenes import list_scenes
+
+    roi = METHANE_SITES["CH4: Korpezhe, Turkmenistan"].bbox
+    scenes = list_scenes(roi, "2018-06-01", "2018-07-01", max_cloud=90.0)
+    assert scenes, "expected non-empty Korpezhe June 2018 scene list"
+    # The documented 2018-06-19 super-emitter acquisition must be present.
+    assert any(s.time.date().isoformat() == "2018-06-19" for s in scenes)
+    for s in scenes:
+        assert s.spacecraft in ("Sentinel-2A", "Sentinel-2B")
+        assert s.amf > 1.0
