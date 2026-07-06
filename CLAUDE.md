@@ -54,6 +54,12 @@ OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; neve
     imported under `packages/`. Reproduce events with `scripts/validate_events.py`.
   - `geometry.py` — `BBox`/`PolygonROI` validate on construction; pure-python `is_global`,
     aspect math (no EE round-trips).
+  - `timelapse.py` — Phase 4. Pure layer: `frame_windows` (interval/monthly/quarterly stepping)
+    + Pillow annotations (`scale_bar_spec`/`render_colorbar`/`annotate_frame`), offline-tested.
+    EE + encoding layer: `render_frames` (one geometry + one vis range per render, mean composite
+    → `thumb_url` → PNG fetch → burn-in, dense re-index, empty-vs-failed status, atomic manifest)
+    and `encode_movie` (mp4/webm via imageio-ffmpeg, gif via Pillow). Frames fetched with an
+    injectable `urllib` `FetchFn` — no HTTP dep in core.
 - `packages/api/src/openearth_api/` — FastAPI layer (`routers/` thin, `services/` do the work).
   `create_app()` must stay EE-free AND DB-free at creation time — `scripts/export_openapi.py`
   and web CI rely on it; the DB engine + EE init happen in the lifespan. EE-touching routes
@@ -65,7 +71,8 @@ OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; neve
     result is refetched on `done`. `db.py` migrations are `PRAGMA user_version` DDL batches —
     append, never edit (migration 1 = `jobs`; migration 2 = `aois`/`workspaces`; migration 3 =
     `sites`/`detections`/`reference_events`, plus a per-connection `busy_timeout` so the analyze
-    runner inserts its own detection row off-loop).
+    runner inserts its own detection row off-loop; migration 4 = `renders`, written off-loop by
+    the timelapse runner too).
   - **Analysis routes**: `timeseries` (chunked coarse→fine series job → parquet-bytes cache),
     `export` (GeoTIFF job / sync PNG / CSV), `inspect` (point sample), `wind` (point + field),
     `aois` + `workspaces` (plain CRUD, 409 on duplicate name; versioned `WorkspaceState`).
@@ -74,7 +81,12 @@ OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; neve
     runner writes the detection row + npz artifact off-loop), detection feed/detail, overlay
     PNG (`services/methane_render.py`), `array.npz`, the `methane_screening` job, and the
     validation importer/cross-match. `POST /tiles` `methane_ref` unlocks the `CH4_ANOMALY`
-    quicklook (builder products still 422 without it).
+    quicklook (builder products still 422 without it); `TilesRequest.auto_range` derives the vis
+    range from `compute_vis_range` into the mint + legend.
+  - **Timelapse routes** (`routers/timelapse.py`, `services/timelapse.py`): the `timelapse`
+    render job (SSE `frame` events → `{render_id}`; runner writes the `renders` row + frames +
+    manifest + movie off-loop), gallery list, detail (row + manifest), immutable frame PNGs,
+    movie download, delete (409 while running). Artifacts at `data_dir/timelapse/{render_id}/`.
 - `apps/web/` — Vite + React + TS (pnpm, NOT a uv member). Thin imperative MapLibre binding
   (no react-map-gl). **No-refetch rule**: layer controls only touch paint/layout/moveLayer;
   re-mints go through `setTiles` on the existing source. API types are generated

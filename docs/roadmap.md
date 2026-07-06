@@ -48,11 +48,15 @@ overlay-PNG + npz artifacts; 3-pane Lab UI verified live (Korpezhe 2018-06-19). 
 gate green — Korpezhe 9.6 ± 5.4 t/h (pub 11.2 ± 5.2, MBMP) and Hassi Messaoud 8.3 t/h mean
 (pub 9.3 ± 5.5, MBSP) via `scripts/validate_events.py`.)*
 
-## Phase 4 — Compare + Timelapse → retire Streamlit (M)
+## Phase 4 — Compare + Timelapse → retire Streamlit (M) ✅
 
 maplibre-gl-compare view; frame-player animation (server-rendered frames, zero flicker);
 Timelapse Studio (MP4/GIF/WebM + gallery); parity sweep.
-*Exit: parity checklist ticked; `legacy/` deleted in one commit; README rewritten.*
+*Exit: parity checklist ticked; `legacy/` deleted in one commit; README rewritten.* ✅
+*As-built: `timelapse.py` (frame stepping + Pillow annotations + `render_frames`/`encode_movie`
+via imageio-ffmpeg); migration 4 `renders` + timelapse job/gallery routes; Timelapse Studio,
+Explore animation (browse + frame playback), and the Compare view; auto vis-range gap closed;
+`legacy/` deleted (branch v2/phase4-compare-timelapse).*
 
 ## Phase 5 — ML segmentation (L)
 

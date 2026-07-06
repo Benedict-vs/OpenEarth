@@ -122,6 +122,33 @@ in `packages/core/src/openearth/methane/`, all offline unit-tested.
 - **Reproduction** — `scripts/validate_events.py` reproduces Korpezhe and the Hassi Messaoud
   blowout within ±50 % of published values (Phase 3 exit gate).
 
+## Built in Phase 4
+
+Compare + Timelapse, then the v1 Streamlit app retired (parity reached — see
+`docs/parity-checklist.md`).
+
+- **Timelapse core** (`packages/core/src/openearth/timelapse.py`) — pure layer: `frame_windows`
+  (interval/monthly/quarterly stepping, budget-guarded) and Pillow annotation helpers
+  (`scale_bar_spec`, `render_colorbar`, `annotate_frame`), all offline-tested. EE + encoding
+  layer: `render_frames` (one geometry + one vis range for the whole render, per-window mean
+  composite → `thumb_url` → PNG fetch → burned-in annotations, dense re-indexing, empty-vs-failed
+  status taxonomy, atomic `manifest.json`) and `encode_movie` (mp4 libx264 / webm libvpx-vp9 via
+  imageio-ffmpeg / gif via Pillow, atomic temp+replace). Frames fetched with an injectable
+  `urllib` `FetchFn` (no HTTP dep in core).
+- **Timelapse API** (migration 4: `renders`): `routers/timelapse.py` + `services/timelapse.py` —
+  the `timelapse` render job (runner writes its own `renders` row off-loop, publishes SSE `frame`
+  events, encodes the movie), gallery list, detail (row + manifest), immutable frame PNGs, movie
+  download, and delete. Render artifacts live at `data_dir/timelapse/{render_id}/`.
+- **Auto vis-range** — `TilesRequest.auto_range` computes the scale from the composite's
+  percentiles (`compute_vis_range`) into both the mint and the legend (closing the last v1 scale
+  gap).
+- **Web** (`apps/web/`, views as an `App.tsx` switcher, no router): **Timelapse Studio**
+  (`features/timelapse/` — form → live SSE frame strip → preload-gated `useFrameTransport` player
+  → gallery), **Explore animation** (`features/explore/AnimationBar` — browse a ±2 preloaded tile
+  pool, or play a render's frames through a MapLibre image source via `map/useImageFrames`), and
+  **Compare** (`features/compare/` — two per-instance maps joined by
+  `@maplibre/maplibre-gl-compare`, linked/independent modes; `MapContext` is per-instance).
+
 ## Earth Engine ground rules (design defensively)
 
 | Mechanic | Assumption | Defense |
