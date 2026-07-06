@@ -5,6 +5,7 @@ description = "OpenEarth core science library: Earth Engine access, dataset cata
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "earthengine-api>=1.7,<2",
+    "imageio-ffmpeg>=0.6,<1",
     "numpy>=1.26,<3",
     "pandas>=2.0,<3",
     "pillow>=10.1,<12",

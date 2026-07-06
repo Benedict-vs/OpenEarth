@@ -56,6 +56,7 @@ module = [
     "ee.*",
     "diskcache",
     "diskcache.*",
+    "imageio_ffmpeg",
     "rasterio",
     "rasterio.*",
     "scipy",

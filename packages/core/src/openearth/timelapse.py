@@ -14,19 +14,32 @@ so no TTF is committed and the repo stays font-license-free.
 
 from __future__ import annotations
 
+import io
+import json
 import math
-from dataclasses import dataclass
+import os
+import urllib.request
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import TYPE_CHECKING, Literal
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal
 
 from PIL import Image, ImageDraw, ImageFont
 
-if TYPE_CHECKING:
-    from openearth.geometry import BBox
+from openearth.catalog import get_dataset
+from openearth.composites import build_mean_composite
+from openearth.ee.render import compute_vis_range, geo_dimensions, thumb_url
+from openearth.errors import EmptyCollectionError, JobError, classify_ee_error
+from openearth.geometry import BBox
 
-# One degree of latitude in metres (WGS84 mean) — the same convention the
-# pixel grid math and the web-side geo box use. Kept local so the pure layer
-# doesn't drag in Earth Engine just to reach a constant.
+if TYPE_CHECKING:
+    from openearth.catalog.models import ProductSpec
+    from openearth.geometry import ROI
+
+# One degree of latitude in metres (WGS84 mean) — the same convention the pixel
+# grid math (ee/pixels.py) and the web-side geo box use.
 _M_PER_DEG = 111_320.0
 
 # ── Frame-budget constants ───────────────────────────────────────
@@ -363,15 +376,371 @@ def _draw_scale_bar(
     draw.text((cx - tw / 2, bar_y - tick_h - th - 2), text, fill=white, font=font)
 
 
+# ── EE + encoding layer ──────────────────────────────────────────
+
+# Frames are fetched with urllib (export.py precedent — core keeps no HTTP
+# client dependency); the fetch is injectable so offline tests supply bytes.
+FetchFn = Callable[[str], bytes]
+
+FrameStatus = Literal["rendered", "empty", "failed"]
+MovieFormat = Literal["mp4", "gif", "webm"]
+
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+@dataclass(frozen=True)
+class AnnotationOptions:
+    """Which burn-ins to composite onto each frame.
+
+    ``attribution`` overrides the dataset's own attribution string when set.
+    """
+
+    date_label: bool = True
+    colorbar: bool = True
+    scale_bar: bool = True
+    attribution: str | None = None
+
+
+@dataclass(frozen=True)
+class FrameResult:
+    """The outcome for one window: a rendered PNG on disk, empty, or failed."""
+
+    window: FrameWindow
+    status: FrameStatus
+    path: Path | None
+
+
+@dataclass(frozen=True)
+class FrameManifest:
+    """Everything a movie encoder and the gallery need about a render."""
+
+    dataset: str
+    product: str
+    width: int
+    height: int
+    vis: tuple[float, float]
+    results: list[FrameResult] = field(default_factory=list)
+
+    @property
+    def frame_paths(self) -> list[Path]:
+        """Dense, in-order paths of the rendered frames (no holes)."""
+        return [r.path for r in self.results if r.status == "rendered" and r.path is not None]
+
+    @property
+    def rendered_count(self) -> int:
+        return sum(1 for r in self.results if r.status == "rendered")
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-serialisable manifest: movie (dense) index → date window.
+
+        Rendered frames carry their dense movie index (aligned with the
+        ``frame_XXXX.png`` filenames); skipped windows record ``index=null``
+        with their empty/failed status so the gallery is honest.
+        """
+        frames: list[dict[str, Any]] = []
+        dense = 0
+        for r in self.results:
+            index: int | None = None
+            if r.status == "rendered":
+                index = dense
+                dense += 1
+            frames.append(
+                {
+                    "index": index,
+                    "start": r.window.start.isoformat(),
+                    "end": r.window.end.isoformat(),
+                    "label": r.window.label,
+                    "status": r.status,
+                }
+            )
+        return {
+            "dataset": self.dataset,
+            "product": self.product,
+            "width": self.width,
+            "height": self.height,
+            "vis": [self.vis[0], self.vis[1]],
+            "frames": frames,
+        }
+
+
+def _fetch_bytes(url: str) -> bytes:
+    """Default frame fetcher: GET an Earth-Engine-minted thumb URL.
+
+    No retry (the URL mint already retried through ``ee_call``); a non-200
+    raises ``urllib.error.HTTPError``, which the caller records as ``failed``.
+    """
+    with urllib.request.urlopen(url) as response:  # EE-minted URL
+        data: bytes = response.read()
+    return data
+
+
+def _is_empty_error(exc: BaseException) -> bool:
+    """True when *exc* means the composite had no imagery (skip, don't fail)."""
+    if isinstance(exc, EmptyCollectionError):
+        return True
+    return classify_ee_error(exc)[0] == "empty"
+
+
+def _frame_dimensions(bbox: BBox, max_dim: int, even_dims: bool) -> tuple[int, int]:
+    """Aspect-correct (W, H) for every frame; rounded down to even for video.
+
+    yuv420p/libx264 reject odd dimensions and every frame must match the movie
+    exactly, so the rounding happens once, up front, before any frame renders.
+    """
+    dims = geo_dimensions(bbox, max_dim)
+    if "x" in dims:
+        w_str, h_str = dims.split("x")
+        w, h = int(w_str), int(h_str)
+    else:  # geo_dimensions falls back to a bare longest-edge for degenerate aspect
+        w = h = int(dims)
+    if even_dims:
+        w -= w % 2
+        h -= h % 2
+    return (max(2, w), max(2, h))
+
+
+def _resolve_vis_range(
+    dataset: str,
+    product: str,
+    spec: ProductSpec,
+    roi: ROI,
+    windows: list[FrameWindow],
+    vis_min: float | None,
+    vis_max: float | None,
+) -> tuple[float, float]:
+    """One vis range for the whole render (no per-frame auto-scale flicker).
+
+    Uses the request overrides where given, else ``compute_vis_range`` on the
+    middle window's composite — computed once and reused for every frame and
+    the colorbar.
+    """
+    if vis_min is not None and vis_max is not None:
+        return (vis_min, vis_max)
+
+    mid = windows[len(windows) // 2]
+    mid_image = build_mean_composite(product, roi, mid.start, mid.end, source=dataset)
+    try:
+        computed = compute_vis_range(mid_image, spec, roi)
+    except Exception as exc:  # empty mid window falls back to catalog defaults
+        if _is_empty_error(exc):
+            computed = (spec.vis_min, spec.vis_max)
+        else:
+            raise
+    lo = vis_min if vis_min is not None else computed[0]
+    hi = vis_max if vis_max is not None else computed[1]
+    return (lo, hi)
+
+
+def _cleanup_staging(out_dir: Path) -> None:
+    for staging in out_dir.glob(".staging_*.png"):
+        staging.unlink(missing_ok=True)
+
+
+def render_frames(
+    dataset: str,
+    product: str,
+    roi: ROI,
+    windows: list[FrameWindow],
+    *,
+    out_dir: Path,
+    max_dim: int,
+    even_dims: bool,
+    vis_min: float | None,
+    vis_max: float | None,
+    annotations: AnnotationOptions,
+    fetch: FetchFn = _fetch_bytes,
+    on_progress: Callable[[int, int], None] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+) -> FrameManifest:
+    """Render one PNG per *window* into *out_dir* and write ``manifest.json``.
+
+    All frames share one geometry (even dimensions for video) and one vis range.
+    Per window: build the mean composite, mint the thumb through ``ee_call``,
+    fetch the PNG, then burn in the annotations. Empty composites are recorded
+    as ``empty`` and skipped; a non-PNG/failed fetch is recorded as ``failed``.
+    Rendered frames are re-indexed densely (``frame_0000.png`` = first rendered)
+    so the movie has no holes. Raises :class:`JobError` only if *nothing*
+    rendered, or ``"cancelled"`` when *should_cancel* trips between frames.
+    """
+    if not windows:
+        raise JobError("Timelapse render needs at least one window.")
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dataset_spec = get_dataset(dataset)
+    spec = dataset_spec.get(product)
+    bbox = roi if isinstance(roi, BBox) else roi.bounds
+
+    width, height = _frame_dimensions(bbox, max_dim, even_dims)
+    dims_arg = f"{width}x{height}"
+    vmin, vmax = _resolve_vis_range(dataset, product, spec, roi, windows, vis_min, vis_max)
+
+    colorbar: Image.Image | None = None
+    if annotations.colorbar and not spec.is_rgb:
+        cb_w = max(120, min(width // 4, 320))
+        cb_h = max(18, round(height * 0.028))
+        colorbar = render_colorbar(spec.palette, vmin, vmax, width=cb_w, height=cb_h)
+    scale_bar = scale_bar_spec(bbox, width) if annotations.scale_bar else None
+    attribution = annotations.attribution or dataset_spec.attribution
+
+    def _work(window: FrameWindow) -> FrameResult:
+        staging = out_dir / f".staging_{window.index:04d}.png"
+        try:
+            image = build_mean_composite(product, roi, window.start, window.end, source=dataset)
+            url = thumb_url(image, spec, roi, vis_min=vmin, vis_max=vmax, dimensions=dims_arg)
+        except Exception as exc:  # empty → skip; anything else re-raises
+            if _is_empty_error(exc):
+                return FrameResult(window, "empty", None)
+            raise
+        try:
+            data = fetch(url)
+        except Exception:  # fetch failures are recorded, not raised
+            return FrameResult(window, "failed", None)
+        if not data.startswith(_PNG_MAGIC):
+            return FrameResult(window, "failed", None)
+
+        with Image.open(io.BytesIO(data)) as opened:
+            base = opened.convert("RGBA")
+        if base.size != (width, height):
+            # EE should honour the explicit WxH; resize the base (never the
+            # annotated frame) as a safety net so every frame matches the movie.
+            base = base.resize((width, height))
+        label = window.label if annotations.date_label else ""
+        annotated = annotate_frame(
+            base, label=label, attribution=attribution, colorbar=colorbar, scale_bar=scale_bar
+        )
+        annotated.convert("RGB").save(staging, format="PNG")
+        return FrameResult(window, "rendered", staging)
+
+    raw: list[FrameResult] = [FrameResult(w, "failed", None) for w in windows]
+    total = len(windows)
+    with ThreadPoolExecutor(max_workers=FRAME_FETCH_WORKERS) as pool:
+        futures = [pool.submit(_work, w) for w in windows]
+        for i, fut in enumerate(futures):
+            if should_cancel is not None and should_cancel():
+                for pending in futures[i:]:
+                    pending.cancel()
+                _cleanup_staging(out_dir)
+                raise JobError("cancelled")
+            raw[i] = fut.result()
+            if on_progress is not None:
+                on_progress(i + 1, total)
+
+    # Dense re-indexing: rename staged rendered frames to a hole-free sequence.
+    results: list[FrameResult] = []
+    dense = 0
+    for r in raw:
+        if r.status == "rendered" and r.path is not None:
+            final = out_dir / f"frame_{dense:04d}.png"
+            os.replace(r.path, final)
+            results.append(FrameResult(r.window, "rendered", final))
+            dense += 1
+        else:
+            results.append(FrameResult(r.window, r.status, None))
+
+    if dense == 0:
+        raise JobError("Timelapse produced no usable frames (all windows empty or failed).")
+
+    manifest = FrameManifest(dataset, product, width, height, (vmin, vmax), results)
+    _write_manifest(out_dir / "manifest.json", manifest)
+    return manifest
+
+
+def _write_manifest(dest: Path, manifest: FrameManifest) -> None:
+    """Write the manifest atomically (temp + os.replace)."""
+    tmp = dest.parent / (dest.name + ".tmp")
+    tmp.write_text(json.dumps(manifest.to_dict(), indent=2))
+    os.replace(tmp, dest)
+
+
+def encode_movie(
+    frame_paths: list[Path],
+    out_path: Path,
+    *,
+    fmt: MovieFormat,
+    fps: int,
+) -> None:
+    """Encode *frame_paths* into a movie at *out_path* (atomic temp + replace).
+
+    mp4 → libx264/yuv420p, webm → libvpx-vp9, gif → Pillow. All frames must
+    already share one exact size; video sizes must be even (guaranteed by
+    :func:`render_frames`). A cancelled/crashed encode never leaves a truncated
+    gallery item — the movie lands via ``os.replace``.
+    """
+    if not frame_paths:
+        raise JobError("Cannot encode a movie with no frames.")
+
+    # Keep the real extension on the temp file — ffmpeg picks the muxer from it.
+    tmp = out_path.parent / f"{out_path.stem}.tmp{out_path.suffix}"
+    try:
+        if fmt == "gif":
+            _encode_gif(frame_paths, tmp, fps)
+        else:
+            _encode_video(frame_paths, tmp, fmt=fmt, fps=fps)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+    os.replace(tmp, out_path)
+
+
+def _encode_gif(frame_paths: list[Path], dest: Path, fps: int) -> None:
+    # Pillow holds every frame in memory to write a GIF — MAX_DIM_GIF bounds it.
+    frames = [Image.open(p).convert("RGB") for p in frame_paths]
+    first, *rest = frames
+    first.save(
+        dest,
+        format="GIF",
+        save_all=True,
+        append_images=rest,
+        duration=round(1000 / fps),
+        loop=0,
+        optimize=True,
+    )
+
+
+def _encode_video(frame_paths: list[Path], dest: Path, *, fmt: MovieFormat, fps: int) -> None:
+    import imageio_ffmpeg
+
+    with Image.open(frame_paths[0]) as first:
+        size = first.size  # (W, H) — all frames share it
+
+    codec = "libx264" if fmt == "mp4" else "libvpx-vp9"
+    try:
+        # macro_block_size=1 disables imageio's pad-to-multiple-of-16 (our even
+        # dims are already yuv420p-legal; padding would resample annotations).
+        writer = imageio_ffmpeg.write_frames(
+            str(dest),
+            size,
+            fps=fps,
+            codec=codec,
+            pix_fmt_out="yuv420p",
+            macro_block_size=1,
+        )
+        writer.send(None)  # prime the generator
+        for path in frame_paths:
+            with Image.open(path) as frame:
+                writer.send(frame.convert("RGB").tobytes())
+        writer.close()
+    except Exception as exc:  # surface ffmpeg's own stderr
+        raise JobError(f"Movie encoding failed ({codec}): {exc}") from exc
+
+
 __all__ = [
     "FRAME_FETCH_WORKERS",
     "MAX_DIM_GIF",
     "MAX_DIM_VIDEO",
     "MAX_FRAMES",
+    "AnnotationOptions",
+    "FetchFn",
+    "FrameManifest",
+    "FrameResult",
+    "FrameStatus",
     "FrameWindow",
+    "MovieFormat",
     "StepMode",
     "annotate_frame",
+    "encode_movie",
     "frame_windows",
     "render_colorbar",
+    "render_frames",
     "scale_bar_spec",
 ]
