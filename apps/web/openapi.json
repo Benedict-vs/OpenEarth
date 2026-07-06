@@ -97,6 +97,38 @@
         "title": "AnalyzeRequest",
         "type": "object"
       },
+      "AnnotationsIn": {
+        "properties": {
+          "attribution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution"
+          },
+          "colorbar": {
+            "default": true,
+            "title": "Colorbar",
+            "type": "boolean"
+          },
+          "date_label": {
+            "default": true,
+            "title": "Date Label",
+            "type": "boolean"
+          },
+          "scale_bar": {
+            "default": true,
+            "title": "Scale Bar",
+            "type": "boolean"
+          }
+        },
+        "title": "AnnotationsIn",
+        "type": "object"
+      },
       "AoiIn": {
         "properties": {
           "name": {
@@ -1389,6 +1421,222 @@
         "title": "ReferenceEventOut",
         "type": "object"
       },
+      "RenderDetailOut": {
+        "description": "A render row plus its parsed ``manifest.json`` (``None`` until finished).",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "mp4",
+              "gif",
+              "webm"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "fps": {
+            "title": "Fps",
+            "type": "integer"
+          },
+          "frame_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "manifest": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest"
+          },
+          "movie_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movie Bytes"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "dataset",
+          "product",
+          "status",
+          "frame_count",
+          "fps",
+          "format",
+          "movie_bytes",
+          "created_at",
+          "updated_at",
+          "roi",
+          "params",
+          "manifest"
+        ],
+        "title": "RenderDetailOut",
+        "type": "object"
+      },
+      "RenderOut": {
+        "description": "Gallery row: SQL-only, no manifest parse.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "mp4",
+              "gif",
+              "webm"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "fps": {
+            "title": "Fps",
+            "type": "integer"
+          },
+          "frame_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "movie_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movie Bytes"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "dataset",
+          "product",
+          "status",
+          "frame_count",
+          "fps",
+          "format",
+          "movie_bytes",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RenderOut",
+        "type": "object"
+      },
       "RoiPresetOut": {
         "properties": {
           "bbox": {
@@ -1796,6 +2044,43 @@
         "title": "SitePatch",
         "type": "object"
       },
+      "StepIn": {
+        "description": "How the date range is sliced into frames (mirrors core ``frame_windows``).",
+        "properties": {
+          "interval_days": {
+            "default": 16,
+            "maximum": 366.0,
+            "minimum": 1.0,
+            "title": "Interval Days",
+            "type": "integer"
+          },
+          "mode": {
+            "default": "interval",
+            "enum": [
+              "interval",
+              "monthly",
+              "quarterly"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "window_days": {
+            "anyOf": [
+              {
+                "maximum": 366.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Days"
+          }
+        },
+        "title": "StepIn",
+        "type": "object"
+      },
       "ThumbnailRequest": {
         "properties": {
           "composite": {
@@ -2056,6 +2341,130 @@
           "product"
         ],
         "title": "TilesRequest",
+        "type": "object"
+      },
+      "TimelapseCreated": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "render_id": {
+            "title": "Render Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "render_id"
+        ],
+        "title": "TimelapseCreated",
+        "type": "object"
+      },
+      "TimelapseRequest": {
+        "description": "A timelapse render request. ``roi`` is required \u2014 no global timelapse.",
+        "properties": {
+          "annotations": {
+            "$ref": "#/components/schemas/AnnotationsIn"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "$ref": "#/components/schemas/DateRangeIn"
+          },
+          "format": {
+            "default": "mp4",
+            "enum": [
+              "mp4",
+              "gif",
+              "webm"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "fps": {
+            "default": 6,
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Fps",
+            "type": "integer"
+          },
+          "max_dim": {
+            "default": 1080,
+            "maximum": 1920.0,
+            "minimum": 64.0,
+            "title": "Max Dim",
+            "type": "integer"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          },
+          "step": {
+            "$ref": "#/components/schemas/StepIn"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "vis_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vis Max"
+          },
+          "vis_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vis Min"
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "roi",
+          "dates"
+        ],
+        "title": "TimelapseRequest",
         "type": "object"
       },
       "TimeseriesPoint": {
@@ -4095,6 +4504,238 @@
         "summary": "Mint Tiles Route",
         "tags": [
           "render"
+        ]
+      }
+    },
+    "/api/timelapse": {
+      "get": {
+        "operationId": "list_renders_api_timelapse_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RenderOut"
+                  },
+                  "title": "Response List Renders Api Timelapse Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Renders",
+        "tags": [
+          "timelapse"
+        ]
+      },
+      "post": {
+        "operationId": "submit_timelapse_api_timelapse_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimelapseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelapseCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Timelapse",
+        "tags": [
+          "timelapse"
+        ]
+      }
+    },
+    "/api/timelapse/{render_id}": {
+      "delete": {
+        "operationId": "delete_render_api_timelapse__render_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "render_id",
+            "required": true,
+            "schema": {
+              "title": "Render Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Render",
+        "tags": [
+          "timelapse"
+        ]
+      },
+      "get": {
+        "operationId": "get_render_api_timelapse__render_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "render_id",
+            "required": true,
+            "schema": {
+              "title": "Render Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Render",
+        "tags": [
+          "timelapse"
+        ]
+      }
+    },
+    "/api/timelapse/{render_id}/download": {
+      "get": {
+        "operationId": "download_movie_api_timelapse__render_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "render_id",
+            "required": true,
+            "schema": {
+              "title": "Render Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "image/gif": {},
+              "video/mp4": {},
+              "video/webm": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Movie",
+        "tags": [
+          "timelapse"
+        ]
+      }
+    },
+    "/api/timelapse/{render_id}/frames/{index}": {
+      "get": {
+        "operationId": "get_frame_api_timelapse__render_id__frames__index__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "render_id",
+            "required": true,
+            "schema": {
+              "title": "Render Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "title": "Index",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Frame",
+        "tags": [
+          "timelapse"
         ]
       }
     },

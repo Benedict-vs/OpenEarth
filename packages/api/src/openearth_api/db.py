@@ -118,6 +118,31 @@ _MIGRATIONS: list[tuple[str, ...]] = [
         )
         """,
     ),
+    # 4 — timelapse renders (Phase 4). A render is primary reviewable data (like
+    # detections): the movie + frame PNGs + manifest live on disk, and this row
+    # is the gallery index. The timelapse runner inserts and updates its own row
+    # from the worker thread (WAL + busy_timeout, detections precedent); the
+    # manager-owned ``jobs`` table stays event-loop-only.
+    (
+        """
+        CREATE TABLE renders (
+            id          TEXT PRIMARY KEY,
+            title       TEXT NOT NULL,
+            dataset     TEXT NOT NULL,
+            product     TEXT NOT NULL,
+            params_json TEXT NOT NULL,
+            roi_json    TEXT NOT NULL,
+            status      TEXT NOT NULL,          -- running | succeeded | failed | cancelled
+            frame_count INTEGER,
+            fps         INTEGER NOT NULL,
+            format      TEXT NOT NULL,          -- mp4 | gif | webm
+            movie_bytes INTEGER,
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        )
+        """,
+        "CREATE INDEX ix_renders_created_at ON renders (created_at)",
+    ),
 ]
 
 

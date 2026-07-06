@@ -35,6 +35,7 @@ from openearth_api.routers import (
     presets,
     scenes,
     tiles,
+    timelapse,
     timeseries,
     wind,
     workspaces,
@@ -60,6 +61,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     (settings.data_dir / "exports").mkdir(parents=True, exist_ok=True)
     (settings.data_dir / "detections").mkdir(parents=True, exist_ok=True)
+    (settings.data_dir / "timelapse").mkdir(parents=True, exist_ok=True)
     app.state.cache = make_cache(settings)
 
     # DB + job manager come up before EE: they are environment-independent and
@@ -121,4 +123,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(aois.router, prefix="/api")
     app.include_router(workspaces.router, prefix="/api")
     app.include_router(methane.router, prefix="/api")
+    app.include_router(timelapse.router, prefix="/api")
     return app

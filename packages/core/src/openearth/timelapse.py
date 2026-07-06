@@ -550,6 +550,7 @@ def render_frames(
     annotations: AnnotationOptions,
     fetch: FetchFn = _fetch_bytes,
     on_progress: Callable[[int, int], None] | None = None,
+    on_frame: Callable[[int | None, FrameStatus, int], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
 ) -> FrameManifest:
     """Render one PNG per *window* into *out_dir* and write ``manifest.json``.
@@ -558,9 +559,13 @@ def render_frames(
     Per window: build the mean composite, mint the thumb through ``ee_call``,
     fetch the PNG, then burn in the annotations. Empty composites are recorded
     as ``empty`` and skipped; a non-PNG/failed fetch is recorded as ``failed``.
-    Rendered frames are re-indexed densely (``frame_0000.png`` = first rendered)
-    so the movie has no holes. Raises :class:`JobError` only if *nothing*
-    rendered, or ``"cancelled"`` when *should_cancel* trips between frames.
+    Rendered frames are re-indexed densely *as they complete* (``frame_0000.png``
+    = first rendered) so the movie has no holes and the API can serve each frame
+    live. ``on_progress(done, total)`` fires per completed window (generic bar);
+    ``on_frame(dense_index_or_None, status, total)`` fires per completed window
+    with its assigned movie index (``None`` when skipped) for live previews.
+    Raises :class:`JobError` only if *nothing* rendered, or ``"cancelled"`` when
+    *should_cancel* trips between frames.
     """
     if not windows:
         raise JobError("Timelapse render needs at least one window.")
@@ -611,8 +616,11 @@ def render_frames(
         annotated.convert("RGB").save(staging, format="PNG")
         return FrameResult(window, "rendered", staging)
 
-    raw: list[FrameResult] = [FrameResult(w, "failed", None) for w in windows]
+    # Frames run concurrently but results are consumed in window order, so each
+    # rendered frame's dense index is settled the moment it lands — no post-pass.
+    results: list[FrameResult] = []
     total = len(windows)
+    dense = 0
     with ThreadPoolExecutor(max_workers=FRAME_FETCH_WORKERS) as pool:
         futures = [pool.submit(_work, w) for w in windows]
         for i, fut in enumerate(futures):
@@ -621,21 +629,20 @@ def render_frames(
                     pending.cancel()
                 _cleanup_staging(out_dir)
                 raise JobError("cancelled")
-            raw[i] = fut.result()
+            r = fut.result()
+            index: int | None = None
+            if r.status == "rendered" and r.path is not None:
+                final = out_dir / f"frame_{dense:04d}.png"
+                os.replace(r.path, final)
+                results.append(FrameResult(r.window, "rendered", final))
+                index = dense
+                dense += 1
+            else:
+                results.append(FrameResult(r.window, r.status, None))
+            if on_frame is not None:
+                on_frame(index, r.status, total)
             if on_progress is not None:
                 on_progress(i + 1, total)
-
-    # Dense re-indexing: rename staged rendered frames to a hole-free sequence.
-    results: list[FrameResult] = []
-    dense = 0
-    for r in raw:
-        if r.status == "rendered" and r.path is not None:
-            final = out_dir / f"frame_{dense:04d}.png"
-            os.replace(r.path, final)
-            results.append(FrameResult(r.window, "rendered", final))
-            dense += 1
-        else:
-            results.append(FrameResult(r.window, r.status, None))
 
     if dense == 0:
         raise JobError("Timelapse produced no usable frames (all windows empty or failed).")
