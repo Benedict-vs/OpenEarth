@@ -11,8 +11,9 @@ WAL mode lets the single event-loop writer coexist with concurrent readers
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import event
 from sqlmodel import create_engine
 
 if TYPE_CHECKING:
@@ -66,6 +67,57 @@ _MIGRATIONS: list[tuple[str, ...]] = [
         )
         """,
     ),
+    # 3 — methane sites, detections, reference events (Phase 3). Detections are
+    # primary reviewable data: headline numbers are real columns so the feed
+    # filters/sorts in SQL; everything else stays in the JSON blobs. Analyze
+    # runners write their own detection row from the worker thread (WAL +
+    # busy_timeout), so this schema is touched off the event loop too.
+    (
+        """
+        CREATE TABLE sites (
+            id              INTEGER PRIMARY KEY,
+            name            TEXT NOT NULL UNIQUE,
+            west REAL NOT NULL, south REAL NOT NULL, east REAL NOT NULL, north REAL NOT NULL,
+            date_hint_start TEXT, date_hint_end TEXT,
+            notes           TEXT,
+            created_at      TEXT NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE detections (
+            id              TEXT PRIMARY KEY,
+            site_id         INTEGER REFERENCES sites(id) ON DELETE SET NULL,
+            source          TEXT NOT NULL,
+            status          TEXT NOT NULL,
+            method          TEXT NOT NULL,
+            scene_id        TEXT NOT NULL,
+            scene_time_utc  TEXT NOT NULL,
+            ref_scene_id    TEXT,
+            q_kg_h REAL, q_sigma_kg_h REAL, xch4_max_ppb REAL, ime_kg REAL,
+            u10_ms REAL, wind_from_deg REAL,
+            params_json     TEXT NOT NULL,
+            result_json     TEXT NOT NULL,
+            mask_geojson    TEXT,
+            array_path      TEXT NOT NULL,
+            notes           TEXT,
+            validation_json TEXT,
+            created_at      TEXT NOT NULL, updated_at TEXT NOT NULL
+        )
+        """,
+        "CREATE INDEX ix_detections_site   ON detections (site_id, created_at)",
+        "CREATE INDEX ix_detections_status ON detections (status)",
+        """
+        CREATE TABLE reference_events (
+            id             INTEGER PRIMARY KEY,
+            source         TEXT NOT NULL,
+            event_time_utc TEXT NOT NULL,
+            lat REAL NOT NULL, lon REAL NOT NULL,
+            q_kg_h REAL, q_sigma_kg_h REAL,
+            raw_json       TEXT NOT NULL,
+            imported_at    TEXT NOT NULL
+        )
+        """,
+    ),
 ]
 
 
@@ -82,6 +134,17 @@ def create_db_engine(db_path: Path) -> Engine:
         f"sqlite:///{db_path}",
         connect_args={"check_same_thread": False},
     )
+
+    # Analyze runners insert their detection row from a worker thread; a short
+    # busy_timeout (set per raw connection, since it does not persist like WAL)
+    # lets that writer wait out the event-loop writer instead of failing with
+    # "database is locked".
+    @event.listens_for(engine, "connect")
+    def _set_pragmas(dbapi_conn: Any, _record: Any) -> None:
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.close()
+
     with engine.connect() as conn:
         conn.exec_driver_sql("PRAGMA journal_mode=WAL")
         conn.commit()

@@ -3,7 +3,9 @@
      within them, not re-litigate them. Live phase status: docs/roadmap.md.
      Phase 0 (Foundations) COMPLETE — merged to main 2026-07-05.
      Phase 1 (Map platform MVP) COMPLETE — branch v2/phase1-map-mvp, 2026-07-05.
-     Phase 2 (Analysis backbone) COMPLETE — branch v2/phase2-analysis, 2026-07-05. -->
+     Phase 2 (Analysis backbone) COMPLETE — branch v2/phase2-analysis, 2026-07-05.
+     Phase 3 (Methane Lab, physics) COMPLETE — branch v2/phase3-methane-lab, 2026-07-06;
+       plan docs/phase3-execution-plan.md; exit gate green (scripts/validate_events.py). -->
 
 # OpenEarth v2 — Complete Overhaul Plan
 

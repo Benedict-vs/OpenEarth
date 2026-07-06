@@ -21,6 +21,10 @@ dev = [
     "pandas-stubs>=2.0",
     "pre-commit>=4,<5",
 ]
+# Used ONLY by scripts/generate_ch4_lut.py to (re)generate the committed CH4 LUT:
+#   uv run --group lut python scripts/generate_ch4_lut.py
+# HAPI/openpyxl must never become runtime deps — the library loads the .npz only.
+lut = ["hitran-api>=1.2", "openpyxl>=3.1"]
 
 # ── Lint / format ────────────────────────────────────────────────
 
@@ -47,7 +51,16 @@ packages = ["openearth", "openearth_api"]
 exclude = ["legacy/"]
 
 [[tool.mypy.overrides]]
-module = ["ee", "ee.*", "diskcache", "diskcache.*", "rasterio", "rasterio.*"]
+module = [
+    "ee",
+    "ee.*",
+    "diskcache",
+    "diskcache.*",
+    "rasterio",
+    "rasterio.*",
+    "scipy",
+    "scipy.*",
+]
 ignore_missing_imports = true
 
 # SQLModel/SQLAlchemy return Any from Session.get / exec chains; "returning
@@ -68,6 +81,10 @@ module = [
     "openearth.analytics.conversions",
     "openearth.analytics.source_classification",
     "openearth.methane.wind",
+    "openearth.methane.scenes",
+    "openearth.methane.retrieval",
+    "openearth.methane.detect",
+    "openearth.methane.tropomi",
     "openearth.timeseries",
     "openearth.export",
     "openearth_api.services.*",

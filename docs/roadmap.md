@@ -34,7 +34,7 @@ point + field endpoints + arrow overlay; saved AOIs + versioned workspaces (SQLi
 GeoTIFF opens georeferenced in QGIS.* ✅ *(measured: warm S5P NO₂ ≈6 s, S2 NDVI ≈3 s;
 cached ~instant; both GeoTIFF paths rasterio-verified; E2E golden path green.)*
 
-## Phase 3 — Methane Lab, physics (XL)
+## Phase 3 — Methane Lab, physics (XL) ✅
 
 HITRAN LUT (`scripts/generate_ch4_lut.py` → committed `ch4_lut_v1.npz`); calibrated MBSP/MBMP
 NumPy retrieval on computePixels chips; plume masking; IME + Monte-Carlo uncertainty;
@@ -42,6 +42,11 @@ S5P screening tier; sites/detections DB; Methane Lab UI; IMEO/SRON validation im
 `docs/methane_methods.md`.
 *Exit: reproduce ≥2 documented super-emitter events with Q within ~±50 % of published values;
 synthetic-plume test suite green; every detection persisted and reviewable.*
+*(Delivered: LUT anchored to Varon 2021 within ±30 %; synthetic golden paths green across
+conversion/retrieval/plume/IME/detect; migration 3 (sites/detections/reference_events) with
+overlay-PNG + npz artifacts; 3-pane Lab UI verified live (Korpezhe 2018-06-19). Reproduction
+gate green — Korpezhe 9.6 ± 5.4 t/h (pub 11.2 ± 5.2, MBMP) and Hassi Messaoud 8.3 t/h mean
+(pub 9.3 ± 5.5, MBSP) via `scripts/validate_events.py`.)*
 
 ## Phase 4 — Compare + Timelapse → retire Streamlit (M)
 

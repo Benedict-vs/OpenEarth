@@ -45,5 +45,10 @@ htmlcov/
 deferred products.md
 # OpenEarth v2 local state
 data/
+# ...but the committed CH4 absorption LUT + SRF extract are versioned payload, not scratch.
+!packages/core/src/openearth/methane/data/
+!packages/core/src/openearth/methane/data/**
+!scripts/data/
+!scripts/data/**
 node_modules/
 uv-receipt.json

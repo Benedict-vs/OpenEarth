@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     ee_project: str | None = None
     data_dir: Path = Path("data")
     ee_max_concurrency: int = 8
+    # Optional override for the CH4 absorption LUT (for retrieval experiments);
+    # None loads the packaged ``ch4_lut_v1.npz``.
+    lut_path: Path | None = None
     # getMapId tile URLs are valid for ~4 h (undocumented, treated as an
     # assumption to measure). Consumers re-mint well before this expires.
     tile_ttl_seconds: int = 4 * 3600
