@@ -299,6 +299,12 @@ def _result_payload(result: DetectionResult, xch4_max: float | None) -> dict[str
             "wind_from_deg": em.wind_from_deg,
             "xch4_max_ppb": xch4_max,
             "n_mc": em.n_mc,
+            # The plume footprint is thresholded on the FROZEN mask-LUT ΔΩ (invariant to
+            # reporting-LUT recalibration); the mask σ and the reporting-ΔΩ noise σ are
+            # distinct populations and must not be conflated.
+            "mask_domain": "frozen_lut_delta_omega",
+            "sigma_mask": result.plume.sigma,
+            "sigma_noise_delta_omega": em.sigma_noise_delta_omega,
             "plume": {
                 "n_pixels": result.plume.n_pixels,
                 "area_m2": result.plume.area_m2,
@@ -325,6 +331,7 @@ def persist_detection(
     """Write the npz artifact then the detection row (own Session, worker thread)."""
     det_id = uuid4().hex
     params = req.model_dump()
+    params["mask_domain"] = "frozen_lut_delta_omega"  # footprint from the frozen mask LUT
     _detections_dir(settings).mkdir(parents=True, exist_ok=True)
     array_path = _detections_dir(settings) / f"{det_id}.npz"
     _write_npz(array_path, result, params)

@@ -97,13 +97,33 @@ subtracting the columns) is Varon's definition and handles mixed S2A/S2B pairs c
 
 ## 3. Plume masking
 
-`plume.py` thresholds the **positive** enhancement tail of the ΔΩ field at `k·σ`, where σ is
-a robust background estimate (`1.4826 · MAD`, NaN-aware). It optionally applies a 1-px
+The plume footprint is thresholded on the **ΔΩ field from a frozen canonical inversion**
+(`ch4_lut_mask.npz`), *decoupled from the reporting LUT*. This makes the footprint **invariant
+to a reporting-LUT recalibration** — v3→v4 changes the retrieved columns and IME but never which
+pixels are called plume (see §8 and the invariance test `test_footprint_invariant_under_lut_swap`).
+The mask LUT is a pinned snapshot and is bumped only to *deliberately* move masks, never
+alongside the reporting LUT.
+
+Why a frozen inversion rather than the LUT-independent ΔR field (the natural first idea):
+masking on raw `−ΔR` was tried and rejected — for MBMP it reintroduces surface-structure
+sensitivity (the raw ΔR difference does not cancel co-clamped structure the way the per-pass
+ΔΩ difference does) and *displaces* the mask off the source (§8). The per-pass inversion is what
+actually localises the plume, so the mask keeps it — just with a fixed inversion.
+
+`plume.py` thresholds the **positive** enhancement tail of that ΔΩ field at `k·σ`, where σ is a
+robust background estimate (`1.4826 · MAD`, NaN-aware). It optionally applies a 1-px
 `binary_opening` (removes speckle), labels connected components with 8-connectivity, drops
 components below `min_area_px`, and keeps the component(s) intersecting a 7×7 window around a
 supplied source pixel — or, failing that, the component holding the peak enhancement. No plume
-above threshold is a valid, empty result (not an error). The mask is vectorised to an
-EPSG:4326 MultiPolygon outline (`rasterio.features.shapes`; pixel-cornered, unsmoothed).
+above threshold is a valid, empty result (not an error). The mask is vectorised to an EPSG:4326
+MultiPolygon outline (`rasterio.features.shapes`; pixel-cornered, unsmoothed).
+
+The **mass** (IME) and the retrieval-noise bootstrap use the *reporting* ΔΩ (mol/m²):
+`ime.quantify` sums the reporting ΔΩ over the mask, and the bootstrap samples the off-plume
+reporting-ΔΩ population. There are therefore two distinct σ's — the mask-threshold σ on the
+frozen-LUT field (`sigma_mask`) and the retrieval-noise σ on the reporting field
+(`sigma_noise_delta_omega`); `result_json` names them separately, and
+`mask_domain: "frozen_lut_delta_omega"` records the choice.
 
 ## 4. Quantification — IME + Monte-Carlo uncertainty
 
@@ -182,10 +202,16 @@ is a human PATCH only).
   US Std Atmosphere background, 500 m enhancement slab), so the remaining ~25 % anchor offset
   vs Varon is attributable to the named spectral omissions, not to a guessed effective (T, p).
   The LUT also bakes in sea-level surface pressure — sites at significant elevation are biased.
-- **Plume mask depends on the LUT** — the `k·σ` threshold operates on the ΔΩ field, so a
-  *nonlinear* change to the inversion curve can move the mask footprint (see the Korpezhe note
-  in §8). Follow-up: threshold in ΔR (or inversion-gain-normalised) space so the detection
-  footprint is invariant to LUT calibration changes.
+- **Plume mask is now invariant to reporting-LUT recalibration** *(resolved in Phase 3.5)* — the
+  `k·σ` threshold operates on the ΔΩ field of a *frozen* canonical inversion (§3), so a change to
+  the reporting LUT (v3→v4) no longer moves the footprint; only the reported ΔΩ *columns* (and
+  hence IME/Q) change. Enforced bit-identically by `test_footprint_invariant_under_lut_swap`.
+- **Source localisation partly rides on the S2A/S2B inversion difference** — for mixed-spacecraft
+  MBMP pairs (S2A reference, S2B target), the per-pass inversion maps near-equal ΔR (ΔR_t ≈ ΔR_r)
+  to a non-zero ΔΩ difference because the S2A and S2B LUT curves differ, contributing to *where*
+  the ΔΩ-domain mask places the plume. This affects the shipping Phase 3 masks as well; it is why
+  raw-ΔR masking (which lacks this signal) displaces the mask off-source, and one reason the
+  calibration scatter (§8.2) is wide.
 
 ## 8. Reproduction and calibration results
 
@@ -262,19 +288,26 @@ unbiased; the wide scatter is honest and has known causes we do **not** chase pe
 (i) *reference quality* — recurrent emitters may have no in-period plume-free reference, so a
 contaminated reference over-subtracts (libya-sirte 1.7 vs 14.7); (ii) IMEO/Varon rates embed
 *their* wind source while ours is ERA5; (iii) single-scene surface heterogeneity. This baseline
-is the reference against which Stage 2 (ΔR-space masking) and Stage 3 (LUT v4) are measured;
+is the reference against which Stage 2 (frozen-mask-LUT footprints) and Stage 3 (LUT v4) are measured;
 the harness `--compare` reruns and diffs a fresh run without overwriting it.
 
 ### LUT history note
 
 **LUT history at Korpezhe (v1 → v2 → v3).** Korpezhe's point estimate moved
-9.6 → 5.4 → 13.7 t/h across the three LUTs while the retrieved ΔR field never changed — the
-robust-σ mask is thresholded in ΔΩ space, so it is invariant under *linear* rescaling of the
-inversion but shifts whenever the curve changes shape (v2's single-effective-layer curve was
-nonlinearly shallower, collapsing the mask 50 → 12 px). v3 restores the mask and lands the
-point estimate inside the ±50 % window, but its Monte-Carlo band is wide (± 22.7 t/h): the
-k-jitter draws straddle a mask-size cliff for this intermittent, different-date-reference
-event — the honest reading is that Korpezhe's *footprint*, not its per-pixel physics, is the
-dominant uncertainty. The structural fix (threshold in ΔR / gain-normalised space so the
-footprint is LUT-invariant) is flagged as follow-up in §7; we report the wide band rather than
-tuning k to shrink it.
+9.6 → 5.4 → 13.7 t/h across the three LUTs while the retrieved ΔR field never changed —
+*because v1–v3 thresholded the mask in ΔΩ space*, it was invariant under *linear* rescaling of
+the inversion but shifted whenever the curve changed shape (v2's single-effective-layer curve
+was nonlinearly shallower, collapsing the mask 50 → 12 px). **Phase 3.5 Stage 2 removed this
+sensitivity**: the mask is thresholded on the ΔΩ of a *frozen* canonical inversion decoupled from
+the reporting LUT (§3), so a reporting-LUT swap changes only the columns and IME, never the
+footprint (`test_footprint_invariant_under_lut_swap`).
+
+Masking on the LUT-*independent* raw `−ΔR` field was tried first (the obvious way to get
+invariance) and **rejected after diagnosis**: for the MBMP-heavy calibration set it gave masks
+with *zero* overlap with the true plume. Two causes — (i) the raw ΔR difference does not cancel
+co-clamped surface structure the way the per-pass ΔΩ difference does, so its tail is dominated by
+surface edges; (ii) the mask component displaces off the seeded source (the offsets are not
+systematically downwind, so not simple advection). The per-pass inversion is what localises the
+plume, so the frozen-mask-LUT keeps it while still decoupling the footprint from calibration. The
+remaining Korpezhe MC width is genuine plume-footprint ambiguity for this intermittent,
+different-date-reference event — we report the wide band rather than tuning k to shrink it.

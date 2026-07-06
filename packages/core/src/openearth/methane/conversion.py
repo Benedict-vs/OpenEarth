@@ -28,6 +28,11 @@ from openearth.methane.constants import OMEGA_AIR_MOL_M2
 
 _METHANE_PACKAGE = "openearth.methane"
 _LUT_FILENAME = "ch4_lut_v3.npz"
+# Frozen canonical inversion used ONLY to build plume masks (Phase 3.5 Stage 2). Decoupling
+# the masking inversion from the reporting LUT makes plume footprints invariant to a
+# reporting-LUT recalibration: v3→v4 changes the retrieved columns/IME but never which pixels
+# are called plume. Never bumped alongside the reporting LUT — only to deliberately move masks.
+_MASK_LUT_FILENAME = "ch4_lut_mask.npz"
 
 # Map the compact npz array keys to full SPACECRAFT_NAME values used everywhere
 # else (S2Scene.spacecraft, retrieval, the API).
@@ -66,6 +71,16 @@ def load_lut(path: Path | None = None) -> CH4Lut:
     """Load the CH4 LUT (cached). *path* defaults to the packaged ``ch4_lut_v3.npz``."""
     resolved = path if path is not None else _packaged_lut_path()
     return _load_lut_cached(str(resolved))
+
+
+def load_mask_lut() -> CH4Lut:
+    """Load the frozen canonical inversion used to build plume masks (cached).
+
+    Always the committed ``ch4_lut_mask.npz`` — never ``settings.lut_path`` — so the plume
+    footprint stays invariant to reporting-LUT recalibrations (see ``_MASK_LUT_FILENAME``).
+    """
+    path = Path(str(files(_METHANE_PACKAGE).joinpath("data", _MASK_LUT_FILENAME)))
+    return _load_lut_cached(str(path))
 
 
 def forward_signal(
