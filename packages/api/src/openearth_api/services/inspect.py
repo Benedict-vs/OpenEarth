@@ -61,7 +61,7 @@ def inspect_point(req: InspectRequest) -> InspectResult:
             ),
         )
     roi = req.roi.to_domain() if req.roi is not None else GLOBAL_BBOX
-    image = build_image(_as_tiles_request(req), roi)  # per-mode 422 like tiles
+    image = build_image(_as_tiles_request(req), roi, spec)  # per-mode 422 like tiles
     value = sample_point(image, spec.band, req.lon, req.lat, dataset.default_scale_m)
     return InspectResult(
         value=value,

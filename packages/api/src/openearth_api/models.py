@@ -62,3 +62,65 @@ class Workspace(SQLModel, table=True):
     state_json: str
     created_at: str
     updated_at: str
+
+
+# ── Phase 3 (methane) ────────────────────────────────────────
+
+# A detection's review lifecycle. 'candidate' until a human accepts/rejects it.
+DetectionStatus = Literal["candidate", "accepted", "rejected"]
+
+
+class Site(SQLModel, table=True):
+    __tablename__ = "sites"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+    west: float
+    south: float
+    east: float
+    north: float
+    date_hint_start: str | None = None
+    date_hint_end: str | None = None
+    notes: str | None = None
+    created_at: str
+
+
+class Detection(SQLModel, table=True):
+    __tablename__ = "detections"
+
+    id: str = Field(primary_key=True)  # uuid4 hex
+    site_id: int | None = None
+    source: str  # 'physics' now; 'ml'|'emit' later
+    status: str  # DetectionStatus
+    method: str  # 'mbmp'|'mbsp'
+    scene_id: str
+    scene_time_utc: str
+    ref_scene_id: str | None = None
+    q_kg_h: float | None = None
+    q_sigma_kg_h: float | None = None
+    xch4_max_ppb: float | None = None
+    ime_kg: float | None = None
+    u10_ms: float | None = None
+    wind_from_deg: float | None = None
+    params_json: str
+    result_json: str
+    mask_geojson: str | None = None
+    array_path: str
+    notes: str | None = None
+    validation_json: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class ReferenceEvent(SQLModel, table=True):
+    __tablename__ = "reference_events"
+
+    id: int | None = Field(default=None, primary_key=True)
+    source: str  # 'imeo'|'sron'|'manual'
+    event_time_utc: str
+    lat: float
+    lon: float
+    q_kg_h: float | None = None
+    q_sigma_kg_h: float | None = None
+    raw_json: str
+    imported_at: str

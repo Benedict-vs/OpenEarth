@@ -1,6 +1,102 @@
 {
   "components": {
     "schemas": {
+      "AnalyzeRequest": {
+        "description": "Exactly one of ``site_id`` / ``roi`` locates the analysis. ``seed`` makes\nthe Monte Carlo reproducible; a re-run with the same seed is bit-for-bit.",
+        "properties": {
+          "k_sigma": {
+            "default": 2.0,
+            "maximum": 5.0,
+            "minimum": 0.5,
+            "title": "K Sigma",
+            "type": "number"
+          },
+          "method": {
+            "default": "mbmp",
+            "enum": [
+              "mbmp",
+              "mbsp"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "min_area_px": {
+            "default": 5,
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Min Area Px",
+            "type": "integer"
+          },
+          "reference_scene_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Scene Id"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
+          },
+          "source_lonlat": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Lonlat"
+          },
+          "target_scene_id": {
+            "minLength": 1,
+            "title": "Target Scene Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_scene_id"
+        ],
+        "title": "AnalyzeRequest",
+        "type": "object"
+      },
       "AoiIn": {
         "properties": {
           "name": {
@@ -262,6 +358,399 @@
           "end"
         ],
         "title": "DateRangeIn",
+        "type": "object"
+      },
+      "DetectionDetailOut": {
+        "description": "Full detail: numbers, params, mask + overlay geometry, validation.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ime_kg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ime Kg"
+          },
+          "mask_geojson": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Geojson"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "overlay_bounds": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Bounds"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "q_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Kg H"
+          },
+          "q_sigma_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Sigma Kg H"
+          },
+          "reference_scene_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Scene Id"
+          },
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          },
+          "scene_id": {
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "scene_time_utc": {
+            "title": "Scene Time Utc",
+            "type": "string"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "candidate",
+              "accepted",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "u10_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "U10 Ms"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation"
+          },
+          "wind_from_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind From Deg"
+          },
+          "xch4_max_ppb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xch4 Max Ppb"
+          }
+        },
+        "required": [
+          "id",
+          "site_id",
+          "source",
+          "status",
+          "method",
+          "scene_id",
+          "scene_time_utc",
+          "q_kg_h",
+          "q_sigma_kg_h",
+          "xch4_max_ppb",
+          "u10_ms",
+          "wind_from_deg",
+          "flags",
+          "created_at",
+          "updated_at",
+          "reference_scene_id",
+          "ime_kg",
+          "notes",
+          "result",
+          "params",
+          "mask_geojson",
+          "overlay_bounds",
+          "validation"
+        ],
+        "title": "DetectionDetailOut",
+        "type": "object"
+      },
+      "DetectionOut": {
+        "description": "Summary row for the detection feed (headline numbers only).",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "q_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Kg H"
+          },
+          "q_sigma_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Sigma Kg H"
+          },
+          "scene_id": {
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "scene_time_utc": {
+            "title": "Scene Time Utc",
+            "type": "string"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "candidate",
+              "accepted",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "u10_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "U10 Ms"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "wind_from_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind From Deg"
+          },
+          "xch4_max_ppb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xch4 Max Ppb"
+          }
+        },
+        "required": [
+          "id",
+          "site_id",
+          "source",
+          "status",
+          "method",
+          "scene_id",
+          "scene_time_utc",
+          "q_kg_h",
+          "q_sigma_kg_h",
+          "xch4_max_ppb",
+          "u10_ms",
+          "wind_from_deg",
+          "flags",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DetectionOut",
+        "type": "object"
+      },
+      "DetectionPatch": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "candidate",
+                  "accepted",
+                  "rejected"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "DetectionPatch",
         "type": "object"
       },
       "ExportGeotiffRequest": {
@@ -860,6 +1349,61 @@
         "title": "RoiPresetOut",
         "type": "object"
       },
+      "SceneInfoOut": {
+        "description": "One S2 scene's metadata for the scene picker. ``ref_ok`` flags a scene\nclear enough (cloud \u2264 30 %) to serve as an MBMP reference.",
+        "properties": {
+          "amf": {
+            "title": "Amf",
+            "type": "number"
+          },
+          "cloud_pct": {
+            "title": "Cloud Pct",
+            "type": "number"
+          },
+          "ref_ok": {
+            "title": "Ref Ok",
+            "type": "boolean"
+          },
+          "relative_orbit": {
+            "title": "Relative Orbit",
+            "type": "integer"
+          },
+          "scene_id": {
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "spacecraft": {
+            "title": "Spacecraft",
+            "type": "string"
+          },
+          "sun_zenith_deg": {
+            "title": "Sun Zenith Deg",
+            "type": "number"
+          },
+          "time": {
+            "format": "date-time",
+            "title": "Time",
+            "type": "string"
+          },
+          "view_zenith_deg": {
+            "title": "View Zenith Deg",
+            "type": "number"
+          }
+        },
+        "required": [
+          "scene_id",
+          "time",
+          "cloud_pct",
+          "relative_orbit",
+          "spacecraft",
+          "sun_zenith_deg",
+          "view_zenith_deg",
+          "amf",
+          "ref_ok"
+        ],
+        "title": "SceneInfoOut",
+        "type": "object"
+      },
       "SceneOut": {
         "properties": {
           "datetime_utc": {
@@ -926,6 +1470,190 @@
         "title": "ScenesRequest",
         "type": "object"
       },
+      "SiteIn": {
+        "properties": {
+          "bbox": {
+            "$ref": "#/components/schemas/BBoxIn"
+          },
+          "date_hint_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Hint End"
+          },
+          "date_hint_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Hint Start"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "name",
+          "bbox"
+        ],
+        "title": "SiteIn",
+        "type": "object"
+      },
+      "SiteOut": {
+        "properties": {
+          "bbox": {
+            "$ref": "#/components/schemas/BBoxIn"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "date_hint_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Hint End"
+          },
+          "date_hint_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Hint Start"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "bbox",
+          "date_hint_start",
+          "date_hint_end",
+          "notes",
+          "created_at"
+        ],
+        "title": "SiteOut",
+        "type": "object"
+      },
+      "SitePatch": {
+        "description": "Partial update \u2014 only provided fields change (unset fields untouched).",
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "date_hint_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Hint End"
+          },
+          "date_hint_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Hint Start"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "title": "SitePatch",
+        "type": "object"
+      },
       "ThumbnailRequest": {
         "properties": {
           "composite": {
@@ -958,6 +1686,16 @@
             "minimum": 0.0,
             "title": "Half Window Days",
             "type": "integer"
+          },
+          "methane_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "product": {
             "title": "Product",
@@ -1097,6 +1835,16 @@
             "minimum": 0.0,
             "title": "Half Window Days",
             "type": "integer"
+          },
+          "methane_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "product": {
             "title": "Product",
@@ -2272,6 +3020,597 @@
         "summary": "Job Events",
         "tags": [
           "jobs"
+        ]
+      }
+    },
+    "/api/methane/analyze": {
+      "post": {
+        "operationId": "submit_analyze_api_methane_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Analyze",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/detections": {
+      "get": {
+        "operationId": "list_detections_api_methane_detections_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "site_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Site Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DetectionOut"
+                  },
+                  "title": "Response List Detections Api Methane Detections Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Detections",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/detections/{det_id}": {
+      "delete": {
+        "operationId": "delete_detection_api_methane_detections__det_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "det_id",
+            "required": true,
+            "schema": {
+              "title": "Det Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Detection",
+        "tags": [
+          "methane"
+        ]
+      },
+      "get": {
+        "operationId": "get_detection_api_methane_detections__det_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "det_id",
+            "required": true,
+            "schema": {
+              "title": "Det Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Detection",
+        "tags": [
+          "methane"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_detection_api_methane_detections__det_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "det_id",
+            "required": true,
+            "schema": {
+              "title": "Det Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetectionPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Detection",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/detections/{det_id}/array.npz": {
+      "get": {
+        "operationId": "detection_array_api_methane_detections__det_id__array_npz_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "det_id",
+            "required": true,
+            "schema": {
+              "title": "Det Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detection Array",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/detections/{det_id}/overlay.png": {
+      "get": {
+        "operationId": "detection_overlay_api_methane_detections__det_id__overlay_png_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "det_id",
+            "required": true,
+            "schema": {
+              "title": "Det Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vmin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vmin"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vmax",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vmax"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detection Overlay",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/sites": {
+      "get": {
+        "operationId": "list_sites_api_methane_sites_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SiteOut"
+                  },
+                  "title": "Response List Sites Api Methane Sites Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Sites",
+        "tags": [
+          "methane"
+        ]
+      },
+      "post": {
+        "operationId": "create_site_api_methane_sites_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Site",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/sites/{site_id}": {
+      "delete": {
+        "operationId": "delete_site_api_methane_sites__site_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Site",
+        "tags": [
+          "methane"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_site_api_methane_sites__site_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SitePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Site",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/sites/{site_id}/scenes": {
+      "get": {
+        "operationId": "list_site_scenes_api_methane_sites__site_id__scenes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_cloud",
+            "required": false,
+            "schema": {
+              "default": 80.0,
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Max Cloud",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SceneInfoOut"
+                  },
+                  "title": "Response List Site Scenes Api Methane Sites  Site Id  Scenes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Site Scenes",
+        "tags": [
+          "methane"
         ]
       }
     },

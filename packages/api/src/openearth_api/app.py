@@ -31,6 +31,7 @@ from openearth_api.routers import (
     inspect,
     jobs,
     meta,
+    methane,
     presets,
     scenes,
     tiles,
@@ -38,6 +39,7 @@ from openearth_api.routers import (
     wind,
     workspaces,
 )
+from openearth_api.services.methane import seed_sites
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -57,6 +59,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     (settings.data_dir / "exports").mkdir(parents=True, exist_ok=True)
+    (settings.data_dir / "detections").mkdir(parents=True, exist_ok=True)
     app.state.cache = make_cache(settings)
 
     # DB + job manager come up before EE: they are environment-independent and
@@ -64,6 +67,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # active by a prior process are marked ``interrupted`` here.
     engine = create_db_engine(settings.data_dir / "openearth.db")
     migrate(engine)
+    seed_sites(engine)  # idempotent: 7 built-in methane sites on an empty table
     app.state.db_engine = engine
     app.state.jobs = JobManager(engine)
     app.state.jobs.start()
@@ -116,4 +120,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(wind.router, prefix="/api")
     app.include_router(aois.router, prefix="/api")
     app.include_router(workspaces.router, prefix="/api")
+    app.include_router(methane.router, prefix="/api")
     return app

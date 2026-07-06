@@ -67,7 +67,7 @@ def render_thumbnail(req: ThumbnailRequest, cache: diskcache.Cache) -> bytes:
     if cached is not None:
         return bytes(cached)
 
-    image = build_image(req, roi)
+    image = build_image(req, roi, spec)
     viz = req.viz_overrides
     url = thumb_url(
         image,

@@ -73,7 +73,7 @@ async def submit_export_geotiff(
     """Validate + build the image, then submit the windowed-write job."""
     dataset, spec = resolve_catalog(req.dataset, req.product)  # 404 / 422 (builder)
     roi = req.roi.to_domain()  # 422 on malformed geometry
-    image = build_image(_as_tiles_request(req), roi)  # per-mode 422 (dates/target/timestamp)
+    image = build_image(_as_tiles_request(req), roi, spec)  # per-mode 422 (dates/target/timestamp)
     scale_m = req.scale_m if req.scale_m is not None else dataset.default_scale_m
 
     file_name = f"{uuid4().hex}.tif"

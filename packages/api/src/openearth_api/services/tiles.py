@@ -15,6 +15,7 @@ from openearth.catalog import get_dataset
 from openearth.composites import (
     build_date_composite,
     build_mean_composite,
+    build_methane_anomaly_composite,
     build_single_scene,
 )
 from openearth.ee.render import mint_tile_url
@@ -52,14 +53,50 @@ def resolve_catalog(dataset_id: str, product_key: str) -> tuple[DatasetSpec, Pro
 
 
 def resolve_request(req: TilesRequest) -> tuple[DatasetSpec, ProductSpec, ROI]:
-    """Resolve catalog specs and the domain ROI; 404/422 on bad input."""
-    dataset, spec = resolve_catalog(req.dataset, req.product)
+    """Resolve catalog specs and the domain ROI for a tiles request.
+
+    Builder products still 422 — except ``methane_anomaly`` when a
+    ``methane_ref`` window is supplied (the quicklook unlock).
+    """
+    try:
+        dataset = get_dataset(req.dataset)
+        spec = dataset.get(req.product)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
+
+    if spec.builder is not None and not (
+        spec.builder == "methane_anomaly" and req.methane_ref is not None
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Product {spec.key!r} requires the dedicated compute path "
+                f"{spec.builder!r}; the CH4 quicklook needs a 'methane_ref' window."
+            ),
+        )
     roi = req.roi.to_domain() if req.roi is not None else GLOBAL_BBOX
     return dataset, spec, roi
 
 
-def build_image(req: TilesRequest, roi: ROI) -> ee.Image:
-    """Dispatch the composite mode to the core builders."""
+def build_image(req: TilesRequest, roi: ROI, spec: ProductSpec) -> ee.Image:
+    """Dispatch the composite mode (or the methane-anomaly builder) to core."""
+    if spec.builder == "methane_anomaly":
+        if req.methane_ref is None:
+            raise HTTPException(
+                status_code=422, detail="CH4_ANOMALY requires a 'methane_ref' window."
+            )
+        if req.target_date is None:
+            raise HTTPException(
+                status_code=422, detail="CH4_ANOMALY quicklook requires 'target_date'."
+            )
+        return build_methane_anomaly_composite(
+            roi,
+            req.target_date,
+            req.half_window_days,
+            req.methane_ref.start,
+            req.methane_ref.end,
+        )
+
     if req.composite == "mean":
         if req.dates is None:
             raise HTTPException(status_code=422, detail="composite='mean' requires 'dates'.")
@@ -87,7 +124,7 @@ def build_image(req: TilesRequest, roi: ROI) -> ee.Image:
 
 def mint_tiles(req: TilesRequest) -> TileResponse:
     dataset, spec, roi = resolve_request(req)
-    image = build_image(req, roi)
+    image = build_image(req, roi, spec)
     viz = req.viz_overrides
     ref = mint_tile_url(
         image,

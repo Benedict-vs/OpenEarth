@@ -221,15 +221,16 @@ def test_reversed_dates_are_422(client: TestClient, seams: dict[str, Any]) -> No
     assert "after" in response.json()["detail"]
 
 
-def test_builder_product_refused_with_phase3_message(
+def test_builder_product_refused_without_methane_ref(
     client: TestClient, seams: dict[str, Any]
 ) -> None:
+    # The CH4_ANOMALY builder still 422s without the 'methane_ref' unlock.
     response = client.post(
         "/api/tiles",
         json={"dataset": "s2", "product": "CH4_ANOMALY", "roi": HEIDELBERG, "dates": DATES},
     )
     assert response.status_code == 422
-    assert "Phase 3" in response.json()["detail"]
+    assert "methane_ref" in response.json()["detail"]
     assert "build" not in seams  # refused before any composite work
 
 

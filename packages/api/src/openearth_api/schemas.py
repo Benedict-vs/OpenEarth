@@ -108,6 +108,9 @@ class TilesRequest(BaseModel):
     half_window_days: int = Field(default=3, ge=0, le=30)
     timestamp_ms: int | None = None
     viz_overrides: VizOverrides | None = None
+    # Reference window that unlocks the CH4_ANOMALY quicklook (a builder product
+    # that 422s without it): the target is the composite's ``target_date``.
+    methane_ref: DateRangeIn | None = None
 
 
 class LegendOut(BaseModel):
@@ -345,6 +348,110 @@ class WorkspaceOut(BaseModel):
     state: WorkspaceState
     created_at: str
     updated_at: str
+
+
+# ── Methane Lab (Phase 3) ────────────────────────────────────
+
+
+class SiteIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    bbox: BBoxIn
+    date_hint_start: date | None = None
+    date_hint_end: date | None = None
+    notes: str | None = None
+
+
+class SitePatch(BaseModel):
+    """Partial update — only provided fields change (unset fields untouched)."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    bbox: BBoxIn | None = None
+    date_hint_start: date | None = None
+    date_hint_end: date | None = None
+    notes: str | None = None
+
+
+class SiteOut(BaseModel):
+    id: int
+    name: str
+    bbox: BBoxIn
+    date_hint_start: date | None
+    date_hint_end: date | None
+    notes: str | None
+    created_at: str
+
+
+class SceneInfoOut(BaseModel):
+    """One S2 scene's metadata for the scene picker. ``ref_ok`` flags a scene
+    clear enough (cloud ≤ 30 %) to serve as an MBMP reference."""
+
+    scene_id: str
+    time: datetime
+    cloud_pct: float
+    relative_orbit: int
+    spacecraft: str
+    sun_zenith_deg: float
+    view_zenith_deg: float
+    amf: float
+    ref_ok: bool
+
+
+class AnalyzeRequest(BaseModel):
+    """Exactly one of ``site_id`` / ``roi`` locates the analysis. ``seed`` makes
+    the Monte Carlo reproducible; a re-run with the same seed is bit-for-bit."""
+
+    site_id: int | None = None
+    roi: BBoxIn | None = None
+    target_scene_id: str = Field(min_length=1)
+    reference_scene_id: str | None = None
+    method: Literal["mbmp", "mbsp"] = "mbmp"
+    k_sigma: float = Field(default=2.0, ge=0.5, le=5.0)
+    min_area_px: int = Field(default=5, ge=1, le=100000)
+    source_lonlat: tuple[float, float] | None = None
+    seed: int = 0
+
+
+class DetectionOut(BaseModel):
+    """Summary row for the detection feed (headline numbers only)."""
+
+    id: str
+    site_id: int | None
+    source: str
+    status: Literal["candidate", "accepted", "rejected"]
+    method: str
+    scene_id: str
+    scene_time_utc: str
+    q_kg_h: float | None
+    q_sigma_kg_h: float | None
+    xch4_max_ppb: float | None
+    u10_ms: float | None
+    wind_from_deg: float | None
+    flags: list[str]
+    created_at: str
+    updated_at: str
+
+
+class DetectionDetailOut(DetectionOut):
+    """Full detail: numbers, params, mask + overlay geometry, validation."""
+
+    reference_scene_id: str | None
+    ime_kg: float | None
+    notes: str | None
+    result: dict[str, Any]
+    params: dict[str, Any]
+    mask_geojson: dict[str, Any] | None
+    # Map image-source corners, [[w,n],[e,n],[e,s],[w,s]] (EPSG:4326).
+    overlay_bounds: list[list[float]] | None
+    validation: dict[str, Any] | None
+
+
+class DetectionPatch(BaseModel):
+    status: Literal["candidate", "accepted", "rejected"] | None = None
+    notes: str | None = None
+
+
+class DetectionCreated(BaseModel):
+    detection_id: str
 
 
 # ── Meta ─────────────────────────────────────────────────────
