@@ -187,7 +187,13 @@ is a human PATCH only).
   in §8). Follow-up: threshold in ΔR (or inversion-gain-normalised) space so the detection
   footprint is invariant to LUT calibration changes.
 
-## 8. Reproduction results (Phase 3 exit gate)
+## 8. Reproduction and calibration results
+
+Two live-EE instruments validate the pipeline. They are complementary: the first is a fast
+pass/fail gate on two hand-checked events; the second is a multi-event regression that makes
+the LUT / masking changes of Phase 3.5 falsifiable.
+
+### 8.1 Two-event exit gate (Phase 3)
 
 `OPENEARTH_EE_TESTS=1 uv run python scripts/validate_events.py` reproduces two documented
 super-emitter events against live Earth Engine (values verified against Varon et al. 2021),
@@ -200,6 +206,66 @@ using the v3 (layered) LUT:
 
 Korpezhe's reference is pinned (its auto pick is the unusable same overpass); Hassi Messaoud is
 a continuous blowout, so single-scene MBSP at the well is averaged over three cloud-free scenes.
+
+### 8.2 Multi-event calibration regression (Phase 3.5)
+
+`OPENEARTH_EE_TESTS=1 uv run python scripts/calibration_harness.py` runs `analyze` over the
+17 same-scene Sentinel-2 events in `scripts/data/calibration_events.json` — IMEO's
+per-scene MARS-S2L quantifications plus the Korpezhe (Varon et al. 2021) anchor, spanning
+13 regions and ~5–25 t/h — and regresses our retrieved rate against the published rate.
+Every event's published value derives from the *same* S2 acquisition we analyze (the
+same-scene principle); the SRON TROPOMI weekly list is excluded (7 km pixels, tens-of-t/h
+scale, different overpass — that measures source variability, not our calibration).
+
+**MBSP applicability (a genuine finding, not a nuisance).** *Method is our per-event analysis
+choice, not a property of the published event.* Single-scene **MBSP** has no reference to
+cancel static surface structure, so over heterogeneous terrain a coherent dark/bright region
+inverts to the **clamped LUT ΔΩ grid edge** and the connected-component step engulfs it into a
+multi-thousand-pixel false plume of hundreds of t/h (turkmenistan-caspian: 473 t/h, a
+9 561-pixel mask that is 76 % LUT-saturated). This is exactly why Varon et al. 2021 prefer
+MBMP: **MBSP is reliable only over spectrally homogeneous (arid) surfaces** (Hassi Messaoud).
+We therefore **default every event to MBMP with a pinned, plume-free reference** — the
+reference pass carries the same static surface structure, so co-located saturation cancels in
+the ΔΩ difference (turkmenistan-caspian → 11.9 t/h vs 12.3 published) — and fall back to MBSP
+only where no clean reference exists and the retrieval is itself valid. A retrieval whose plume
+mask exceeds 20 % LUT-saturated fraction is a **documented exclusion** (`excluded_lut_saturated`,
+with the fraction recorded), published-value-blind — never a silent drop and never a crash;
+`no_plume` is likewise recorded. `scripts/curate_calibration_events.py --recurate` resolves the
+per-event method + reference live.
+
+Baseline (LUT v3, MC seed 0, n = 500; committed at `scripts/data/calibration_baseline_v3.json`):
+
+| Event | Method | Published (t/h) | Ours (t/h) | Note |
+|---|---|---|---|---|
+| hassi-messaoud-2020-01-19 | MBMP | 7.0 | 7.5 ± 3.7 | |
+| algeria-ghardaia-2020-08-27 | MBMP | 6.5 | 5.4 ± 2.0 | |
+| neuquen-2022-06-11 | MBMP | 14.9 | 11.8 ± 3.4 | |
+| libya-sirte-2020-01-21 | MBMP | 14.7 | 1.7 ± 0.8 | reference likely plume-contaminated (recurrent) |
+| campeche-2024-09-13 | MBSP | 25.4 | — | *excluded:* LUT-saturated (offshore water) |
+| ahvaz-2023-12-08 | MBSP | 7.5 | 10.9 ± 10.0 | homogeneous surface; no clean reference |
+| gulf-of-thailand-2023-10-05 | MBMP | 15.3 | 17.1 ± 6.2 | |
+| turkmenistan-caspian-2017-11-26 | MBMP | 12.3 | 11.9 ± 7.1 | 473 t/h under MBSP (76 % saturated) |
+| permian-2023-09-27 | MBMP | 6.9 | 13.2 ± 4.5 | |
+| maturin-2024-02-20 | MBSP | 25.0 | — | *excluded:* no plume above threshold |
+| marib-2024-11-02 | MBMP | 7.1 | 2.3 ± 1.3 | |
+| gulf-of-suez-2023-09-20 | MBMP | 20.0 | 51.0 ± 17.8 | |
+| rub-al-khali-2023-12-09 | MBMP | 5.2 | 12.7 ± 4.3 | 3 343-px MBSP blowup fixed by MBMP |
+| kazakhstan-almaty-2019-09-18 | MBMP | 9.6 | 23.8 ± 7.5 | |
+| amudarya-2024-05-29 | MBMP | 11.3 | 5.7 ± 1.7 | |
+| turkmenistan-south-2018-10-02 | MBMP | 25.1 | 8.3 ± 4.4 | |
+| korpezhe-2018-06-19 | MBMP | 11.2 | 5.6 ± 5.0 | pinned plume-free reference |
+
+**Aggregates (15 quantified, LUT v3):** through-origin slope **β = 1.03**, median ratio
+**0.97**, robust log-scatter **s = 0.42** (≈ a factor of 2.6). With N ≈ 15 these are
+engineering diagnostics, not hypothesis tests. The central calibration is essentially
+unbiased; the wide scatter is honest and has known causes we do **not** chase per-event:
+(i) *reference quality* — recurrent emitters may have no in-period plume-free reference, so a
+contaminated reference over-subtracts (libya-sirte 1.7 vs 14.7); (ii) IMEO/Varon rates embed
+*their* wind source while ours is ERA5; (iii) single-scene surface heterogeneity. This baseline
+is the reference against which Stage 2 (ΔR-space masking) and Stage 3 (LUT v4) are measured;
+the harness `--compare` reruns and diffs a fresh run without overwriting it.
+
+### LUT history note
 
 **LUT history at Korpezhe (v1 → v2 → v3).** Korpezhe's point estimate moved
 9.6 → 5.4 → 13.7 t/h across the three LUTs while the retrieved ΔR field never changed — the

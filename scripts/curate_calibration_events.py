@@ -41,8 +41,12 @@ import pandas as pd
 
 from openearth.ee.client import initialize
 from openearth.geometry import BBox
-from openearth.methane.retrieval import fetch_chip
-from openearth.methane.scenes import S2Scene, list_scenes
+from openearth.methane.conversion import CH4Lut, invert_fractional_signal, load_lut
+from openearth.methane.detect import DetectionResult, analyze
+from openearth.methane.ime import McParams
+from openearth.methane.plume import detect_plume
+from openearth.methane.retrieval import fetch_chip, mbsp
+from openearth.methane.scenes import S2Scene, list_scenes, pick_reference
 
 # MARS-S2L column names (verified against validated_images_plumes.csv, 2026-07-06).
 _MARS_S2_SATELLITES = ("S2A", "S2B")
@@ -238,16 +242,229 @@ def _to_event_json(cand: Candidate) -> dict[str, object]:
     }
 
 
+# ── Method resolution: prefer MBMP with a plume-free reference (Varon et al. 2021) ──
+#
+# MBSP has no reference to cancel static surface structure, so over heterogeneous
+# terrain a coherent dark/bright region inverts to the clamped LUT ΔΩ edge and the
+# connected-component step engulfs it into a multi-thousand-pixel "plume" (hundreds
+# of t/h). MBMP subtracts the reference pass, so co-located saturation cancels in the
+# ΔΩ difference. We therefore DEFAULT every event to MBMP with a pinned, plume-free
+# reference and fall back to MBSP only where no clean reference exists and the MBSP
+# retrieval is itself valid (homogeneous arid surface).
+
+_LUT_SAT_FRACTION_MAX = (
+    0.20  # a retrieval whose mask exceeds this LUT-saturated fraction is invalid
+)
+_MC_CURATE = McParams(n=40, seed=0)  # light MC — the display mask/ΔΩ don't depend on n
+_MAX_REF_TRIES = 6
+
+
+def lut_saturated_fraction(delta_omega: np.ndarray, mask: np.ndarray, lut: CH4Lut) -> float:
+    """Fraction of masked pixels whose inverted ΔΩ landed on a LUT grid edge (saturated)."""
+    in_mask = delta_omega[mask]
+    if in_mask.size == 0:
+        return 0.0
+    lo, hi = float(lut.delta_omega[0]), float(lut.delta_omega[-1])
+    return float(np.mean((in_mask <= lo) | (in_mask >= hi)))
+
+
+def find_clean_reference(
+    target: S2Scene,
+    scenes: list[S2Scene],
+    bbox: BBox,
+    source_rc: tuple[int, int] | None,
+    d_omega_t: np.ndarray,
+    grid: object,
+    lut: CH4Lut,
+) -> tuple[str, float] | None:
+    """A reference that yields a *valid MBMP retrieval* — the published-value-blind test.
+
+    Ranks candidates by ``pick_reference`` (geometry), then for each forms the per-pass
+    ΔΩ difference (``d_omega_t − invert(ΔR_ref)``) and accepts the first whose plume mask
+    is present and NOT LUT-saturated. Static surface structure is shared by both passes,
+    so it cancels in the difference (even if each pass saturates on its own); only a
+    reference carrying a transient plume at the source, or one leaving residual
+    saturation, is rejected. Returns ``(reference_scene_id, sat_fraction)`` or ``None``.
+    """
+    tried: set[str] = set()
+    for _ in range(_MAX_REF_TRIES):
+        remaining = [s for s in scenes if s.scene_id not in tried and s.scene_id != target.scene_id]
+        ref = pick_reference(target, remaining)
+        if ref is None:
+            return None
+        tried.add(ref.scene_id)
+        try:
+            chip = fetch_chip(ref, bbox)
+        except Exception:
+            continue
+        r_result = mbsp(chip.bands["B11"].astype(np.float64), chip.bands["B12"].astype(np.float64))
+        d_omega_r = invert_fractional_signal(r_result.delta_r, lut, ref.spacecraft, ref.amf)
+        delta_omega = np.asarray(d_omega_t - d_omega_r, dtype=np.float64)
+        pm = detect_plume(delta_omega, grid, k_sigma=2.0, source_rc=source_rc)  # type: ignore[arg-type]
+        if pm.n_pixels == 0:
+            continue  # this reference over-cancels the plume — try the next date
+        sat = lut_saturated_fraction(delta_omega, pm.mask, lut)
+        if sat <= _LUT_SAT_FRACTION_MAX:
+            return ref.scene_id, sat
+    return None
+
+
+def _saturation_verdict(result: DetectionResult, lut: CH4Lut) -> tuple[bool, float]:
+    """(valid, sat_fraction): valid when a plume exists and isn't LUT-saturated."""
+    if result.plume.n_pixels == 0:
+        return False, 0.0
+    sat = lut_saturated_fraction(result.delta_omega, result.plume.mask, lut)
+    return sat <= _LUT_SAT_FRACTION_MAX, sat
+
+
+def resolve_method(event: dict[str, object], lut: CH4Lut) -> dict[str, object]:
+    """Decide method + reference for one event, live. MBMP-preferred; MBSP fallback.
+
+    Returns a verdict dict: chosen method, reference_scene_id (pinned), q_t_h,
+    sat_fraction, and a reason. ``no_plume`` and saturation are recorded outcomes.
+    """
+    bbox = BBox(*event["bbox"])  # type: ignore[misc]
+    src = event.get("source_lonlat")
+    source_lonlat = tuple(src) if src else None  # type: ignore[arg-type]
+    target_id = str(event["target_scene_id"])
+    out: dict[str, object] = {"id": event["id"], "method": None, "reference_scene_id": None}
+
+    # Gather the scene window once to find a clean reference.
+    target_day = date.fromisoformat(str(event["published_time_utc"])[:10])
+    scenes = list_scenes(
+        bbox,
+        target_day - timedelta(days=130),
+        target_day + timedelta(days=130),
+        max_cloud=90.0,
+    )
+    target = next((s for s in scenes if s.scene_id == target_id), None)
+    if target is None:
+        out["reason"] = "target scene not found"
+        return out
+
+    # Target inversion once (reused across every candidate reference).
+    target_chip = fetch_chip(target, bbox)
+    grid = target_chip.grid
+    t_result = mbsp(
+        target_chip.bands["B11"].astype(np.float64), target_chip.bands["B12"].astype(np.float64)
+    )
+    d_omega_t = invert_fractional_signal(t_result.delta_r, lut, target.spacecraft, target.amf)
+    source_rc = None
+    if source_lonlat is not None:
+        lon, lat = source_lonlat
+        col = round((lon - grid.x0) / grid.xscale)
+        row = round((grid.y0 - lat) / grid.yscale)
+        if 0 <= row < grid.height and 0 <= col < grid.width:
+            source_rc = (row, col)
+
+    found = find_clean_reference(target, scenes, bbox, source_rc, d_omega_t, grid, lut)
+    if found is not None:
+        ref_id, _ = found
+        result = analyze(
+            bbox,
+            target_id,
+            reference_scene_id=ref_id,
+            method="mbmp",
+            source_lonlat=source_lonlat,
+            mc=_MC_CURATE,  # type: ignore[arg-type]
+        )
+        valid, sat = _saturation_verdict(result, lut)
+        if valid:
+            out.update(
+                method="mbmp",
+                reference_scene_id=ref_id,
+                q_t_h=round(result.emission.q_kg_h / 1000.0, 3),
+                sat_fraction=round(sat, 3),
+                reason="mbmp with pinned reference (co-located saturation cancels)",
+            )
+            return out
+
+    # Fall back to MBSP (valid only over homogeneous surfaces).
+    result = analyze(
+        bbox,
+        target_id,
+        method="mbsp",
+        source_lonlat=source_lonlat,
+        mc=_MC_CURATE,  # type: ignore[arg-type]
+    )
+    valid, sat = _saturation_verdict(result, lut)
+    if valid:
+        out.update(
+            method="mbsp",
+            reference_scene_id=None,
+            q_t_h=round(result.emission.q_kg_h / 1000.0, 3),
+            sat_fraction=round(sat, 3),
+            reason="mbsp fallback (no clean reference; retrieval valid)",
+        )
+        return out
+    out.update(
+        method=None,
+        q_t_h=None,
+        sat_fraction=round(sat, 3),
+        reason=(
+            "no_plume under both methods"
+            if result.plume.n_pixels == 0
+            else f"excluded_lut_saturated (sat={sat:.2f}); no clean reference"
+        ),
+    )
+    return out
+
+
+def recurate(events_path: str) -> list[dict[str, object]]:
+    """Resolve method + reference for every event in a committed events file (live)."""
+    initialize()
+    lut = load_lut()
+    with open(events_path) as fh:
+        events = json.load(fh)["events"]
+    verdicts: list[dict[str, object]] = []
+    for i, event in enumerate(events, 1):
+        try:
+            v = resolve_method(event, lut)
+        except Exception as exc:
+            v = {"id": event["id"], "method": None, "reason": f"error: {exc}"}
+        verdicts.append(v)
+        m = v.get("method") or "EXCLUDED"
+        q = v.get("q_t_h")
+        qs = f"{q:>7.1f}" if isinstance(q, (int, float)) else "      —"
+        print(
+            f"  [{i:>2}/{len(events)}] {event['id']!s:<30} {m:<5} {qs}  {v.get('reason')}",
+            file=sys.stderr,
+        )
+    return verdicts
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", required=True, help="path to a downloaded MARS-S2L plume CSV")
-    parser.add_argument("--output", required=True, help="candidate JSON to write for human review")
+    parser.add_argument(
+        "--recurate",
+        metavar="EVENTS_JSON",
+        help="resolve method+reference for an existing events file (live)",
+    )
+    parser.add_argument("--input", help="path to a downloaded MARS-S2L plume CSV")
+    parser.add_argument("--output", help="candidate/verdict JSON to write for human review")
     parser.add_argument("--min-th", type=float, default=5.0, help="min published rate (t/h)")
     parser.add_argument("--max-th", type=float, default=30.0, help="max published rate (t/h)")
     parser.add_argument("--sources-per-region", type=int, default=2)
     parser.add_argument("--per-source", type=int, default=1)
     parser.add_argument("--dry-run", action="store_true", help="select only; skip live EE gates")
     args = parser.parse_args()
+
+    if args.recurate:
+        verdicts = recurate(args.recurate)
+        quantified = [v for v in verdicts if v.get("method")]
+        print(
+            f"\n{len(quantified)}/{len(verdicts)} events quantified "
+            f"({sum(v['method'] == 'mbmp' for v in quantified)} mbmp, "
+            f"{sum(v['method'] == 'mbsp' for v in quantified)} mbsp)",
+            file=sys.stderr,
+        )
+        if args.output:
+            with open(args.output, "w") as fh:
+                json.dump(verdicts, fh, indent=2, default=str)
+        return 0
+
+    if not args.input or not args.output:
+        parser.error("--input and --output are required unless --recurate is given")
 
     candidates = load_candidates(
         args.input,

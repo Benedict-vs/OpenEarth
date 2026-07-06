@@ -1,7 +1,7 @@
 {
   "version": 1,
   "curated_utc": "2026-07-06",
-  "description": "Same-scene Sentinel-2 published methane rates for multi-event calibration regression (Phase 3.5). MARS-S2L rates are IMEO's per-scene quantifications; Korpezhe is Varon et al. 2021 same-scene. SRON TROPOMI weekly rates are deliberately excluded (cross-scale).",
+  "description": "Same-scene Sentinel-2 published methane rates for the multi-event calibration regression (Phase 3.5). Method is our per-event analysis choice: MBMP with a pinned plume-free reference by default (Varon et al. 2021 \u2014 MBSP saturates the LUT inversion over heterogeneous surfaces), MBSP only where no clean reference exists and the retrieval is valid. LUT-saturated or no-plume retrievals are kept as documented exclusions (see docs/methane_methods.md \u00a78). MARS-S2L rates are IMEO's per-scene quantifications; Korpezhe is Varon et al. 2021 same-scene. SRON TROPOMI weekly rates are deliberately excluded (cross-scale).",
   "events": [
     {
       "id": "hassi-messaoud-2020-01-19",
@@ -21,14 +21,14 @@
         5.93035,
         31.67853
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20200119T101331_20200119T101401_T32SKA",
-      "reference_scene_id": null,
+      "reference_scene_id": "20200109T101401_20200109T101402_T31SGR",
       "source_lonlat": [
         5.905345153215046,
         31.65852722711689
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2A; valid_frac=1.0, cloud=27.66%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u22487.819 t/h, sat=0.0"
     },
     {
       "id": "algeria-ghardaia-2020-08-27",
@@ -48,14 +48,14 @@
         3.26773,
         32.8615
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20200827T102559_20200827T103234_T31SES",
-      "reference_scene_id": null,
+      "reference_scene_id": "20200822T103031_20200822T103915_T31SES",
       "source_lonlat": [
         3.242726067016846,
         32.84149532599688
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2B; valid_frac=1.0, cloud=0.0%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u22485.828 t/h, sat=0.0"
     },
     {
       "id": "neuquen-2022-06-11",
@@ -75,14 +75,14 @@
         -67.04984,
         -36.34529
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20220611T141719_20220611T142601_T19HFV",
-      "reference_scene_id": null,
+      "reference_scene_id": "20220601T141739_20220601T142651_T19HFV",
       "source_lonlat": [
         -67.07484278328293,
         -36.36528845346963
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2B; valid_frac=1.0, cloud=0.0%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u224812.908 t/h, sat=0.0"
     },
     {
       "id": "libya-sirte-2020-01-21",
@@ -102,14 +102,14 @@
         21.00608,
         28.9239
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20200121T091301_20200121T091306_T34RDT",
-      "reference_scene_id": null,
+      "reference_scene_id": "20200131T091231_20200131T091321_T34RET",
       "source_lonlat": [
         20.981081920125767,
         28.903904569668818
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2A; valid_frac=1.0, cloud=0.11%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u22481.861 t/h, sat=0.0"
     },
     {
       "id": "campeche-2024-09-13",
@@ -136,7 +136,7 @@
         -92.23700213635531,
         19.566106624033782
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2B; valid_frac=1.0, cloud=78.59%"
+      "notes": "documented exclusion \u2014 excluded_lut_saturated (sat=0.56); no clean reference; no plume-free MBMP reference found"
     },
     {
       "id": "ahvaz-2023-12-08",
@@ -163,7 +163,7 @@
         49.94787096977234,
         30.995046696290245
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2A; valid_frac=1.0, cloud=0.0%"
+      "notes": "MBSP (homogeneous surface; no clean reference); curated q\u224811.76 t/h, sat=0.111"
     },
     {
       "id": "gulf-of-thailand-2023-10-05",
@@ -183,14 +183,14 @@
         103.01246,
         7.6125
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20231005T032609_20231005T034228_T48NTP",
-      "reference_scene_id": null,
+      "reference_scene_id": "20231104T032919_20231104T034047_T48NTP",
       "source_lonlat": [
         102.98746215988857,
         7.592501995534762
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2B; valid_frac=1.0, cloud=20.96%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u224817.868 t/h, sat=0.167"
     },
     {
       "id": "turkmenistan-caspian-2017-11-26",
@@ -210,14 +210,14 @@
         53.66265,
         39.51676
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20171126T071221_20171126T071720_T39SYD",
-      "reference_scene_id": null,
+      "reference_scene_id": "20171116T071301_20171116T071407_T39SYD",
       "source_lonlat": [
         53.637646436359326,
         39.49676138103425
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2A; valid_frac=1.0, cloud=5.18%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u224812.505 t/h, sat=0.0"
     },
     {
       "id": "permian-2023-09-27",
@@ -237,14 +237,14 @@
         -101.80584,
         32.45457
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20230927T173009_20230927T173854_T13SGR",
-      "reference_scene_id": null,
+      "reference_scene_id": "20231007T173119_20231007T174227_T14SKB",
       "source_lonlat": [
         -101.83084309101106,
         32.4345731877123
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2B; valid_frac=1.0, cloud=0.0%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u224813.789 t/h, sat=0.133"
     },
     {
       "id": "maturin-2024-02-20",
@@ -271,7 +271,7 @@
         -63.47416520118714,
         9.678724842649771
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2B; valid_frac=1.0, cloud=16.35%"
+      "notes": "documented exclusion \u2014 no_plume under both methods; no plume-free MBMP reference found"
     },
     {
       "id": "marib-2024-11-02",
@@ -291,14 +291,14 @@
         45.82354,
         15.58386
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20241102T072041_20241102T073408_T38PNC",
-      "reference_scene_id": null,
+      "reference_scene_id": "20241107T072009_20241107T073402_T38PNC",
       "source_lonlat": [
         45.798536539077766,
         15.563860997214368
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2A; valid_frac=1.0, cloud=0.0%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u22482.696 t/h, sat=0.0"
     },
     {
       "id": "gulf-of-suez-2023-09-20",
@@ -318,14 +318,14 @@
         32.32544,
         29.65329
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20230920T082631_20230920T083456_T36RVT",
-      "reference_scene_id": null,
+      "reference_scene_id": "20230930T082741_20230930T083258_T36RVT",
       "source_lonlat": [
         32.30044305324555,
         29.633286672533306
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2A; valid_frac=1.0, cloud=0.05%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u224854.144 t/h, sat=0.07"
     },
     {
       "id": "rub-al-khali-2023-12-09",
@@ -345,14 +345,14 @@
         55.63998,
         22.89362
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20231209T065251_20231209T065248_T40QCL",
-      "reference_scene_id": null,
+      "reference_scene_id": "20231219T065301_20231219T065304_T40QCL",
       "source_lonlat": [
         55.61497628688813,
         22.873623773310246
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2A; valid_frac=1.0, cloud=0.0%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u224813.558 t/h, sat=0.0"
     },
     {
       "id": "kazakhstan-almaty-2019-09-18",
@@ -372,14 +372,14 @@
         75.53614,
         43.50321
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20190918T054639_20190918T055537_T43TEJ",
-      "reference_scene_id": null,
+      "reference_scene_id": "20190913T054641_20190913T054900_T43TEJ",
       "source_lonlat": [
         75.51114141941072,
         43.483208820425055
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2B; valid_frac=1.0, cloud=0.0%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u224825.259 t/h, sat=0.0"
     },
     {
       "id": "amudarya-2024-05-29",
@@ -399,14 +399,41 @@
         62.82442,
         38.59137
       ],
-      "method": "mbsp",
+      "method": "mbmp",
       "target_scene_id": "20240529T063629_20240529T064713_T41SMC",
-      "reference_scene_id": null,
+      "reference_scene_id": "20240524T063621_20240524T064405_T41SMC",
       "source_lonlat": [
         62.799423336982734,
         38.571367644912705
       ],
-      "notes": "MARS-S2L same-scene MBSP; S2B; valid_frac=1.0, cloud=0.0%"
+      "notes": "MBMP (pinned plume-free reference); curated q\u22486.23 t/h, sat=0.0"
+    },
+    {
+      "id": "turkmenistan-south-2018-10-02",
+      "region": "Turkmenistan (south)",
+      "surface": "arid",
+      "source": "mars_s2l",
+      "source_ref": "UNEP-IMEO/MARS-S2L validated_images_plumes.csv (id_plume=cadb90d4-299a-4c0a-adca-3c0abd1594f3, id_source=3b62760a-8121-4f52-9cc6-d7a116ae81b9); huggingface.co/datasets/UNEP-IMEO/MARS-S2L",
+      "published_q_t_h": 25.098,
+      "published_sigma_t_h": 5.756,
+      "published_instrument": "Sentinel-2",
+      "published_time_utc": "2018-10-02T07:13:33.880000+00:00",
+      "lat": 37.90823346173027,
+      "lon": 53.89861464500428,
+      "bbox": [
+        53.87361,
+        37.88823,
+        53.92361,
+        37.92823
+      ],
+      "method": "mbmp",
+      "target_scene_id": "20181002T070711_20181002T071333_T39SYC",
+      "reference_scene_id": "20180927T070639_20180927T071837_T39SYB",
+      "source_lonlat": [
+        53.89861464500428,
+        37.90823346173027
+      ],
+      "notes": "MBMP (pinned plume-free reference); high-rate anchor; curated q\u22489.534 t/h, sat=0.024"
     },
     {
       "id": "korpezhe-2018-06-19",
@@ -433,7 +460,7 @@
         53.9648,
         38.4939
       ],
-      "notes": "orbit-degenerate auto reference; ref pinned to plume-free 2018-06-24 (Phase 3 lesson)"
+      "notes": "orbit-degenerate/cross-tile auto pick; ref pinned to plume-free same-tile 2018-06-24 (Phase 3 lesson)"
     }
   ]
 }
