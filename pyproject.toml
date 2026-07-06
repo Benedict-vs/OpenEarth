@@ -51,7 +51,16 @@ packages = ["openearth", "openearth_api"]
 exclude = ["legacy/"]
 
 [[tool.mypy.overrides]]
-module = ["ee", "ee.*", "diskcache", "diskcache.*", "rasterio", "rasterio.*"]
+module = [
+    "ee",
+    "ee.*",
+    "diskcache",
+    "diskcache.*",
+    "rasterio",
+    "rasterio.*",
+    "scipy",
+    "scipy.*",
+]
 ignore_missing_imports = true
 
 # SQLModel/SQLAlchemy return Any from Session.get / exec chains; "returning
