@@ -124,13 +124,18 @@ def pick_reference(
     *,
     max_cloud: float = 30.0,
     max_days: int = 120,
+    min_days: float = 1.0,
 ) -> S2Scene | None:
     """Choose the best plume-free reference scene for *target* (MBMP), or None.
 
     Pure and unit-tested. Excludes the target itself, requires
-    ``cloud_pct ≤ max_cloud`` and ``|Δt| ≤ max_days``, and scores by temporal
-    distance plus penalties for a different relative orbit (+30, viewing
-    geometry) or spacecraft (+5, SRF); the lowest score wins.
+    ``cloud_pct ≤ max_cloud`` and ``min_days ≤ |Δt| ≤ max_days``, and scores by
+    temporal distance plus penalties for a different relative orbit (+30,
+    viewing geometry) or spacecraft (+5, SRF); the lowest score wins.
+
+    The ``min_days`` floor excludes a *same-overpass* scene (an adjacent UTM tile
+    of the same acquisition, ``Δt ≈ 0``): it images the very same plume, so
+    differencing against it would cancel the signal instead of the background.
     """
 
     def score(candidate: S2Scene) -> float:
@@ -144,7 +149,7 @@ def pick_reference(
         for c in candidates
         if c.scene_id != target.scene_id
         and c.cloud_pct <= max_cloud
-        and abs((c.time - target.time).total_seconds()) / 86400.0 <= max_days
+        and min_days <= abs((c.time - target.time).total_seconds()) / 86400.0 <= max_days
     ]
     if not eligible:
         return None

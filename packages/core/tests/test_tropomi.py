@@ -61,7 +61,7 @@ def test_cells_refuses_oversized_lattice() -> None:
 def _feat(idx: int, value: float | None) -> dict[str, object]:
     props: dict[str, object] = {"idx": idx}
     if value is not None:
-        props[trop._ENH_BAND] = value
+        props[trop._MEAN_PROP] = value
     return {"properties": props}
 
 

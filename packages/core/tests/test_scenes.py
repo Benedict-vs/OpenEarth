@@ -94,6 +94,17 @@ def test_pick_reference_none_when_empty() -> None:
     assert pick_reference(_scene("t", 19), []) is None
 
 
+def test_pick_reference_excludes_same_overpass() -> None:
+    # A same-day adjacent-tile scene (Δt ≈ 0) images the same plume; it must be
+    # excluded so a real, plume-free different-date reference is chosen instead.
+    target = _scene("t", 19)
+    same_overpass = S2Scene(
+        "sameday", datetime(2018, 6, 19, 7, 40, tzinfo=UTC), 5.0, 50, "Sentinel-2B", 30.0, 5.0
+    )
+    real_ref = _scene("earlier", 14)  # 5 days before
+    assert pick_reference(target, [same_overpass, real_ref]).scene_id == "earlier"
+
+
 # ── list_scenes parsing (canned getInfo payload) ──
 
 

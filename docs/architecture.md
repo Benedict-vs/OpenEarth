@@ -94,6 +94,35 @@ ML training (packages/ml)            ← Phase 5 (torch; the API serves ONNX onl
 - **Web analysis UI**: ECharts time-series panel (coarse→fine fill + client-side stat cards),
   pixel inspector, GeoTIFF/PNG/CSV export controls, wind arrow overlay.
 
+## Built in Phase 3
+
+Physics-honest methane detection. Full theory in `docs/methane_methods.md`; the science lives
+in `packages/core/src/openearth/methane/`, all offline unit-tested.
+
+- **CH4 absorption LUT** — `scripts/generate_ch4_lut.py` (HITRAN via HAPI + ESA Sentinel-2
+  SRFs, script-only `lut` dependency group) generates the committed
+  `methane/data/ch4_lut_v1.npz`; `conversion.py` loads it and does ΔR→ΔΩ→ΔXCH4. Anchored to
+  Varon 2021 within ±30 %.
+- **Retrieval** — `scenes.py` (S2 L1C metadata search + reference auto-select),
+  `retrieval.py` (calibrated MBSP/MBMP on `computePixels` chips, refit calibration),
+  `plume.py` (robust-σ threshold + connected components + GeoJSON outline),
+  `ime.py` (IME mass balance + seeded joint Monte-Carlo uncertainty),
+  `detect.py` (7-step cancellable orchestrator → `DetectionResult`).
+- **Screening** — `tropomi.py` (weekly S5P XCH4 enhancement lattice + persistence ranking).
+- **Validation** — `validation.py` (IMEO/SRON CSV/GeoJSON parse + haversine/time cross-match).
+- **API** (migration 3: `sites`, `detections`, `reference_events`): `routers/methane.py` +
+  `services/methane.py` — sites CRUD (7 seeded), scene search, the `methane_analyze` job
+  (runner writes its own detection row via WAL + `busy_timeout`), detection feed/detail,
+  overlay PNG (`services/methane_render.py`, diskcached) and npz artifacts, the
+  `methane_screening` job, and the validation importer/cross-match. `POST /tiles` gains
+  `methane_ref` to unlock the `CH4_ANOMALY` quicklook.
+- **Methane Lab UI** (`apps/web/src/features/methane/`, third view, no router): 3-pane
+  sites | own MapLibre `LabMap` (ΔXCH4 overlay + mask outline + wind arrow + S2 RGB context) |
+  detection feed + detail (numbers, MC histogram, accept/reject, validation). Verified live on
+  Korpezhe 2018-06-19.
+- **Reproduction** — `scripts/validate_events.py` reproduces Korpezhe and the Hassi Messaoud
+  blowout within ±50 % of published values (Phase 3 exit gate).
+
 ## Earth Engine ground rules (design defensively)
 
 | Mechanic | Assumption | Defense |

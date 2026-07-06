@@ -27,8 +27,9 @@ if TYPE_CHECKING:
 
 ProgressCallback = Callable[[int, int, str], None]
 
-# The enhancement band name we reduce (mean reducer names its output by band).
-_ENH_BAND = "ch4_enh"
+# reduceRegions names a single-band mean reducer's output "mean" (not the band
+# name — that only holds for multi-band reductions like the wind field).
+_MEAN_PROP = "mean"
 # S5P L3 CH4 native grid ≈ 0.01° (~1.1 km).
 _S5P_SCALE_M = 1113
 # Screening lattice guard: refuse a bbox/cell_deg combo that would blow up the
@@ -122,7 +123,7 @@ def _reduce_week(
     week_mean = get_trace_gas_collection(
         "CH4", bbox, week[0].isoformat(), week[1].isoformat()
     ).mean()
-    enh = week_mean.subtract(background).rename(_ENH_BAND)
+    enh = week_mean.subtract(background)
     reduced = enh.reduceRegions(collection=cells_fc, reducer=ee.Reducer.mean(), scale=_S5P_SCALE_M)
     info = ee_call(reduced.getInfo) or {}
     return list(info.get("features", []))
@@ -145,7 +146,7 @@ def stitch_hotspots(
     for week in weekly_features:
         for feat in week:
             props = feat.get("properties", {})
-            value = props.get(_ENH_BAND)
+            value = props.get(_MEAN_PROP)
             if value is None:
                 continue
             idx = int(props["idx"])

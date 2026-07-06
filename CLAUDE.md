@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # OpenEarth v2
 
-Satellite-based environmental analysis. **v2 rebuild in progress** (currently Phase 2 complete):
+Satellite-based environmental analysis. **v2 rebuild in progress** (currently Phase 3 complete):
 Python core library (`packages/core`) + FastAPI backend (`packages/api`) + React/MapLibre
-frontend (`apps/web`), with a physics-honest methane detection suite (Phase 3+). The v1
+frontend (`apps/web`), with a physics-honest methane detection suite (the Methane Lab). The v1
 Streamlit app is frozen in `legacy/` until v2 reaches parity (end of Phase 4).
 
 ## Commands
@@ -42,9 +42,17 @@ OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; neve
     fetch: pure EPSG:4326 grid math + tiling, offline-tested; used by export, reused Phase 3).
   - `export.py` — GeoTIFF writer: fast `getDownloadURL` path < 32 MB, windowed `computePixels`
     assembly above.
-  - `methane/wind.py` — ERA5 wind; `wind_to_deg`/`wind_from_deg` are distinct, tested
-    conventions. `sample_wind_at` (ROI-mean) + `sample_wind_field` (nx×ny lattice, one
-    `reduceRegions`, ERA5-Land→global fallback). Retrieval/plume/IME modules arrive in Phase 3.
+  - `methane/` — the physics suite (theory in `docs/methane_methods.md`). `wind.py` (ERA5;
+    `wind_to_deg`/`wind_from_deg` distinct tested conventions; `sample_wind_at` +
+    `sample_wind_field`). `constants.py` (cited literature + declared modeling constants),
+    `conversion.py` (loads committed `data/ch4_lut_v1.npz`; ΔR→ΔΩ→ΔXCH4 — pure, strict mypy),
+    `scenes.py` (S2 L1C search + `pick_reference`, which excludes the same-overpass tile),
+    `retrieval.py` (calibrated MBSP/MBMP on `computePixels` chips; bands are unpadded B4/B3/B2),
+    `plume.py` (robust-σ threshold + components + outline), `ime.py` (IME + seeded joint MC),
+    `detect.py` (7-step cancellable orchestrator), `tropomi.py` (S5P screening),
+    `validation.py` (IMEO/SRON parse + cross-match). The LUT is generated **offline** by
+    `scripts/generate_ch4_lut.py` (`uv run --group lut …`, HITRAN+SRFs); HAPI must never be
+    imported under `packages/`. Reproduce events with `scripts/validate_events.py`.
   - `geometry.py` — `BBox`/`PolygonROI` validate on construction; pure-python `is_global`,
     aspect math (no EE round-trips).
 - `packages/api/src/openearth_api/` — FastAPI layer (`routers/` thin, `services/` do the work).
@@ -56,10 +64,18 @@ OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; neve
   - **Jobs + SSE** (`jobs.py`): in-process `JobManager` over SQLite (WAL; one event-loop
     writer), runners off-loop via `asyncio.to_thread`; `points` events are live previews, the
     result is refetched on `done`. `db.py` migrations are `PRAGMA user_version` DDL batches —
-    append, never edit (migration 1 = `jobs`; migration 2 = `aois`/`workspaces`).
+    append, never edit (migration 1 = `jobs`; migration 2 = `aois`/`workspaces`; migration 3 =
+    `sites`/`detections`/`reference_events`, plus a per-connection `busy_timeout` so the analyze
+    runner inserts its own detection row off-loop).
   - **Analysis routes**: `timeseries` (chunked coarse→fine series job → parquet-bytes cache),
     `export` (GeoTIFF job / sync PNG / CSV), `inspect` (point sample), `wind` (point + field),
     `aois` + `workspaces` (plain CRUD, 409 on duplicate name; versioned `WorkspaceState`).
+  - **Methane routes** (`routers/methane.py`, `services/methane.py`): sites CRUD (7 seeded in
+    the lifespan), scene search, the `methane_analyze` job (SSE progress → `{detection_id}`;
+    runner writes the detection row + npz artifact off-loop), detection feed/detail, overlay
+    PNG (`services/methane_render.py`), `array.npz`, the `methane_screening` job, and the
+    validation importer/cross-match. `POST /tiles` `methane_ref` unlocks the `CH4_ANOMALY`
+    quicklook (builder products still 422 without it).
 - `apps/web/` — Vite + React + TS (pnpm, NOT a uv member). Thin imperative MapLibre binding
   (no react-map-gl). **No-refetch rule**: layer controls only touch paint/layout/moveLayer;
   re-mints go through `setTiles` on the existing source. API types are generated
