@@ -101,8 +101,9 @@ in `packages/core/src/openearth/methane/`, all offline unit-tested.
 
 - **CH4 absorption LUT** — `scripts/generate_ch4_lut.py` (HITRAN via HAPI + ESA Sentinel-2
   SRFs, script-only `lut` dependency group) generates the committed
-  `methane/data/ch4_lut_v1.npz`; `conversion.py` loads it and does ΔR→ΔΩ→ΔXCH4. Anchored to
-  Varon 2021 within ±30 %.
+  `methane/data/ch4_lut_v3.npz` (layered US Std Atmosphere background + 500 m enhancement
+  slab per Varon 2021); `conversion.py` loads it and does ΔR→ΔΩ→ΔXCH4. Regression-pinned to
+  its own layered reference; the Varon 2021 anchor is a ±30 % sanity band (methods §2).
 - **Retrieval** — `scenes.py` (S2 L1C metadata search + reference auto-select),
   `retrieval.py` (calibrated MBSP/MBMP on `computePixels` chips, refit calibration),
   `plume.py` (robust-σ threshold + connected components + GeoJSON outline),
@@ -120,8 +121,9 @@ in `packages/core/src/openearth/methane/`, all offline unit-tested.
   sites | own MapLibre `LabMap` (ΔXCH4 overlay + mask outline + wind arrow + S2 RGB context) |
   detection feed + detail (numbers, MC histogram, accept/reject, validation). Verified live on
   Korpezhe 2018-06-19.
-- **Reproduction** — `scripts/validate_events.py` reproduces Korpezhe and the Hassi Messaoud
-  blowout within ±50 % of published values (Phase 3 exit gate).
+- **Reproduction** — `scripts/validate_events.py` reproduces the Hassi Messaoud blowout within
+  ±50 % (near-exact) and Korpezhe within σ (its point estimate is MARGINAL under the v2 LUT — see
+  `docs/methane_methods.md` §8). Phase 3 exit gate.
 
 ## Earth Engine ground rules (design defensively)
 

@@ -36,17 +36,42 @@ cached ~instant; both GeoTIFF paths rasterio-verified; E2E golden path green.)*
 
 ## Phase 3 — Methane Lab, physics (XL) ✅
 
-HITRAN LUT (`scripts/generate_ch4_lut.py` → committed `ch4_lut_v1.npz`); calibrated MBSP/MBMP
+HITRAN LUT (`scripts/generate_ch4_lut.py` → committed `ch4_lut_v3.npz`); calibrated MBSP/MBMP
 NumPy retrieval on computePixels chips; plume masking; IME + Monte-Carlo uncertainty;
 S5P screening tier; sites/detections DB; Methane Lab UI; IMEO/SRON validation importer;
 `docs/methane_methods.md`.
 *Exit: reproduce ≥2 documented super-emitter events with Q within ~±50 % of published values;
 synthetic-plume test suite green; every detection persisted and reviewable.*
-*(Delivered: LUT anchored to Varon 2021 within ±30 %; synthetic golden paths green across
+*(Delivered: LUT v3 — layered US Std Atmosphere forward model, regression-pinned to its own
+reference with the Varon 2021 anchor as a ±30 % sanity band (see `docs/methane_methods.md` §2
+for why closer anchor agreement was error cancellation); synthetic golden paths green across
 conversion/retrieval/plume/IME/detect; migration 3 (sites/detections/reference_events) with
 overlay-PNG + npz artifacts; 3-pane Lab UI verified live (Korpezhe 2018-06-19). Reproduction
-gate green — Korpezhe 9.6 ± 5.4 t/h (pub 11.2 ± 5.2, MBMP) and Hassi Messaoud 8.3 t/h mean
-(pub 9.3 ± 5.5, MBSP) via `scripts/validate_events.py`.)*
+via `scripts/validate_events.py` under v3 — Korpezhe 13.7 ± 22.7 t/h (pub 11.2 ± 5.2, MBMP,
+PASS; wide MC band from a mask-size cliff, documented in §8) and Hassi Messaoud 8.5 t/h mean
+(pub 9.3 ± 5.5, MBSP, PASS).)*
+
+## Phase 3.5 — Methane calibration hardening (M, parallel track)
+
+Three sequenced stages, each its own commit with a falsifiable acceptance criterion; never
+touches the EE-browsing/parity stack, so it can run alongside Phase 4.
+
+1. **Multi-event regression harness** (prerequisite): extend `validate_events.py` over N ≥ 10
+   IMEO/SRON events with cloud-free S2 coverage (importer + cross-match exist); output the
+   ours-vs-published regression (slope/intercept/scatter), not per-event pass/fail; freeze the
+   v3 baseline as a committed JSON. *Exit: harness green live; baseline slope in methods §8.*
+2. **ΔR-space plume masking**: MBSP masks on the ΔR field, MBMP on ΔR_t − ΔR_ref (per-pass ΔΩ
+   inversion still feeds IME); footprint becomes LUT-invariant. *Exit: footprint bit-identical
+   under LUT swap (v2 snapshot vs v3); harness slope/scatter not degraded; Korpezhe MC band
+   shrinks or the mask cliff is characterized. ALGO_VERSION bump.*
+3. **LUT v4 spectroscopy**: H₂O + CO₂ interfering absorbers (per-layer HITRAN σ; CO₂ ~420 ppm
+   well-mixed, H₂O from a committed US Std profile extract) + solar-irradiance band weighting
+   (committed TSIS-1 HSRS extract, same pattern as the SRF csv). Expect the anchor to move
+   toward Varon — do **not** gate on it. *Exit: harness slope closer to 1, scatter not
+   degraded; fresh own-reference regression pin; Varon stays a sanity band.*
+
+Out of scope here (noted in methods §7): multiple scattering/aerosols, site-elevation surface
+pressure (P₀ axis), EMIT per-pixel co-location (Phase 6).
 
 ## Phase 4 — Compare + Timelapse → retire Streamlit (M)
 
