@@ -1,93 +1,82 @@
 # OpenEarth
 
-Satellite-based environmental analysis, rebuilt as **OpenEarth v2**: a Python core science
-library, a FastAPI backend, and a React/TypeScript/MapLibre GL frontend — with a scientifically
-defensible methane detection suite at its heart (physics retrieval + ML segmentation + EMIT
-confirmation).
+Satellite-based environmental analysis: browse trace gases, spectral indices, and radar over any
+region and time window, quantify methane super-emitters with a physics-honest retrieval, compare
+two scenes side by side, and export polished timelapse movies — all served from Google Earth
+Engine through a clean API and a fast MapLibre GL web app.
 
-> **Status: Phase 1 (Map platform MVP) — browse any registered dataset on a MapLibre map with
-> polygon ROIs, layer stacks, and legends; add any public GEE collection from TOML with zero
-> code changes.** Analysis jobs, time series, and exports land in Phase 2. The original
-> Streamlit app lives on unchanged in [`legacy/`](legacy/) and stays runnable until v2 reaches
-> feature parity. The full plan (methane science spec, architecture, phased roadmap) is in
-> [`docs/`](docs/).
+## Stack
+
+Three layers, one workspace:
+
+- **`packages/core`** (`openearth-core`) — the science library. Unified dataset catalog, Earth
+  Engine access, GeoTIFF/pixel export, and the methane physics suite. Guiding split: *Earth
+  Engine for browsing and bulk reduction; NumPy for physics* — everything science-critical runs
+  on plain arrays so it is unit-testable offline, with **no UI framework** ever in the graph.
+- **`packages/api`** (`openearth-api`) — a thin FastAPI layer over the core: tiles, analysis
+  jobs with SSE progress, time series, exports, the Methane Lab, and the Timelapse Studio. Jobs
+  persist to SQLite; tile URLs and reviewable artifacts (detections, renders) live on disk.
+- **`apps/web`** — Vite + React + TypeScript + MapLibre GL (pnpm; not a uv member). A thin
+  imperative map binding: layer controls only touch paint/layout, and animation never
+  round-trips React renders.
+
+## Features
+
+- **Explore** — stack any registered dataset on the map, drawn or preset ROIs, per-layer opacity,
+  legends, and an optional data-adaptive vis range; a pixel inspector, time-series charts with a
+  rolling mean, PNG/GeoTIFF/CSV export, and an ERA5 wind overlay. An **animation** transport plays
+  the active layer over time — either by browsing date-window composites or by overlaying an
+  encoded render's frames.
+- **Compare** — two synced maps joined by a swipe slider; *linked* mode compares one layer at two
+  dates (the classic change view), *independent* mode gives each side its own configuration.
+- **Methane Lab** — calibrated MBSP/MBMP retrieval on Sentinel-2, robust plume masking, and
+  Integrated Mass Enhancement quantification with Monte-Carlo uncertainty, cross-matched against
+  IMEO/SRON reference events. The methods, constants, and their citations are written up in
+  [`docs/methane_methods.md`](docs/methane_methods.md).
+- **Timelapse Studio** — step a date range into frames, render each with burned-in date label,
+  scale bar, and colorbar, and encode an MP4/WebM/GIF with a live gallery and in-app player.
 
 ## Data sources
 
 | Satellite | Variables | Resolution | Revisit |
 |-----------|-----------|------------|---------|
-| **Sentinel-5P / TROPOMI** | NO₂, SO₂, CO, O₃, CH₄, HCHO (QA-screened L3) | ~7 km | Daily |
+| **Sentinel-5P / TROPOMI** | NO₂, SO₂, CO, O₃, CH₄, HCHO (QA-screened) | ~7 km | Daily |
 | **Sentinel-2 Harmonized** | 18 spectral indices + 13 raw bands + RGB + methane proxies | 10–60 m | ~5 days |
 | **Sentinel-1 GRD** | VV, VH, polarization difference, RVI (orbit-pass aware) | 10 m | 6–12 days |
 | **ERA5-Land** | 10 m wind, overpass-matched | ~9 km | Hourly |
 
 All data is accessed via [Google Earth Engine](https://earthengine.google.com/) with per-user
-OAuth (`earthengine authenticate`).
+OAuth — run `earthengine authenticate` once and set `OPENEARTH_EE_PROJECT` to your EE cloud
+project. New public GEE collections can be added from a TOML file with zero code changes
+(demo: `docs/examples/modis_lst.toml`).
 
-## Repository layout
+## Quickstart
 
-```
-openearth/
-├── packages/
-│   ├── core/            # openearth-core: EE access, unified dataset catalog, NumPy physics
-│   └── api/             # openearth-api: FastAPI — tiles, thumbnails, catalog + custom datasets
-├── apps/
-│   └── web/             # Vite + React + TS + MapLibre GL frontend (pnpm, not a uv member)
-├── legacy/              # frozen v1 Streamlit app — own pins, not a workspace member
-├── docs/                # architecture, roadmap, examples/ (demo TOML dataset)
-├── scripts/             # dev.sh, OpenAPI export (LUT generation & DB seeding arrive later)
-└── pyproject.toml       # uv workspace root + ruff/mypy/pytest config
-```
-
-## Development
-
-Requires [uv](https://docs.astral.sh/uv/) (Python 3.13 is pinned via `.python-version`).
-
-Requires [pnpm](https://pnpm.io) and Node ≥ 22 for the web app.
+Requires [uv](https://docs.astral.sh/uv/) (Python 3.13, pinned via `.python-version`) and, for the
+web app, [pnpm](https://pnpm.io) with Node ≥ 22.
 
 ```bash
-uv sync --all-packages   # whole Python dev environment, one command
+uv sync --all-packages         # whole Python dev environment, one command
 pnpm --dir apps/web install
-make dev                 # API (uvicorn :8000) + web (vite :5173) together
-make test                # offline unit tests (no Earth Engine needed)
-make lint typecheck      # ruff + mypy --strict
-make gen                 # regenerate OpenAPI schema + TS client types after API changes
-make legacy              # run the frozen v1 Streamlit app
+earthengine authenticate       # one-time EE OAuth; then set OPENEARTH_EE_PROJECT (.env.example)
+make dev                       # API (uvicorn :8000) + web (vite :5173) together
 ```
 
-Live Earth Engine integration tests are opt-in and never run in CI:
+Common tasks:
 
 ```bash
-OPENEARTH_EE_TESTS=1 uv run pytest -m ee
+make test                      # offline unit tests (no Earth Engine needed)
+make lint typecheck            # ruff + mypy --strict
+make gen                       # regenerate OpenAPI schema + TS client types after API changes
+OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (opt-in; never in CI)
 ```
 
-Configuration is environment-based (prefix `OPENEARTH_`, see `.env.example`); set
-`OPENEARTH_EE_PROJECT` to your Earth Engine cloud project.
+## Documentation
 
-## What Phase 0 fixed (vs the v1 app)
-
-The v2 core is a port of the v1 library **with the audited defects fixed**:
-
-- **Wind direction convention** — v1 mislabeled the blowing-*toward* azimuth as meteorological;
-  v2 returns both conventions, explicitly named and unit-tested, and samples ERA5 matched to the
-  actual satellite overpass instead of a fixed noon window.
-- **`CH4_ANOMALY` vestigial expression** — the registry entry silently rendered plain B12/B11
-  through the generic path; it now requires its dedicated anomaly builder.
-- **L1C/L2A split** — indices and RGB render from L2A surface reflectance; the methane proxies
-  deliberately stay on L1C TOA (retrieval-literature convention), documented in the catalog.
-- **S5P valid-range masking**, **s2cloudless null-guard**, **single-scene missing-scene guard**,
-  **S1 orbit-pass filtering + honest "polarization difference (dB)" naming**.
-
-## Roadmap (abridged — see `docs/roadmap.md`)
-
-- **Phase 1 ✓** — FastAPI + MapLibre map platform: catalog browser, polygon ROIs, layer stacks,
-  "add any GEE dataset via TOML" (demo: `docs/examples/modis_lst.toml`)
-- **Phase 2** — jobs + SSE progress, time series v2, exports, wind overlay
-- **Phase 3** — Methane Lab: calibrated MBSP/MBMP retrieval, plume masking, IME quantification
-  with Monte-Carlo uncertainty, validation against IMEO/SRON events
-- **Phase 4** — compare view + timelapse studio → retire `legacy/`
-- **Phase 5** — ML plume segmentation (CH4Net, site-held-out CV, ONNX serving)
-- **Phase 6** — EMIT hyperspectral tier, AlphaEarth embeddings explorer, derived products
+- [`docs/architecture.md`](docs/architecture.md) — the as-built system, phase by phase.
+- [`docs/roadmap.md`](docs/roadmap.md) — where it has been and where it is going.
+- [`docs/methane_methods.md`](docs/methane_methods.md) — the methane retrieval + quantification.
+- [`docs/parity-checklist.md`](docs/parity-checklist.md) — the v1 → v2 feature disposition.
 
 ## License
 

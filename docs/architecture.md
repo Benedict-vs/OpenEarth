@@ -16,8 +16,7 @@ ML training (packages/ml)            ← Phase 5 (torch; the API serves ONNX onl
 
 ## Built in Phase 0
 
-- **uv workspace** (root `pyproject.toml`; single lockfile; Python 3.13 pinned; `legacy/`
-  excluded with its own pins).
+- **uv workspace** (root `pyproject.toml`; single lockfile; Python 3.13 pinned).
 - **`openearth-core`** with the v1 library ported and all audited defects fixed:
   - unified **catalog** (`DatasetSpec`/`ProductSpec` generalize the three v1 registries;
     46 products across s5p/s2/s1; ROI presets + 7 methane sites with date hints),

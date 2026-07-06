@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # OpenEarth v2
 
-Satellite-based environmental analysis. **v2 rebuild in progress** (currently Phase 3 complete):
+Satellite-based environmental analysis (**Phase 4 complete** — v1 Streamlit app retired):
 Python core library (`packages/core`) + FastAPI backend (`packages/api`) + React/MapLibre
-frontend (`apps/web`), with a physics-honest methane detection suite (the Methane Lab). The v1
-Streamlit app is frozen in `legacy/` until v2 reaches parity (end of Phase 4).
+frontend (`apps/web`), with a physics-honest methane detection suite (the Methane Lab),
+side-by-side Compare, and a Timelapse Studio.
 
 ## Commands
 
@@ -21,7 +21,6 @@ make api                      # FastAPI dev server only
 make gen                      # regenerate apps/web/openapi.json + src/api/types.gen.ts —
                               #   run after ANY API schema change (CI diff-checks drift)
 pnpm --dir apps/web lint && pnpm --dir apps/web typecheck && pnpm --dir apps/web test -- --run
-make legacy                   # run the frozen v1 Streamlit app (own pins, separate resolution)
 OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; never CI)
 ```
 
@@ -80,7 +79,8 @@ OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; neve
   (no react-map-gl). **No-refetch rule**: layer controls only touch paint/layout/moveLayer;
   re-mints go through `setTiles` on the existing source. API types are generated
   (`src/api/types.gen.ts` — never edit; run `make gen` after API schema changes).
-- `legacy/` — frozen v1. Do not add features; fix defects in `packages/core` instead.
+  Views (state switcher in `App.tsx`): Explore, Compare (`@maplibre/maplibre-gl-compare`,
+  two per-instance maps), Methane Lab, Timelapse Studio, Settings.
 
 ## Conventions
 
