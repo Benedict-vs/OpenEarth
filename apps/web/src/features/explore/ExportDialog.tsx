@@ -90,7 +90,12 @@ export function ExportDialog({ layer, onClose }: { layer: Layer; onClose: () => 
   const submitGeotiff = () => {
     if (!roi) return;
     const tiles = buildTilesRequest(
-      { dataset: layer.dataset, product: layer.product, vizOverrides: layer.vizOverrides },
+      {
+        dataset: layer.dataset,
+        product: layer.product,
+        vizOverrides: layer.vizOverrides,
+        autoRange: layer.autoRange,
+      },
       roi,
       dateParams(),
     );
@@ -125,7 +130,12 @@ export function ExportDialog({ layer, onClose }: { layer: Layer; onClose: () => 
     setPngBusy(true);
     setPngError(null);
     const tiles = buildTilesRequest(
-      { dataset: layer.dataset, product: layer.product, vizOverrides: layer.vizOverrides },
+      {
+        dataset: layer.dataset,
+        product: layer.product,
+        vizOverrides: layer.vizOverrides,
+        autoRange: layer.autoRange,
+      },
       roi,
       dateParams(),
     );

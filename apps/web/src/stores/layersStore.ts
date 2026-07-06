@@ -24,6 +24,8 @@ export interface Layer {
   opacity: number;
   visible: boolean;
   vizOverrides: VizOverrides | null;
+  /** Data-adaptive vis range from the composite's percentiles (server-side). */
+  autoRange: boolean;
   mint: LayerMint | null;
   status: LayerStatus;
   error: string | null;
@@ -36,6 +38,7 @@ interface LayersState {
   removeLayer(id: string): void;
   setOpacity(id: string, opacity: number): void;
   toggleVisible(id: string): void;
+  toggleAutoRange(id: string): void;
   /** Move a layer one step up (+1, toward the viewer) or down (−1). */
   moveLayer(id: string, direction: 1 | -1): void;
   setMinting(id: string): void;
@@ -65,6 +68,7 @@ export const useLayersStore = create<LayersState>()((set) => ({
           opacity: 0.8,
           visible: true,
           vizOverrides: null,
+          autoRange: false,
           mint: null,
           status: "idle",
           error: null,
@@ -83,6 +87,13 @@ export const useLayersStore = create<LayersState>()((set) => ({
     set((state) => ({
       layers: state.layers.map((layer) =>
         layer.id === id ? { ...layer, visible: !layer.visible } : layer,
+      ),
+    })),
+
+  toggleAutoRange: (id) =>
+    set((state) => ({
+      layers: state.layers.map((layer) =>
+        layer.id === id ? { ...layer, autoRange: !layer.autoRange } : layer,
       ),
     })),
 

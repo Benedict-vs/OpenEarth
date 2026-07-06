@@ -108,6 +108,10 @@ class TilesRequest(BaseModel):
     half_window_days: int = Field(default=3, ge=0, le=30)
     timestamp_ms: int | None = None
     viz_overrides: VizOverrides | None = None
+    # Data-adaptive vis range: compute the scale from the composite's own
+    # percentiles (``compute_vis_range``) instead of the catalog default. Ignored
+    # for RGB products and when an explicit ``viz_overrides`` range is supplied.
+    auto_range: bool = False
     # Reference window that unlocks the CH4_ANOMALY quicklook (a builder product
     # that 422s without it): the target is the composite's ``target_date``.
     methane_ref: DateRangeIn | None = None

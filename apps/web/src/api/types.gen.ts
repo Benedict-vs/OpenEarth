@@ -1439,6 +1439,11 @@ export interface components {
     /** ThumbnailRequest */
     ThumbnailRequest: {
       /**
+       * Auto Range
+       * @default false
+       */
+      auto_range: boolean;
+      /**
        * Composite
        * @default mean
        * @enum {string}
@@ -1488,6 +1493,11 @@ export interface components {
      *     single_scene → ``timestamp_ms``.
      */
     TilesRequest: {
+      /**
+       * Auto Range
+       * @default false
+       */
+      auto_range: boolean;
       /**
        * Composite
        * @default mean

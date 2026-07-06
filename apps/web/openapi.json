@@ -2083,6 +2083,11 @@
       },
       "ThumbnailRequest": {
         "properties": {
+          "auto_range": {
+            "default": false,
+            "title": "Auto Range",
+            "type": "boolean"
+          },
           "composite": {
             "default": "mean",
             "enum": [
@@ -2232,6 +2237,11 @@
       "TilesRequest": {
         "description": "Per-mode requirements (enforced in the service, 422 on violation):\nmean \u2192 ``dates``; date_window \u2192 ``target_date`` (\u00b1 ``half_window_days``);\nsingle_scene \u2192 ``timestamp_ms``.",
         "properties": {
+          "auto_range": {
+            "default": false,
+            "title": "Auto Range",
+            "type": "boolean"
+          },
           "composite": {
             "default": "mean",
             "enum": [

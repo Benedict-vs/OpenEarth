@@ -134,7 +134,12 @@ async function sampleAt(
   const { mode, start, end, targetDate, halfWindowDays } = useDateStore.getState();
   const roi = useRoiStore.getState().roi;
   const tiles = buildTilesRequest(
-    { dataset: layer.dataset, product: layer.product, vizOverrides: layer.vizOverrides },
+    {
+      dataset: layer.dataset,
+      product: layer.product,
+      vizOverrides: layer.vizOverrides,
+      autoRange: layer.autoRange,
+    },
     roi,
     { mode, start, end, targetDate, halfWindowDays },
   );

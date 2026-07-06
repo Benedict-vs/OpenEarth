@@ -103,6 +103,7 @@ export function useBrowseFrames(
         product: layer.product,
         roi: roi ?? null,
         viz_overrides: layer.vizOverrides ?? null,
+        auto_range: layer.autoRange,
         composite: "date_window",
         target_date: targetDate,
         half_window_days: opts.halfWindowDays,

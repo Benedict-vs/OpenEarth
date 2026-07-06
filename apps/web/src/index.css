@@ -290,6 +290,10 @@ button.icon {
   padding: 1px 7px;
   line-height: 1.4;
 }
+button.icon.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 
 .badge {
   font-size: 11px;
