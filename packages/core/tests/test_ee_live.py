@@ -159,3 +159,18 @@ def test_fetch_chip_korpezhe() -> None:
     assert finite.size > 0
     assert float(finite.min()) > 0.0
     assert float(finite.max()) < 1.5
+
+
+def test_screen_region_turkmenistan() -> None:
+    from datetime import date
+
+    from openearth.geometry import BBox
+    from openearth.methane.tropomi import screen_region
+
+    # Central Turkmenistan (Galkynysh/Korpezhe belt), one month of 2023.
+    bbox = BBox(53.5, 38.0, 54.5, 39.0)
+    hotspots = screen_region(bbox, date(2023, 6, 1), date(2023, 7, 1), top_n=20)
+    assert hotspots, "expected at least one hotspot"
+    for h in hotspots:
+        assert bbox.west <= h.lon <= bbox.east
+        assert bbox.south <= h.lat <= bbox.north

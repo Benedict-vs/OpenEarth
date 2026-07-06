@@ -84,6 +84,7 @@ module = [
     "openearth.methane.scenes",
     "openearth.methane.retrieval",
     "openearth.methane.detect",
+    "openearth.methane.tropomi",
     "openearth.timeseries",
     "openearth.export",
     "openearth_api.services.*",
