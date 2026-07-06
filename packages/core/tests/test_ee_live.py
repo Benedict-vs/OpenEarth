@@ -139,3 +139,23 @@ def test_list_scenes_korpezhe_june_2018() -> None:
     for s in scenes:
         assert s.spacecraft in ("Sentinel-2A", "Sentinel-2B")
         assert s.amf > 1.0
+
+
+def test_fetch_chip_korpezhe() -> None:
+    import numpy as np
+
+    from openearth.geometry import BBox
+    from openearth.methane.retrieval import CHIP_BANDS, fetch_chip
+    from openearth.methane.scenes import list_scenes
+
+    # A small 2 km box around the Korpezhe well pad; grab the 2018-06-19 scene.
+    bbox = BBox(53.95, 38.48, 53.98, 38.50)
+    scenes = list_scenes(bbox, "2018-06-18", "2018-06-21", max_cloud=90.0)
+    assert scenes
+    chip = fetch_chip(scenes[0], bbox, scale_m=20)
+    assert set(chip.bands) == set(CHIP_BANDS)
+    b12 = chip.bands["B12"]
+    finite = b12[np.isfinite(b12)]
+    assert finite.size > 0
+    assert float(finite.min()) > 0.0
+    assert float(finite.max()) < 1.5

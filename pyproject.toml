@@ -73,6 +73,7 @@ module = [
     "openearth.analytics.source_classification",
     "openearth.methane.wind",
     "openearth.methane.scenes",
+    "openearth.methane.retrieval",
     "openearth.timeseries",
     "openearth.export",
     "openearth_api.services.*",
