@@ -44,14 +44,19 @@ OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; neve
   - `methane/` — the physics suite (theory in `docs/methane_methods.md`). `wind.py` (ERA5;
     `wind_to_deg`/`wind_from_deg` distinct tested conventions; `sample_wind_at` +
     `sample_wind_field`). `constants.py` (cited literature + declared modeling constants),
-    `conversion.py` (loads committed `data/ch4_lut_v3.npz`; ΔR→ΔΩ→ΔXCH4 — pure, strict mypy),
+    `conversion.py` (loads reporting `data/ch4_lut_v4.npz`; ΔR→ΔΩ→ΔXCH4 — pure, strict mypy;
+    `load_mask_lut` = frozen `ch4_lut_mask.npz` used ONLY to build footprints, decoupled from
+    the reporting LUT so masks are invariant to LUT recalibration — Phase 3.5 Stage 2),
     `scenes.py` (S2 L1C search + `pick_reference`, which excludes the same-overpass tile),
     `retrieval.py` (calibrated MBSP/MBMP on `computePixels` chips; bands are unpadded B4/B3/B2),
-    `plume.py` (robust-σ threshold + components + outline), `ime.py` (IME + seeded joint MC),
+    `plume.py` (robust-σ threshold + components + outline), `ime.py` (IME + seeded joint MC;
+    `quantify(mask_field=…)` thresholds the frozen-LUT ΔΩ, IME uses reporting ΔΩ),
     `detect.py` (7-step cancellable orchestrator), `tropomi.py` (S5P screening),
-    `validation.py` (IMEO/SRON parse + cross-match). The LUT is generated **offline** by
-    `scripts/generate_ch4_lut.py` (`uv run --group lut …`, HITRAN+SRFs); HAPI must never be
-    imported under `packages/`. Reproduce events with `scripts/validate_events.py`.
+    `validation.py` (IMEO/SRON parse + cross-match). LUT v4 = layered US-Std background +
+    H₂O/CO₂ interfering absorbers + TSIS-1 solar weighting, generated **offline** by
+    `scripts/generate_ch4_lut.py` (`uv run --group lut …`, HITRAN+SRFs+committed data extracts);
+    HAPI must never be imported under `packages/`. Reproduce events with
+    `scripts/validate_events.py` (2-event gate) or `scripts/calibration_harness.py` (regression).
   - `geometry.py` — `BBox`/`PolygonROI` validate on construction; pure-python `is_global`,
     aspect math (no EE round-trips).
   - `timelapse.py` — Phase 4. Pure layer: `frame_windows` (interval/monthly/quarterly stepping)

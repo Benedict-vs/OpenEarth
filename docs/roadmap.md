@@ -51,7 +51,20 @@ via `scripts/validate_events.py` under v3 — Korpezhe 13.7 ± 22.7 t/h (pub 11.
 PASS; wide MC band from a mask-size cliff, documented in §8) and Hassi Messaoud 8.5 t/h mean
 (pub 9.3 ± 5.5, MBSP, PASS).)*
 
-## Phase 3.5 — Methane calibration hardening (M, parallel track)
+## Phase 3.5 — Methane calibration hardening (M, parallel track) ✅
+
+**As built:** multi-event regression over 17 same-scene S2 events (IMEO MARS-S2L + Korpezhe;
+IMEO portal was down, so rates come from the MARS-S2L HuggingFace dataset) — the harness
+immediately showed single-scene MBSP saturates the LUT over heterogeneous surfaces, so events
+default to **MBMP with pinned plume-free references** (v3 baseline slope 1.03). Footprint
+LUT-invariance is delivered by a **frozen mask LUT** (decoupled from the reporting LUT), *not*
+the planned raw-ΔR masking — which was implemented and rejected after diagnosis (zero plume
+overlap for MBMP; the raw ΔR difference doesn't cancel co-clamped structure). LUT **v4** adds
+H₂O/CO₂ interfering absorbers (AFGL H₂O, 420 ppm CO₂) + TSIS-1 solar weighting, but its key
+result is a **refuted hypothesis**: those gaps move the anchor only ~1.6 %, so the ~25 % Varon
+offset is *not* dominated by them (scattering/aerosols/P₀ remain). v4 is empirically
+indistinguishable from v3 and ships for physical completeness; both baselines stay committed.
+See methods §2/§8.2.
 
 Three sequenced stages, each its own commit with a falsifiable acceptance criterion; never
 touches the EE-browsing/parity stack, so it can run alongside Phase 4.

@@ -46,7 +46,7 @@ retrieval literature.
 ## 2. Column conversion — the CH4 absorption LUT
 
 The fractional signal ΔR is mapped to a methane **column enhancement** ΔΩ (mol/m²) through a
-precomputed lookup table, `methane/data/ch4_lut_v3.npz`.
+precomputed lookup table, `methane/data/ch4_lut_v4.npz`.
 
 **Physics (`scripts/generate_ch4_lut.py`, run once with network):** layered Beer–Lambert band
 transmittance, no scattering.
@@ -55,18 +55,28 @@ transmittance, no scattering.
   16 equal-mass layers (well-mixed CH4 ⇒ absorber fraction = pressure fraction), each with its
   own absorber-weighted `(T_i, p_i)` and its own **HITRAN** Voigt cross section σ_i(ν) (HAPI
   `absorptionCoefficient_Voigt`, 0.005 cm⁻¹ grids spanning B11 ≈ 5946–6497 cm⁻¹ and
-  B12 ≈ 4310–4812 cm⁻¹, ± 50 cm⁻¹). Vertical background optical depth
-  `τ_bg(ν) = Ω₀ · Σ_i f_i · N_A · 1e−4 · σ_i(ν)` with `Ω₀ = 0.65 mol/m²` (1875 ppb).
+  B12 ≈ 4310–4812 cm⁻¹, ± 50 cm⁻¹).
+- **Interfering absorbers (v4).** The background optical depth adds **H2O** and **CO2**:
+  `τ_bg(ν) = Σ_i [Ω_CH4,i k_CH4,i + Ω_H2O,i k_H2O,i + Ω_CO2,i k_CO2,i]` (`k = N_A·1e−4·σ`), with
+  CH4 background `Ω₀ = 0.65 mol/m²` (1875 ppb) well-mixed, CO2 well-mixed at **420 ppm** (a
+  declared modeling constant; NOAA GML global mean ~423 ppm in 2024), and H2O from the **AFGL US
+  Standard** profile (Anderson et al. 1986 — USSA 1976 is a *dry* atmosphere) integrated per
+  layer (total column ≈ 14.2 kg/m² precipitable water). H2O/CO2 are HITRAN molecules 1/2, main
+  isotopologues (same policy as CH4). The enhancement slab stays **CH4-only** — a plume adds
+  methane, not water.
+- **Solar weighting (v4).** The band weight is `w(ν) = SRF_b(ν) · E_ν(ν) · e^{−AMF·τ_bg}`, with
+  `E_ν` the **TSIS-1 HSRS** solar irradiance (Coddington et al. 2021, via LASP LISIRD). The HSRS
+  is per-wavelength, so its shape is converted to per-wavenumber with the **λ² Jacobian**
+  (`E_ν ∝ E_λ·λ²`) *before* interpolation — λ² varies ~27 % across B12, so dropping it visibly
+  reweights the band. The B11/B12 extracts are committed at `scripts/data/tsis1_hsrs_b11_b12.csv`
+  and `scripts/data/afgl_us_standard_h2o.csv`.
 - The plume **enhancement ΔΩ sits in the lowest 500 m** at that slab's absorber-weighted
   conditions (0.971 atm, 286.5 K) — the vertical placement Varon et al. 2021 assume in their
-  100-layer reference model. This matters: the enhancement only produces signal where the
-  background hasn't already saturated the band, and a near-surface plume's pressure-broadened
-  wings absorb outside the background-saturated cores.
-- Both terms are slanted by the same geometric `AMF = 1/cos θ_sun + 1/cos θ_view` (the plume is
-  below both paths). SRF-weighted band signal
-  `m_b(ΔΩ) = ∫ SRF_b e^{−AMF·τ_bg} e^{−AMF·ΔΩ·k_enh} dν / ∫ SRF_b e^{−AMF·τ_bg} dν − 1`, using
-  the ESA Sentinel-2 spectral response functions (document COPE-GSEG-EOPG-TN-15-0007,
-  issue 3.2; the B11/B12 columns are committed at `scripts/data/s2_srf_b11_b12.csv`),
+  100-layer reference model (the enhancement only produces signal where the background hasn't
+  saturated the band). Both terms are slanted by the same geometric
+  `AMF = 1/cos θ_sun + 1/cos θ_view`. Band signal
+  `m_b(ΔΩ) = ∫ w e^{−AMF·ΔΩ·k_enh} dν / ∫ w dν − 1` with `w` above, using the ESA Sentinel-2
+  spectral response functions (COPE-GSEG-EOPG-TN-15-0007 issue 3.2; `scripts/data/s2_srf_b11_b12.csv`),
   combined to `m_MBSP = (1 + m_B12)/(1 + m_B11) − 1`, computed **separately for Sentinel-2A
   and Sentinel-2B** (their B12 SRFs differ enough to matter).
 
@@ -77,19 +87,25 @@ so saturated super-emitter cores don't clip at the grid end) × AMF ∈ [2.0, 4.
 ppb is `ΔΩ / Ω_air · 1e9` with the dry-air column `Ω_air = 3.567e5 mol/m²`.
 
 **Anchor (sanity-checked in `test_varon_anchor`, regression-pinned in
-`test_v3_regression_pin`):** at AMF = 1/cos 40° + 1 ≈ 2.305 and a doubled background
-(ΔΩ = 0.65 mol/m²), the LUT gives `m_MBSP ≈ −0.0363` (S2A) / `−0.0273` (S2B) — ~25 % above
-Varon's published −0.029 / −0.022 in magnitude, with the correct S2A/S2B ordering and ratio
-(1.328 vs the published 1.32). That offset is **expected, not a defect**: our forward model is
-CH4-only Beer–Lambert with SRF-only band weighting, while Varon's reference includes
-interfering H2O/CO2 absorption and solar-spectrum radiance weighting, both of which shrink the
-CH4 fractional signal. The interim v2 LUT (single Curtis–Godson effective layer, 0.51 atm /
-255 K applied to background *and* enhancement) agreed with Varon's anchor to ~8 %, but for the
-wrong reason: evaluating the *enhancement* at half surface pressure concentrates its optical
-depth in the background-saturated line cores and understates its absorption — an error that
-happened to cancel the missing interfering-gas/solar-weighting effects at that one point.
-v3 removes the cancellation and pins the test to our own layered reference instead; the Varon
-anchor is kept only as a loose ±30 % sanity band.
+`test_v4_regression_pin`):** at AMF = 1/cos 40° + 1 ≈ 2.305 and a doubled background
+(ΔΩ = 0.65 mol/m²), the v4 LUT gives `m_MBSP ≈ −0.0357` (S2A) / `−0.0268` (S2B) — still ~23 %
+above Varon's published −0.029 / −0.022 in magnitude, with the correct S2A/S2B ordering. The
+Varon anchor is kept only as a loose ±30 % sanity band; correctness is pinned against our own
+generated reference (`V4_ANCHOR_*`, pasted from the npz, not estimated).
+
+**Key result of Phase 3.5 Stage 3 (a refuted hypothesis).** The two spectroscopy gaps the
+roadmap blamed for the ~25 % offset — interfering **H2O/CO2** and **solar-spectrum weighting** —
+were added in v4 and turn out to be **minor**: they shrink |m| by only **~1.6 %** (v3 −0.0363 →
+v4 −0.0357), leaving ~23 % of the Varon discrepancy **unexplained**. So the offset is *not*
+dominated by those omissions; the remaining candidates are multiple scattering / aerosols
+(entirely absent from our Beer–Lambert model), the site-elevation surface pressure P₀ baked in
+at sea level, and deeper reference-model structural differences. v4 ships for physical
+completeness and to make this finding checkable from the repo — **not** because it improves the
+calibration (see §8.2: it is empirically indistinguishable from v3). Earlier LUT history: the
+interim v2 (single Curtis–Godson layer) agreed with Varon to ~8 % by *error cancellation*
+(evaluating the enhancement at half surface pressure understated its absorption, cancelling the
+then-missing interfering-gas/solar effects); v3 removed that, and v4 confirms those effects were
+small to begin with.
 
 **MBMP inversion** is per-pass: `ΔΩ_MBMP = invert(ΔR_target; AMF_t, sat_t) −
 invert(ΔR_ref; AMF_r, sat_r)`. Inverting each pass with its own AMF and spacecraft (then
@@ -290,6 +306,34 @@ contaminated reference over-subtracts (libya-sirte 1.7 vs 14.7); (ii) IMEO/Varon
 *their* wind source while ours is ERA5; (iii) single-scene surface heterogeneity. This baseline
 is the reference against which Stage 2 (frozen-mask-LUT footprints) and Stage 3 (LUT v4) are measured;
 the harness `--compare` reruns and diffs a fresh run without overwriting it.
+
+**v4 vs v3 — an explicit exit-gate deviation (documented honestly).** The Stage 3 exit gate as
+written required `|slope − 1|` to shrink. It **did not**: swapping v3→v4 (masks held fixed by the
+frozen mask LUT, so this isolates the column change) moves the four aggregates by ≤ 0.015 each —
+*smaller than a rounding wobble against the s ≈ 0.41 scatter* — but in **opposite directions**:
+
+| Aggregate | v3 | v4 | |
+|---|---|---|---|
+| through-origin slope | 1.027 | 1.042 | away from 1 |
+| Theil–Sen slope | 0.200 | 0.190 | away from 1 |
+| median ratio | 0.967 | 0.972 | toward 1 |
+| log-scatter | 0.424 | 0.413 | tighter |
+
+Both slope-like estimators drift *away* from 1 while both robust estimators improve. This split
+is **structurally forced, not evidence against v4**: the residual distribution straddles 1 (median
+0.97 < 1 < leverage-weighted slope 1.04), so v4's uniform ~1.6 % lift of every retrieved Q *cannot*
+help both sides at once — it pulls the (below-1) median up toward 1 and pushes the (above-1) slope
+further past it. We therefore ship v4 as **empirically indistinguishable from v3** on this set, for
+physical completeness and the repo-checkable refuted-hypothesis result (§2) — **not** as a
+calibration improvement. Both baselines stay committed (`calibration_baseline_v3.json`,
+`calibration_baseline_v4.json`) so the comparison is checkable from the repo alone.
+
+**Open finding — a rate-dependent skew.** That the median sits below 1 while the slope sits above
+it means we tend to *over*-estimate the largest emitters and *under*-estimate typical ones (e.g.
+gulf-of-suez 51 vs 20, kazakhstan 24 vs 10; against marib 2.3 vs 7.1, amudarya 5.7 vs 11.3). This
+is a genuine open question, not tuned away: candidate mechanisms are mask-size saturation at high
+IME (the k·σ footprint grows super-linearly for a bright plume), U_eff wind-error scaling, and the
+IME's heavy upper tail. Left for a future phase.
 
 ### LUT history note
 
