@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from datetime import UTC, datetime
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -160,6 +161,43 @@ def test_no_plume_is_valid_result(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "no_plume" in result.flags
     assert np.isnan(result.emission.q_kg_h)
     assert result.plume.n_pixels == 0
+
+
+_V2_SNAPSHOT = Path(__file__).parent / "data" / "ch4_lut_v2_snapshot.npz"
+
+
+def test_footprint_invariant_under_lut_swap(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Stage 2: the plume mask is thresholded on the ΔΩ from the FROZEN mask LUT, so swapping the
+    # *reporting* LUT must leave the mask BIT-IDENTICAL while the reported ΔΩ (and therefore
+    # IME/Q) change — the footprint is invariant to a reporting-LUT recalibration by construction.
+    truth = _truth_delta_omega()  # crafts R11/R12 via the packaged v3 LUT → ΔR is fixed
+    _install_fakes(monkeypatch, target_delta=truth, ref_delta=np.zeros(_SHAPE))
+    v3 = load_lut()
+    v2 = load_lut(_V2_SNAPSHOT)
+    assert v3.version != v2.version
+
+    # Only the reporting `load_lut` is swapped; `load_mask_lut` (the frozen mask inversion) is not.
+    monkeypatch.setattr(detect_mod, "load_lut", lambda *_a, **_k: v3)
+    r3 = analyze(_BBOX, "20180619T074619_x", method="mbmp", mc=McParams(n=80, seed=1))
+    monkeypatch.setattr(detect_mod, "load_lut", lambda *_a, **_k: v2)
+    r2 = analyze(_BBOX, "20180619T074619_x", method="mbmp", mc=McParams(n=80, seed=1))
+
+    # The point of the stage: identical footprint under any reporting-LUT substitution.
+    assert r3.plume.n_pixels > 0
+    assert np.array_equal(r3.plume.mask, r2.plume.mask)
+    # And the swap genuinely changed the reported columns (else the test proves nothing).
+    assert not np.allclose(r3.delta_omega, r2.delta_omega, equal_nan=True)
+    assert r3.emission.ime_kg != r2.emission.ime_kg
+
+
+def test_two_sigmas_are_distinct(monkeypatch: pytest.MonkeyPatch) -> None:
+    # After Stage 2 there are two σ's in different units: the mask threshold σ (ΔR space,
+    # on PlumeMask) and the retrieval-noise σ (ΔΩ, on the estimate). They must not coincide.
+    _install_fakes(monkeypatch, target_delta=_truth_delta_omega())
+    result = analyze(_BBOX, "20180619T074619_x", method="mbmp", mc=McParams(n=80, seed=1))
+    assert np.isfinite(result.plume.sigma)  # ΔR-space mask σ
+    assert np.isfinite(result.emission.sigma_noise_delta_omega)  # ΔΩ-space noise σ
+    assert result.plume.sigma != result.emission.sigma_noise_delta_omega
 
 
 def test_mbsp_skips_reference_fetch(monkeypatch: pytest.MonkeyPatch) -> None:

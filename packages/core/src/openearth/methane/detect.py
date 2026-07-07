@@ -23,6 +23,7 @@ from openearth.methane.conversion import (
     delta_omega_to_xch4_ppb,
     invert_fractional_signal,
     load_lut,
+    load_mask_lut,
 )
 from openearth.methane.ime import EmissionEstimate, McParams, quantify
 from openearth.methane.plume import PlumeMask
@@ -146,6 +147,9 @@ def analyze(
 
     flags: list[str] = []
     lut = load_lut(get_settings().lut_path)
+    # Frozen inversion for masking only — keeps the footprint invariant to reporting-LUT
+    # recalibrations (Stage 2); the reported columns/IME use `lut`.
+    mask_lut = load_mask_lut()
 
     # ── Step 1: list scenes / resolve target + reference ──
     check_cancel()
@@ -203,6 +207,9 @@ def analyze(
         target_chip.bands["B11"].astype(np.float64), target_chip.bands["B12"].astype(np.float64)
     )
     d_omega_t = invert_fractional_signal(t_result.delta_r, lut, target.spacecraft, target.amf)
+    mask_d_omega_t = invert_fractional_signal(
+        t_result.delta_r, mask_lut, target.spacecraft, target.amf
+    )
 
     calibration = {
         "c_target": t_result.c,
@@ -220,7 +227,11 @@ def analyze(
         d_omega_r = invert_fractional_signal(
             r_result.delta_r, lut, reference.spacecraft, reference.amf
         )
+        mask_d_omega_r = invert_fractional_signal(
+            r_result.delta_r, mask_lut, reference.spacecraft, reference.amf
+        )
         delta_omega = d_omega_t - d_omega_r
+        mask_delta_omega = mask_d_omega_t - mask_d_omega_r
         delta_r = mbmp(t_result, r_result)
         calibration["c_ref"] = r_result.c
         calibration["n_excluded_ref"] = float(r_result.n_excluded)
@@ -228,9 +239,11 @@ def analyze(
             flags.append("clipped_inversion")
     else:
         delta_omega = d_omega_t
+        mask_delta_omega = mask_d_omega_t
         delta_r = t_result.delta_r
 
     delta_omega = np.asarray(delta_omega, dtype=np.float64)
+    mask_delta_omega = np.asarray(mask_delta_omega, dtype=np.float64)
     xch4_ppb = np.asarray(delta_omega_to_xch4_ppb(delta_omega), dtype=np.float64)
 
     # ── Step 6: mask ──
@@ -241,11 +254,16 @@ def analyze(
     # ── Step 7: Monte-Carlo quantification ──
     check_cancel()
     progress(7, "Quantifying (Monte Carlo)")
+    # Threshold the plume footprint on the ΔΩ field from the FROZEN mask LUT, so the mask is
+    # invariant to reporting-LUT recalibrations while still using the per-pass inversion that
+    # actually localises the plume (raw −ΔR masking displaces the mask off-source for MBMP —
+    # see docs/methane_methods.md §3/§8). Mass (IME) and the noise bootstrap use the reporting ΔΩ.
     emission, plume = quantify(
         delta_omega,
         grid,
         wind,
         sigma_u10,
+        mask_field=mask_delta_omega,
         k_sigma=k_sigma,
         min_area_px=min_area_px,
         source_rc=source_rc,

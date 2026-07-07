@@ -22,7 +22,7 @@ from openearth.methane.constants import (
     UEFF_ALPHA,
     UEFF_BETA_MS,
 )
-from openearth.methane.plume import PlumeMask, detect_plume, pixel_area_m2
+from openearth.methane.plume import PlumeMask, detect_plume, pixel_area_m2, robust_sigma
 
 if TYPE_CHECKING:
     from openearth.ee.pixels import GridSpec
@@ -79,6 +79,10 @@ class EmissionEstimate:
     sigma_u10_ms: float
     wind_from_deg: float
     n_mc: int
+    # Robust σ of the off-plume ΔΩ (mol/m²) population — the retrieval-noise scale that
+    # feeds the MC bootstrap. Distinct from the mask threshold σ (which is in ΔR units when
+    # masking in ΔR space); see ``PlumeMask.sigma``. NaN when there is no plume.
+    sigma_noise_delta_omega: float = float("nan")
 
 
 def _nan_estimate(
@@ -98,6 +102,7 @@ def _nan_estimate(
         sigma_u10_ms=sigma_u10,
         wind_from_deg=wind_from_deg,
         n_mc=n_mc,
+        sigma_noise_delta_omega=nan,
     )
 
 
@@ -107,6 +112,7 @@ def quantify(
     wind: WindSample,
     sigma_u10: float,
     *,
+    mask_field: NDArray[np.float64] | None = None,
     k_sigma: float = 2.0,
     min_area_px: int = 5,
     source_rc: tuple[int, int] | None = None,
@@ -114,12 +120,16 @@ def quantify(
 ) -> tuple[EmissionEstimate, PlumeMask]:
     """Quantify the emission rate and its uncertainty from a ΔΩ field.
 
-    The display mask (and the returned ``PlumeMask``) is the ``k_sigma`` one; the
+    The plume footprint is thresholded on *mask_field* (defaults to *delta_omega*);
+    passing the LUT-independent ``−ΔR`` field there makes the mask invariant to the
+    inversion calibration while the mass (IME) and retrieval-noise bootstrap stay in
+    ΔΩ. The display mask (and the returned ``PlumeMask``) is the ``k_sigma`` one; the
     Monte Carlo additionally jitters the threshold over ``mc.k_grid``.
     """
     u10 = wind.speed_ms
+    field = delta_omega if mask_field is None else mask_field
     display = detect_plume(
-        delta_omega, grid, k_sigma=k_sigma, min_area_px=min_area_px, source_rc=source_rc
+        field, grid, k_sigma=k_sigma, min_area_px=min_area_px, source_rc=source_rc
     )
     if display.n_pixels == 0:
         return _nan_estimate(u10, sigma_u10, wind.wind_from_deg, mc.n), display
@@ -128,15 +138,15 @@ def quantify(
     # Off-plume ΔΩ population for the retrieval-noise bootstrap: finite pixels
     # outside the display mask (the plume must not inflate its own noise).
     off_plume = delta_omega[(~display.mask) & np.isfinite(delta_omega)]
+    sigma_noise = robust_sigma(off_plume) if off_plume.size else float("nan")
 
-    # Precompute mask/IME/length once per threshold k (5 labelings, not 500).
+    # Precompute mask/IME/length once per threshold k (5 labelings, not 500). The mask
+    # is thresholded on *field*; the mass it integrates stays in ΔΩ.
     ime_k = np.empty(len(mc.k_grid))
     length_k = np.empty(len(mc.k_grid))
     npix_k = np.empty(len(mc.k_grid), dtype=np.intp)
     for i, k in enumerate(mc.k_grid):
-        pm = detect_plume(
-            delta_omega, grid, k_sigma=k, min_area_px=min_area_px, source_rc=source_rc
-        )
+        pm = detect_plume(field, grid, k_sigma=k, min_area_px=min_area_px, source_rc=source_rc)
         ime_k[i] = ime_kg(delta_omega, pm.mask, grid)
         length_k[i] = plume_length_m(pm.mask, grid)
         npix_k[i] = pm.n_pixels
@@ -184,5 +194,6 @@ def quantify(
         sigma_u10_ms=sigma_u10,
         wind_from_deg=wind.wind_from_deg,
         n_mc=mc.n,
+        sigma_noise_delta_omega=sigma_noise,
     )
     return estimate, display

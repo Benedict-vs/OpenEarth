@@ -46,7 +46,7 @@ retrieval literature.
 ## 2. Column conversion — the CH4 absorption LUT
 
 The fractional signal ΔR is mapped to a methane **column enhancement** ΔΩ (mol/m²) through a
-precomputed lookup table, `methane/data/ch4_lut_v3.npz`.
+precomputed lookup table, `methane/data/ch4_lut_v4.npz`.
 
 **Physics (`scripts/generate_ch4_lut.py`, run once with network):** layered Beer–Lambert band
 transmittance, no scattering.
@@ -55,18 +55,28 @@ transmittance, no scattering.
   16 equal-mass layers (well-mixed CH4 ⇒ absorber fraction = pressure fraction), each with its
   own absorber-weighted `(T_i, p_i)` and its own **HITRAN** Voigt cross section σ_i(ν) (HAPI
   `absorptionCoefficient_Voigt`, 0.005 cm⁻¹ grids spanning B11 ≈ 5946–6497 cm⁻¹ and
-  B12 ≈ 4310–4812 cm⁻¹, ± 50 cm⁻¹). Vertical background optical depth
-  `τ_bg(ν) = Ω₀ · Σ_i f_i · N_A · 1e−4 · σ_i(ν)` with `Ω₀ = 0.65 mol/m²` (1875 ppb).
+  B12 ≈ 4310–4812 cm⁻¹, ± 50 cm⁻¹).
+- **Interfering absorbers (v4).** The background optical depth adds **H2O** and **CO2**:
+  `τ_bg(ν) = Σ_i [Ω_CH4,i k_CH4,i + Ω_H2O,i k_H2O,i + Ω_CO2,i k_CO2,i]` (`k = N_A·1e−4·σ`), with
+  CH4 background `Ω₀ = 0.65 mol/m²` (1875 ppb) well-mixed, CO2 well-mixed at **420 ppm** (a
+  declared modeling constant; NOAA GML global mean ~423 ppm in 2024), and H2O from the **AFGL US
+  Standard** profile (Anderson et al. 1986 — USSA 1976 is a *dry* atmosphere) integrated per
+  layer (total column ≈ 14.2 kg/m² precipitable water). H2O/CO2 are HITRAN molecules 1/2, main
+  isotopologues (same policy as CH4). The enhancement slab stays **CH4-only** — a plume adds
+  methane, not water.
+- **Solar weighting (v4).** The band weight is `w(ν) = SRF_b(ν) · E_ν(ν) · e^{−AMF·τ_bg}`, with
+  `E_ν` the **TSIS-1 HSRS** solar irradiance (Coddington et al. 2021, via LASP LISIRD). The HSRS
+  is per-wavelength, so its shape is converted to per-wavenumber with the **λ² Jacobian**
+  (`E_ν ∝ E_λ·λ²`) *before* interpolation — λ² varies ~27 % across B12, so dropping it visibly
+  reweights the band. The B11/B12 extracts are committed at `scripts/data/tsis1_hsrs_b11_b12.csv`
+  and `scripts/data/afgl_us_standard_h2o.csv`.
 - The plume **enhancement ΔΩ sits in the lowest 500 m** at that slab's absorber-weighted
   conditions (0.971 atm, 286.5 K) — the vertical placement Varon et al. 2021 assume in their
-  100-layer reference model. This matters: the enhancement only produces signal where the
-  background hasn't already saturated the band, and a near-surface plume's pressure-broadened
-  wings absorb outside the background-saturated cores.
-- Both terms are slanted by the same geometric `AMF = 1/cos θ_sun + 1/cos θ_view` (the plume is
-  below both paths). SRF-weighted band signal
-  `m_b(ΔΩ) = ∫ SRF_b e^{−AMF·τ_bg} e^{−AMF·ΔΩ·k_enh} dν / ∫ SRF_b e^{−AMF·τ_bg} dν − 1`, using
-  the ESA Sentinel-2 spectral response functions (document COPE-GSEG-EOPG-TN-15-0007,
-  issue 3.2; the B11/B12 columns are committed at `scripts/data/s2_srf_b11_b12.csv`),
+  100-layer reference model (the enhancement only produces signal where the background hasn't
+  saturated the band). Both terms are slanted by the same geometric
+  `AMF = 1/cos θ_sun + 1/cos θ_view`. Band signal
+  `m_b(ΔΩ) = ∫ w e^{−AMF·ΔΩ·k_enh} dν / ∫ w dν − 1` with `w` above, using the ESA Sentinel-2
+  spectral response functions (COPE-GSEG-EOPG-TN-15-0007 issue 3.2; `scripts/data/s2_srf_b11_b12.csv`),
   combined to `m_MBSP = (1 + m_B12)/(1 + m_B11) − 1`, computed **separately for Sentinel-2A
   and Sentinel-2B** (their B12 SRFs differ enough to matter).
 
@@ -77,19 +87,25 @@ so saturated super-emitter cores don't clip at the grid end) × AMF ∈ [2.0, 4.
 ppb is `ΔΩ / Ω_air · 1e9` with the dry-air column `Ω_air = 3.567e5 mol/m²`.
 
 **Anchor (sanity-checked in `test_varon_anchor`, regression-pinned in
-`test_v3_regression_pin`):** at AMF = 1/cos 40° + 1 ≈ 2.305 and a doubled background
-(ΔΩ = 0.65 mol/m²), the LUT gives `m_MBSP ≈ −0.0363` (S2A) / `−0.0273` (S2B) — ~25 % above
-Varon's published −0.029 / −0.022 in magnitude, with the correct S2A/S2B ordering and ratio
-(1.328 vs the published 1.32). That offset is **expected, not a defect**: our forward model is
-CH4-only Beer–Lambert with SRF-only band weighting, while Varon's reference includes
-interfering H2O/CO2 absorption and solar-spectrum radiance weighting, both of which shrink the
-CH4 fractional signal. The interim v2 LUT (single Curtis–Godson effective layer, 0.51 atm /
-255 K applied to background *and* enhancement) agreed with Varon's anchor to ~8 %, but for the
-wrong reason: evaluating the *enhancement* at half surface pressure concentrates its optical
-depth in the background-saturated line cores and understates its absorption — an error that
-happened to cancel the missing interfering-gas/solar-weighting effects at that one point.
-v3 removes the cancellation and pins the test to our own layered reference instead; the Varon
-anchor is kept only as a loose ±30 % sanity band.
+`test_v4_regression_pin`):** at AMF = 1/cos 40° + 1 ≈ 2.305 and a doubled background
+(ΔΩ = 0.65 mol/m²), the v4 LUT gives `m_MBSP ≈ −0.0357` (S2A) / `−0.0268` (S2B) — still ~23 %
+above Varon's published −0.029 / −0.022 in magnitude, with the correct S2A/S2B ordering. The
+Varon anchor is kept only as a loose ±30 % sanity band; correctness is pinned against our own
+generated reference (`V4_ANCHOR_*`, pasted from the npz, not estimated).
+
+**Key result of Phase 3.5 Stage 3 (a refuted hypothesis).** The two spectroscopy gaps the
+roadmap blamed for the ~25 % offset — interfering **H2O/CO2** and **solar-spectrum weighting** —
+were added in v4 and turn out to be **minor**: they shrink |m| by only **~1.6 %** (v3 −0.0363 →
+v4 −0.0357), leaving ~23 % of the Varon discrepancy **unexplained**. So the offset is *not*
+dominated by those omissions; the remaining candidates are multiple scattering / aerosols
+(entirely absent from our Beer–Lambert model), the site-elevation surface pressure P₀ baked in
+at sea level, and deeper reference-model structural differences. v4 ships for physical
+completeness and to make this finding checkable from the repo — **not** because it improves the
+calibration (see §8.2: it is empirically indistinguishable from v3). Earlier LUT history: the
+interim v2 (single Curtis–Godson layer) agreed with Varon to ~8 % by *error cancellation*
+(evaluating the enhancement at half surface pressure understated its absorption, cancelling the
+then-missing interfering-gas/solar effects); v3 removed that, and v4 confirms those effects were
+small to begin with.
 
 **MBMP inversion** is per-pass: `ΔΩ_MBMP = invert(ΔR_target; AMF_t, sat_t) −
 invert(ΔR_ref; AMF_r, sat_r)`. Inverting each pass with its own AMF and spacecraft (then
@@ -97,13 +113,33 @@ subtracting the columns) is Varon's definition and handles mixed S2A/S2B pairs c
 
 ## 3. Plume masking
 
-`plume.py` thresholds the **positive** enhancement tail of the ΔΩ field at `k·σ`, where σ is
-a robust background estimate (`1.4826 · MAD`, NaN-aware). It optionally applies a 1-px
+The plume footprint is thresholded on the **ΔΩ field from a frozen canonical inversion**
+(`ch4_lut_mask.npz`), *decoupled from the reporting LUT*. This makes the footprint **invariant
+to a reporting-LUT recalibration** — v3→v4 changes the retrieved columns and IME but never which
+pixels are called plume (see §8 and the invariance test `test_footprint_invariant_under_lut_swap`).
+The mask LUT is a pinned snapshot and is bumped only to *deliberately* move masks, never
+alongside the reporting LUT.
+
+Why a frozen inversion rather than the LUT-independent ΔR field (the natural first idea):
+masking on raw `−ΔR` was tried and rejected — for MBMP it reintroduces surface-structure
+sensitivity (the raw ΔR difference does not cancel co-clamped structure the way the per-pass
+ΔΩ difference does) and *displaces* the mask off the source (§8). The per-pass inversion is what
+actually localises the plume, so the mask keeps it — just with a fixed inversion.
+
+`plume.py` thresholds the **positive** enhancement tail of that ΔΩ field at `k·σ`, where σ is a
+robust background estimate (`1.4826 · MAD`, NaN-aware). It optionally applies a 1-px
 `binary_opening` (removes speckle), labels connected components with 8-connectivity, drops
 components below `min_area_px`, and keeps the component(s) intersecting a 7×7 window around a
 supplied source pixel — or, failing that, the component holding the peak enhancement. No plume
-above threshold is a valid, empty result (not an error). The mask is vectorised to an
-EPSG:4326 MultiPolygon outline (`rasterio.features.shapes`; pixel-cornered, unsmoothed).
+above threshold is a valid, empty result (not an error). The mask is vectorised to an EPSG:4326
+MultiPolygon outline (`rasterio.features.shapes`; pixel-cornered, unsmoothed).
+
+The **mass** (IME) and the retrieval-noise bootstrap use the *reporting* ΔΩ (mol/m²):
+`ime.quantify` sums the reporting ΔΩ over the mask, and the bootstrap samples the off-plume
+reporting-ΔΩ population. There are therefore two distinct σ's — the mask-threshold σ on the
+frozen-LUT field (`sigma_mask`) and the retrieval-noise σ on the reporting field
+(`sigma_noise_delta_omega`); `result_json` names them separately, and
+`mask_domain: "frozen_lut_delta_omega"` records the choice.
 
 ## 4. Quantification — IME + Monte-Carlo uncertainty
 
@@ -182,12 +218,24 @@ is a human PATCH only).
   US Std Atmosphere background, 500 m enhancement slab), so the remaining ~25 % anchor offset
   vs Varon is attributable to the named spectral omissions, not to a guessed effective (T, p).
   The LUT also bakes in sea-level surface pressure — sites at significant elevation are biased.
-- **Plume mask depends on the LUT** — the `k·σ` threshold operates on the ΔΩ field, so a
-  *nonlinear* change to the inversion curve can move the mask footprint (see the Korpezhe note
-  in §8). Follow-up: threshold in ΔR (or inversion-gain-normalised) space so the detection
-  footprint is invariant to LUT calibration changes.
+- **Plume mask is now invariant to reporting-LUT recalibration** *(resolved in Phase 3.5)* — the
+  `k·σ` threshold operates on the ΔΩ field of a *frozen* canonical inversion (§3), so a change to
+  the reporting LUT (v3→v4) no longer moves the footprint; only the reported ΔΩ *columns* (and
+  hence IME/Q) change. Enforced bit-identically by `test_footprint_invariant_under_lut_swap`.
+- **Source localisation partly rides on the S2A/S2B inversion difference** — for mixed-spacecraft
+  MBMP pairs (S2A reference, S2B target), the per-pass inversion maps near-equal ΔR (ΔR_t ≈ ΔR_r)
+  to a non-zero ΔΩ difference because the S2A and S2B LUT curves differ, contributing to *where*
+  the ΔΩ-domain mask places the plume. This affects the shipping Phase 3 masks as well; it is why
+  raw-ΔR masking (which lacks this signal) displaces the mask off-source, and one reason the
+  calibration scatter (§8.2) is wide.
 
-## 8. Reproduction results (Phase 3 exit gate)
+## 8. Reproduction and calibration results
+
+Two live-EE instruments validate the pipeline. They are complementary: the first is a fast
+pass/fail gate on two hand-checked events; the second is a multi-event regression that makes
+the LUT / masking changes of Phase 3.5 falsifiable.
+
+### 8.1 Two-event exit gate (Phase 3)
 
 `OPENEARTH_EE_TESTS=1 uv run python scripts/validate_events.py` reproduces two documented
 super-emitter events against live Earth Engine (values verified against Varon et al. 2021),
@@ -201,14 +249,109 @@ using the v3 (layered) LUT:
 Korpezhe's reference is pinned (its auto pick is the unusable same overpass); Hassi Messaoud is
 a continuous blowout, so single-scene MBSP at the well is averaged over three cloud-free scenes.
 
+### 8.2 Multi-event calibration regression (Phase 3.5)
+
+`OPENEARTH_EE_TESTS=1 uv run python scripts/calibration_harness.py` runs `analyze` over the
+17 same-scene Sentinel-2 events in `scripts/data/calibration_events.json` — IMEO's
+per-scene MARS-S2L quantifications plus the Korpezhe (Varon et al. 2021) anchor, spanning
+13 regions and ~5–25 t/h — and regresses our retrieved rate against the published rate.
+Every event's published value derives from the *same* S2 acquisition we analyze (the
+same-scene principle); the SRON TROPOMI weekly list is excluded (7 km pixels, tens-of-t/h
+scale, different overpass — that measures source variability, not our calibration).
+
+**MBSP applicability (a genuine finding, not a nuisance).** *Method is our per-event analysis
+choice, not a property of the published event.* Single-scene **MBSP** has no reference to
+cancel static surface structure, so over heterogeneous terrain a coherent dark/bright region
+inverts to the **clamped LUT ΔΩ grid edge** and the connected-component step engulfs it into a
+multi-thousand-pixel false plume of hundreds of t/h (turkmenistan-caspian: 473 t/h, a
+9 561-pixel mask that is 76 % LUT-saturated). This is exactly why Varon et al. 2021 prefer
+MBMP: **MBSP is reliable only over spectrally homogeneous (arid) surfaces** (Hassi Messaoud).
+We therefore **default every event to MBMP with a pinned, plume-free reference** — the
+reference pass carries the same static surface structure, so co-located saturation cancels in
+the ΔΩ difference (turkmenistan-caspian → 11.9 t/h vs 12.3 published) — and fall back to MBSP
+only where no clean reference exists and the retrieval is itself valid. A retrieval whose plume
+mask exceeds 20 % LUT-saturated fraction is a **documented exclusion** (`excluded_lut_saturated`,
+with the fraction recorded), published-value-blind — never a silent drop and never a crash;
+`no_plume` is likewise recorded. `scripts/curate_calibration_events.py --recurate` resolves the
+per-event method + reference live.
+
+Baseline (LUT v3, MC seed 0, n = 500; committed at `scripts/data/calibration_baseline_v3.json`):
+
+| Event | Method | Published (t/h) | Ours (t/h) | Note |
+|---|---|---|---|---|
+| hassi-messaoud-2020-01-19 | MBMP | 7.0 | 7.5 ± 3.7 | |
+| algeria-ghardaia-2020-08-27 | MBMP | 6.5 | 5.4 ± 2.0 | |
+| neuquen-2022-06-11 | MBMP | 14.9 | 11.8 ± 3.4 | |
+| libya-sirte-2020-01-21 | MBMP | 14.7 | 1.7 ± 0.8 | reference likely plume-contaminated (recurrent) |
+| campeche-2024-09-13 | MBSP | 25.4 | — | *excluded:* LUT-saturated (offshore water) |
+| ahvaz-2023-12-08 | MBSP | 7.5 | 10.9 ± 10.0 | homogeneous surface; no clean reference |
+| gulf-of-thailand-2023-10-05 | MBMP | 15.3 | 17.1 ± 6.2 | |
+| turkmenistan-caspian-2017-11-26 | MBMP | 12.3 | 11.9 ± 7.1 | 473 t/h under MBSP (76 % saturated) |
+| permian-2023-09-27 | MBMP | 6.9 | 13.2 ± 4.5 | |
+| maturin-2024-02-20 | MBSP | 25.0 | — | *excluded:* no plume above threshold |
+| marib-2024-11-02 | MBMP | 7.1 | 2.3 ± 1.3 | |
+| gulf-of-suez-2023-09-20 | MBMP | 20.0 | 51.0 ± 17.8 | |
+| rub-al-khali-2023-12-09 | MBMP | 5.2 | 12.7 ± 4.3 | 3 343-px MBSP blowup fixed by MBMP |
+| kazakhstan-almaty-2019-09-18 | MBMP | 9.6 | 23.8 ± 7.5 | |
+| amudarya-2024-05-29 | MBMP | 11.3 | 5.7 ± 1.7 | |
+| turkmenistan-south-2018-10-02 | MBMP | 25.1 | 8.3 ± 4.4 | |
+| korpezhe-2018-06-19 | MBMP | 11.2 | 5.6 ± 5.0 | pinned plume-free reference |
+
+**Aggregates (15 quantified, LUT v3):** through-origin slope **β = 1.03**, median ratio
+**0.97**, robust log-scatter **s = 0.42** (≈ a factor of 2.6). With N ≈ 15 these are
+engineering diagnostics, not hypothesis tests. The central calibration is essentially
+unbiased; the wide scatter is honest and has known causes we do **not** chase per-event:
+(i) *reference quality* — recurrent emitters may have no in-period plume-free reference, so a
+contaminated reference over-subtracts (libya-sirte 1.7 vs 14.7); (ii) IMEO/Varon rates embed
+*their* wind source while ours is ERA5; (iii) single-scene surface heterogeneity. This baseline
+is the reference against which Stage 2 (frozen-mask-LUT footprints) and Stage 3 (LUT v4) are measured;
+the harness `--compare` reruns and diffs a fresh run without overwriting it.
+
+**v4 vs v3 — an explicit exit-gate deviation (documented honestly).** The Stage 3 exit gate as
+written required `|slope − 1|` to shrink. It **did not**: swapping v3→v4 (masks held fixed by the
+frozen mask LUT, so this isolates the column change) moves the four aggregates by ≤ 0.015 each —
+*smaller than a rounding wobble against the s ≈ 0.41 scatter* — but in **opposite directions**:
+
+| Aggregate | v3 | v4 | |
+|---|---|---|---|
+| through-origin slope | 1.027 | 1.042 | away from 1 |
+| Theil–Sen slope | 0.200 | 0.190 | away from 1 |
+| median ratio | 0.967 | 0.972 | toward 1 |
+| log-scatter | 0.424 | 0.413 | tighter |
+
+Both slope-like estimators drift *away* from 1 while both robust estimators improve. This split
+is **structurally forced, not evidence against v4**: the residual distribution straddles 1 (median
+0.97 < 1 < leverage-weighted slope 1.04), so v4's uniform ~1.6 % lift of every retrieved Q *cannot*
+help both sides at once — it pulls the (below-1) median up toward 1 and pushes the (above-1) slope
+further past it. We therefore ship v4 as **empirically indistinguishable from v3** on this set, for
+physical completeness and the repo-checkable refuted-hypothesis result (§2) — **not** as a
+calibration improvement. Both baselines stay committed (`calibration_baseline_v3.json`,
+`calibration_baseline_v4.json`) so the comparison is checkable from the repo alone.
+
+**Open finding — a rate-dependent skew.** That the median sits below 1 while the slope sits above
+it means we tend to *over*-estimate the largest emitters and *under*-estimate typical ones (e.g.
+gulf-of-suez 51 vs 20, kazakhstan 24 vs 10; against marib 2.3 vs 7.1, amudarya 5.7 vs 11.3). This
+is a genuine open question, not tuned away: candidate mechanisms are mask-size saturation at high
+IME (the k·σ footprint grows super-linearly for a bright plume), U_eff wind-error scaling, and the
+IME's heavy upper tail. Left for a future phase.
+
+### LUT history note
+
 **LUT history at Korpezhe (v1 → v2 → v3).** Korpezhe's point estimate moved
-9.6 → 5.4 → 13.7 t/h across the three LUTs while the retrieved ΔR field never changed — the
-robust-σ mask is thresholded in ΔΩ space, so it is invariant under *linear* rescaling of the
-inversion but shifts whenever the curve changes shape (v2's single-effective-layer curve was
-nonlinearly shallower, collapsing the mask 50 → 12 px). v3 restores the mask and lands the
-point estimate inside the ±50 % window, but its Monte-Carlo band is wide (± 22.7 t/h): the
-k-jitter draws straddle a mask-size cliff for this intermittent, different-date-reference
-event — the honest reading is that Korpezhe's *footprint*, not its per-pixel physics, is the
-dominant uncertainty. The structural fix (threshold in ΔR / gain-normalised space so the
-footprint is LUT-invariant) is flagged as follow-up in §7; we report the wide band rather than
-tuning k to shrink it.
+9.6 → 5.4 → 13.7 t/h across the three LUTs while the retrieved ΔR field never changed —
+*because v1–v3 thresholded the mask in ΔΩ space*, it was invariant under *linear* rescaling of
+the inversion but shifted whenever the curve changed shape (v2's single-effective-layer curve
+was nonlinearly shallower, collapsing the mask 50 → 12 px). **Phase 3.5 Stage 2 removed this
+sensitivity**: the mask is thresholded on the ΔΩ of a *frozen* canonical inversion decoupled from
+the reporting LUT (§3), so a reporting-LUT swap changes only the columns and IME, never the
+footprint (`test_footprint_invariant_under_lut_swap`).
+
+Masking on the LUT-*independent* raw `−ΔR` field was tried first (the obvious way to get
+invariance) and **rejected after diagnosis**: for the MBMP-heavy calibration set it gave masks
+with *zero* overlap with the true plume. Two causes — (i) the raw ΔR difference does not cancel
+co-clamped surface structure the way the per-pass ΔΩ difference does, so its tail is dominated by
+surface edges; (ii) the mask component displaces off the seeded source (the offsets are not
+systematically downwind, so not simple advection). The per-pass inversion is what localises the
+plume, so the frozen-mask-LUT keeps it while still decoupling the footprint from calibration. The
+remaining Korpezhe MC width is genuine plume-footprint ambiguity for this intermittent,
+different-date-reference event — we report the wide band rather than tuning k to shrink it.

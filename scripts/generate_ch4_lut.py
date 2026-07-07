@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Generate the committed CH4 absorption LUT (``ch4_lut_v3.npz``).
+"""Generate the committed CH4 absorption LUT (``ch4_lut_v4.npz``).
 
 Run manually, once, with network access (HITRAN line tables are cached in the
 scratch directory and re-used offline on later runs):
@@ -26,14 +26,17 @@ Physics (layered Beer–Lambert band transmittance, no scattering):
   with the background-saturated cores and understate the marginal absorption,
   while surface-pressure background lines overstate the band absorption.
 
-    τ_bg(ν; AMF)   = AMF · Ω0 · Σ_i f_i k_i(ν)      [k = N_A·1e-4·σ, per mol/m²]
-    w(ν; AMF)      = SRF_b(ν) · e^{−τ_bg}
+    τ_bg(ν)        = Σ_i [Ω_CH4,i k_CH4,i(ν) + Ω_H2O,i k_H2O,i(ν) + Ω_CO2,i k_CO2,i(ν)]
+    w(ν; AMF)      = SRF_b(ν) · E_ν(ν) · e^{−AMF·τ_bg}
     m_b(ΔΩ, AMF)   = ∫ w e^{−AMF·ΔΩ·k_enh} dν / ∫ w dν − 1
     m_MBSP(ΔΩ)     = (1 + m_B12) / (1 + m_B11) − 1
 
-computed separately for Sentinel-2A and Sentinel-2B (their B12 SRFs differ
-enough to matter). HAPI is imported lazily so the pure profile + band helpers
-below can be unit-tested without it.
+v4 adds interfering **H2O** (AFGL US Standard profile — USSA 1976 is dry) and
+**CO2** (well-mixed, 420 ppm) to the background optical depth τ_bg, and weights
+the band by the **TSIS-1 HSRS** solar irradiance E_ν (λ² Jacobian applied). The
+enhancement slab stays CH4-only. Computed separately for Sentinel-2A and
+Sentinel-2B (their B12 SRFs differ enough to matter). HAPI is imported lazily so
+the pure profile + band helpers below can be unit-tested without it.
 """
 
 from __future__ import annotations
@@ -52,10 +55,20 @@ from numpy.typing import NDArray
 # depend on structurally — it may run in an environment without the package).
 AVOGADRO_PER_MOL = 6.02214076e23
 OMEGA_CH4_BACKGROUND_MOL_M2 = 0.65
+# Vertical column of dry air P0/(g·M_air) — for the well-mixed CO2 background column.
+OMEGA_AIR_MOL_M2 = 3.567e5
 
 # HITRAN molecule 6 = CH4; global isotopologue ids for the main isotopologues
 # (12CH4, 13CH4, CH3D, and 13CH3D). See hitran.org isotopologue metadata.
 CH4_ISO_GLOBAL_IDS = [32, 33, 34, 35]
+# Interfering absorbers (v4). HITRAN molecule 1 = H2O, 2 = CO2; main isotopologue
+# global ids (H2O: 161/181/171/HDO; CO2: 626/636/628) — same policy as CH4.
+H2O_ISO_GLOBAL_IDS = [1, 2, 3, 4]
+CO2_ISO_GLOBAL_IDS = [7, 8, 9]
+# CO2 is well-mixed; 420 ppm is a declared modeling constant (NOAA GML global mean is
+# ~423 ppm in 2024 — the LUT is insensitive at this precision). H2O is NOT well-mixed and
+# comes from the AFGL US Standard profile (USSA 1976 is a dry atmosphere).
+CO2_VMR_PPM = 420.0
 
 # SRF-supported band ranges in wavenumber (cm⁻¹) with a ±50 cm⁻¹ margin so the
 # Voigt wings are captured. B11 ≈ 5946–6497, B12 ≈ 4310–4812.
@@ -84,11 +97,14 @@ _USSA_TOP_M = 47_000.0
 P0_PA = 101_325.0
 _G0 = 9.80665  # m/s²
 _R_AIR = 287.053  # J/(kg·K)
+_M_AIR_KG = 0.0289644  # dry-air molar mass, kg/mol
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRF_CSV = REPO_ROOT / "scripts" / "data" / "s2_srf_b11_b12.csv"
+SOLAR_CSV = REPO_ROOT / "scripts" / "data" / "tsis1_hsrs_b11_b12.csv"
+AFGL_H2O_CSV = REPO_ROOT / "scripts" / "data" / "afgl_us_standard_h2o.csv"
 LUT_OUT = (
-    REPO_ROOT / "packages" / "core" / "src" / "openearth" / "methane" / "data" / "ch4_lut_v3.npz"
+    REPO_ROOT / "packages" / "core" / "src" / "openearth" / "methane" / "data" / "ch4_lut_v4.npz"
 )
 
 # The ΔΩ × AMF grid the runtime interpolates over. The ΔΩ top end is 3.0 (v2:
@@ -261,6 +277,69 @@ def srf_on_nu_grid(
     )
 
 
+# ── Solar irradiance weighting (v4; pure, λ²-Jacobian unit-tested) ──
+
+
+def load_solar_csv(path: Path) -> dict[str, NDArray[np.float64]]:
+    """Load the committed TSIS-1 HSRS extract (wavelength_nm, irradiance_w_m2_nm)."""
+    return load_srf_csv(path)
+
+
+def solar_e_nu_on_grid(
+    nu_grid: NDArray[np.float64],
+    wavelength_nm: NDArray[np.float64],
+    e_lambda: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Solar irradiance *shape* on a wavenumber grid, via the λ² Jacobian.
+
+    The HSRS is per-wavelength (E_λ). The LUT integrates in wavenumber, so the shape must be
+    converted with ``E_ν = E_λ · |dλ/dν| = E_λ · λ²/1e7`` **before** interpolating onto the ν
+    grid (constant factors cancel in the band-weight normalisation, but λ² varies ~20-27 %
+    across a band and must not be dropped). Returns 0 outside the tabulated support.
+    """
+    nu_src = 1e7 / wavelength_nm
+    e_nu_src = e_lambda * wavelength_nm**2  # λ² Jacobian (shape only; 1e7 cancels)
+    order = np.argsort(nu_src)
+    return np.asarray(
+        np.interp(nu_grid, nu_src[order], e_nu_src[order], left=0.0, right=0.0),
+        dtype=np.float64,
+    )
+
+
+# ── AFGL H2O background profile (v4; USSA 1976 is dry) ──
+
+
+def load_afgl_h2o(path: Path) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Load the AFGL US Standard H2O profile: (pressure_Pa, vmr) sorted surface-first."""
+    cols = load_srf_csv(path)  # reuses the '#'-comment + named-column reader
+    p_pa = cols["p_mb"] * 100.0
+    vmr = cols["h2o_vmr_ppmv"] * 1e-6
+    order = np.argsort(-p_pa)  # decreasing pressure = surface first
+    return p_pa[order], vmr[order]
+
+
+def layer_h2o_columns(
+    n_layers: int, afgl_p_pa: NDArray[np.float64], afgl_vmr: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """H2O column (mol/m²) in each equal-mass layer: Ω = ∫ vmr dp / (g·M_air).
+
+    Integrates the AFGL vmr(p) over each layer's pressure span (the same equal-Δp edges
+    ``equal_mass_layers`` uses), so H2O — concentrated near the surface — is placed correctly
+    rather than treated as well-mixed.
+    """
+    _, _, p = _fine_profile()
+    edges = np.linspace(P0_PA, float(p[-1]), n_layers + 1)  # decreasing pressure edges
+    p_inc = afgl_p_pa[::-1]  # ascending for np.interp
+    vmr_inc = afgl_vmr[::-1]
+    cols = np.empty(n_layers)
+    for i in range(n_layers):
+        p_bot, p_top = float(edges[i]), float(edges[i + 1])  # p_bot > p_top
+        p_grid = np.linspace(p_top, p_bot, 400)
+        vmr_grid = np.interp(p_grid, p_inc, vmr_inc)
+        cols[i] = float(np.trapezoid(vmr_grid, p_grid)) / (_G0 * _M_AIR_KG)
+    return cols
+
+
 # ── HAPI cross sections (network on first run; lazy import) ──
 
 
@@ -281,11 +360,14 @@ def compute_layer_cross_sections(
     hapi.db_begin(str(scratch_dir))
 
     def sigma_at(
-        table: str, t_k: float, p_atm: float
+        table: str, t_k: float, p_atm: float, wn_range: tuple[float, float]
     ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        # Pin WavenumberRange so EVERY gas/layer lands on the identical grid
+        # arange(nu_min, nu_max, step); HAPI's default auto-range differs per line list.
         nu, coef = hapi.absorptionCoefficient_Voigt(
             SourceTables=table,
             Environment={"T": t_k, "p": p_atm},
+            WavenumberRange=wn_range,
             WavenumberStep=WAVENUMBER_STEP,
             HITRAN_units=True,  # σ in cm²/molecule
             Diluent={"air": 1.0},
@@ -304,15 +386,56 @@ def compute_layer_cross_sections(
         nu_ref: NDArray[np.float64] | None = None
         sigmas: list[NDArray[np.float64]] = []
         for _, p_atm, t_k in layers:
-            nu, sigma = sigma_at(table, t_k, p_atm)
+            nu, sigma = sigma_at(table, t_k, p_atm, (nu_min, nu_max))
             if nu_ref is None:
                 nu_ref = nu
             else:
                 assert nu.shape == nu_ref.shape, "HAPI ν grids must match across layers"
             sigmas.append(sigma)
         assert nu_ref is not None
-        _, sigma_enh = sigma_at(table, t_enh, p_enh)
+        _, sigma_enh = sigma_at(table, t_enh, p_enh, (nu_min, nu_max))
         out[band] = (nu_ref, sigmas, sigma_enh)
+    return out
+
+
+def compute_interfering_cross_sections(
+    scratch_dir: Path,
+    layers: list[tuple[float, float, float]],
+) -> dict[str, dict[str, list[NDArray[np.float64]]]]:
+    """Per-layer H2O + CO2 Voigt cross sections per band (v4 interfering absorbers).
+
+    Returns ``{band: {"h2o": [σ_i…], "co2": [σ_i…]}}`` in cm²/molecule, on the SAME ν grid
+    as ``compute_layer_cross_sections`` (verified per layer). HITRAN molecules 1 = H2O,
+    2 = CO2; cached tables are re-used, fetching only when a table is missing.
+    """
+    import hapi
+
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+    hapi.db_begin(str(scratch_dir))
+    gases = {"h2o": (1, H2O_ISO_GLOBAL_IDS), "co2": (2, CO2_ISO_GLOBAL_IDS)}
+
+    out: dict[str, dict[str, list[NDArray[np.float64]]]] = {}
+    for band, (nu_min, nu_max) in BAND_NU_RANGES.items():
+        out[band] = {}
+        for gas, (molecule, iso_ids) in gases.items():
+            table = f"{gas.upper()}_{band}"
+            if not (scratch_dir / f"{table}.header").exists():
+                try:
+                    hapi.fetch_by_ids(table, iso_ids, nu_min, nu_max)
+                except Exception:
+                    hapi.fetch(table, molecule, 1, nu_min, nu_max)
+            sigmas: list[NDArray[np.float64]] = []
+            for _, p_atm, t_k in layers:
+                _, coef = hapi.absorptionCoefficient_Voigt(
+                    SourceTables=table,
+                    Environment={"T": t_k, "p": p_atm},
+                    WavenumberRange=(nu_min, nu_max),
+                    WavenumberStep=WAVENUMBER_STEP,
+                    HITRAN_units=True,
+                    Diluent={"air": 1.0},
+                )
+                sigmas.append(np.asarray(coef, dtype=np.float64))
+            out[band][gas] = sigmas
     return out
 
 
@@ -323,18 +446,37 @@ def build_lut_arrays(
     cross_sections: dict[
         str, tuple[NDArray[np.float64], list[NDArray[np.float64]], NDArray[np.float64]]
     ],
+    interfering: dict[str, dict[str, list[NDArray[np.float64]]]],
     layers: list[tuple[float, float, float]],
     srf: dict[str, NDArray[np.float64]],
+    solar: dict[str, NDArray[np.float64]],
+    h2o_columns: NDArray[np.float64],
 ) -> dict[str, NDArray[np.float64]]:
-    """Assemble the (M, N) MBSP fractional-signal grids for S2A and S2B."""
+    """Assemble the (M, N) MBSP fractional-signal grids for S2A and S2B.
+
+    v4: the background optical depth adds interfering H2O + CO2 absorption, and the band
+    weight adds the TSIS-1 solar irradiance shape (E_ν). The enhancement slab stays CH4-only
+    (a plume adds methane, not water) — interfering gases matter through the *background*
+    transmittance that shapes the band weight.
+    """
     wl = srf["wavelength_nm"]
     fracs = np.array([f for f, _, _ in layers])
     to_k = AVOGADRO_PER_MOL * 1e-4  # σ [cm²/molec] → k [m²/mol]
+    # Per-layer background columns (mol/m²): CH4 well-mixed, CO2 well-mixed at CO2_VMR_PPM,
+    # H2O from the AFGL profile (already per-layer).
+    ch4_columns = OMEGA_CH4_BACKGROUND_MOL_M2 * fracs
+    co2_columns = (CO2_VMR_PPM * 1e-6 * OMEGA_AIR_MOL_M2) * fracs
 
     per_band: dict[str, tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]] = {}
     for band, (nu, sigmas, sigma_enh) in cross_sections.items():
-        k_layers = np.stack(sigmas) * to_k  # (L, nnu)
-        tau_bg_vert = OMEGA_CH4_BACKGROUND_MOL_M2 * np.tensordot(fracs, k_layers, axes=1)
+        k_ch4 = np.stack(sigmas) * to_k  # (L, nnu)
+        k_h2o = np.stack(interfering[band]["h2o"]) * to_k
+        k_co2 = np.stack(interfering[band]["co2"]) * to_k
+        tau_bg_vert = (
+            np.tensordot(ch4_columns, k_ch4, axes=1)
+            + np.tensordot(h2o_columns, k_h2o, axes=1)
+            + np.tensordot(co2_columns, k_co2, axes=1)
+        )
         per_band[band] = (nu, tau_bg_vert, sigma_enh * to_k)
 
     n = DELTA_OMEGA_GRID.size
@@ -343,12 +485,17 @@ def build_lut_arrays(
     for key in ("s2a", "s2b"):
         nu11, tau11, k11 = per_band["B11"]
         nu12, tau12, k12 = per_band["B12"]
-        srf11 = srf_on_nu_grid(nu11, wl, srf[f"{key}_b11"])
-        srf12 = srf_on_nu_grid(nu12, wl, srf[f"{key}_b12"])
+        # Band weight base = SRF · E_ν (solar-radiance weighting; normalisation cancels).
+        w11 = srf_on_nu_grid(nu11, wl, srf[f"{key}_b11"]) * solar_e_nu_on_grid(
+            nu11, solar["wavelength_nm"], solar["irradiance_w_m2_nm"]
+        )
+        w12 = srf_on_nu_grid(nu12, wl, srf[f"{key}_b12"]) * solar_e_nu_on_grid(
+            nu12, solar["wavelength_nm"], solar["irradiance_w_m2_nm"]
+        )
         grid = np.empty((m, n), dtype=np.float64)
         for i, amf in enumerate(AMF_GRID):
-            m11 = band_fractional_signals(nu11, srf11, tau11, k11, DELTA_OMEGA_GRID, float(amf))
-            m12 = band_fractional_signals(nu12, srf12, tau12, k12, DELTA_OMEGA_GRID, float(amf))
+            m11 = band_fractional_signals(nu11, w11, tau11, k11, DELTA_OMEGA_GRID, float(amf))
+            m12 = band_fractional_signals(nu12, w12, tau12, k12, DELTA_OMEGA_GRID, float(amf))
             grid[i] = (1.0 + m12) / (1.0 + m11) - 1.0
         out[key] = grid
     return out
@@ -377,31 +524,51 @@ def main() -> None:
     layers = equal_mass_layers(N_LAYERS)
     enh_p_atm, enh_t_k = slab_conditions(ENHANCEMENT_TOP_M)
     srf = load_srf_csv(SRF_CSV)
+    solar = load_solar_csv(SOLAR_CSV)
+    afgl_p_pa, afgl_vmr = load_afgl_h2o(AFGL_H2O_CSV)
+    h2o_columns = layer_h2o_columns(N_LAYERS, afgl_p_pa, afgl_vmr)
     cross_sections = compute_layer_cross_sections(args.scratch, layers, (enh_p_atm, enh_t_k))
-    grids = build_lut_arrays(cross_sections, layers, srf)
+    interfering = compute_interfering_cross_sections(args.scratch, layers)
+    grids = build_lut_arrays(cross_sections, interfering, layers, srf, solar, h2o_columns)
 
     provenance = {
         "generated_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "hitran_fetch_date": datetime.now(UTC).date().isoformat(),
-        "hitran_molecule": "CH4 (6)",
-        "hitran_isotopologue_global_ids": CH4_ISO_GLOBAL_IDS,
+        "hitran_molecule": "CH4 (6) enhancement + background; H2O (1) + CO2 (2) background",
+        "hitran_isotopologue_global_ids": {
+            "ch4": CH4_ISO_GLOBAL_IDS,
+            "h2o": H2O_ISO_GLOBAL_IDS,
+            "co2": CO2_ISO_GLOBAL_IDS,
+        },
         "srf_document": (
             "ESA Sentinel-2 Spectral Response Functions, "
             "COPE-GSEG-EOPG-TN-15-0007 issue 3.2 (2022), via scripts/data/s2_srf_b11_b12.csv"
         ),
+        "solar_reference": (
+            "TSIS-1 HSRS v1 (Coddington et al. 2021, doi:10.1029/2020GL091709; LASP LISIRD), "
+            "via scripts/data/tsis1_hsrs_b11_b12.csv; E_λ→E_ν λ² Jacobian applied"
+        ),
+        "interfering_gases": {
+            "co2_vmr_ppm": CO2_VMR_PPM,
+            "co2_note": "well-mixed; declared modeling constant (NOAA GML ~423 ppm 2024)",
+            "h2o_profile": (
+                "AFGL US Standard (Anderson et al. 1986, AFGL-TR-86-0110 Table 1f); USSA 1976 is "
+                "dry, so H2O comes from AFGL, via scripts/data/afgl_us_standard_h2o.csv"
+            ),
+            "h2o_total_column_mol_m2": round(float(np.sum(h2o_columns)), 2),
+        },
         "model": (
-            "layered Beer-Lambert: well-mixed background over the US Standard "
-            "Atmosphere 1976 in equal-mass layers (per-layer absorber-weighted T/p "
-            "Voigt cross sections), enhancement in the lowest "
-            f"{ENHANCEMENT_TOP_M:.0f} m at its absorber-weighted conditions "
-            "(vertical placement per Varon et al. 2021). Replaces the v2 single "
-            "effective-layer (Curtis-Godson) collapse, which applied one (T, p) to "
-            "background and enhancement alike."
+            "layered Beer-Lambert with interfering absorbers + solar-radiance weighting (v4): "
+            "well-mixed CH4/CO2 + AFGL H2O background over the US Standard Atmosphere 1976 in "
+            "equal-mass layers (per-layer absorber-weighted T/p Voigt cross sections); band weight "
+            "w(ν) = SRF(ν)·E_ν(ν)·e^(−AMF·τ_bg); enhancement CH4-only in the lowest "
+            f"{ENHANCEMENT_TOP_M:.0f} m (Varon et al. 2021 placement). Adds H2O/CO2 + solar to v3."
         ),
         "n_layers": N_LAYERS,
         "layer_mass_fractions": [round(f, 6) for f, _, _ in layers],
         "layer_pressure_atm": [round(p, 4) for _, p, _ in layers],
         "layer_temperature_k": [round(t, 2) for _, _, t in layers],
+        "layer_h2o_columns_mol_m2": [round(float(c), 5) for c in h2o_columns],
         "enhancement_layer": {
             "top_m": ENHANCEMENT_TOP_M,
             "pressure_atm": round(enh_p_atm, 4),
@@ -420,7 +587,7 @@ def main() -> None:
         amf=AMF_GRID,
         m_s2a=grids["s2a"],
         m_s2b=grids["s2b"],
-        version="3",
+        version="4",
         provenance=json.dumps(provenance),
     )
     print(f"Wrote {args.out} ({args.out.stat().st_size / 1024:.0f} KiB)")

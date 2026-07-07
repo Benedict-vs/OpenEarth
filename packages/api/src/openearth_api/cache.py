@@ -27,7 +27,9 @@ if TYPE_CHECKING:
 
 # Bump when cached artifact semantics change (rendering math, defaults, …).
 # 2: CH4 LUT v2 (Curtis–Godson effective T/p) changed methane ΔΩ/ΔXCH4 outputs.
-ALGO_VERSION = 3
+# 4: plume footprint thresholded on the frozen mask-LUT ΔΩ (invariant to reporting-LUT swaps).
+# 5: CH4 LUT v4 (interfering H2O/CO2 + TSIS-1 solar weighting) changed methane ΔΩ/ΔXCH4 outputs.
+ALGO_VERSION = 5
 
 # Open-ended date ranges keep collecting new scenes upstream; closed
 # historical ranges are immutable.

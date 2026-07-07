@@ -50,5 +50,7 @@ data/
 !packages/core/src/openearth/methane/data/**
 !scripts/data/
 !scripts/data/**
+!packages/core/tests/data/
+!packages/core/tests/data/**
 node_modules/
 uv-receipt.json

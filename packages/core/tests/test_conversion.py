@@ -14,10 +14,12 @@ from openearth.methane.constants import OMEGA_CH4_BACKGROUND_MOL_M2
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
-# Anchor values of the committed ch4_lut_v3.npz at Varon's geometry (AMF ≈ 2.305,
+# Anchor values of the committed ch4_lut_v4.npz at Varon's geometry (AMF ≈ 2.305,
 # ΔΩ = 0.65 mol/m²) — our own layered-model reference for regression pinning.
-V3_ANCHOR_M_S2A = -0.036307
-V3_ANCHOR_M_S2B = -0.027335
+# Pasted from the generated v4 npz (H2O/CO2 + solar weighting moved these only ~1.6 % from
+# v3's −0.036307 / −0.027335 — see docs/methane_methods.md §2), NOT estimated beforehand.
+V4_ANCHOR_M_S2A = -0.035719
+V4_ANCHOR_M_S2B = -0.026830
 
 
 @pytest.fixture(scope="module")
@@ -29,7 +31,7 @@ def lut() -> conversion.CH4Lut:
 
 
 def test_lut_structure(lut: conversion.CH4Lut) -> None:
-    assert lut.version == "3"
+    assert lut.version == "4"
     assert lut.delta_omega.shape == (351,)
     assert lut.amf.shape == (9,)
     for name in ("Sentinel-2A", "Sentinel-2B"):
@@ -56,6 +58,10 @@ def test_provenance_parses(lut: conversion.CH4Lut) -> None:
     assert prov["enhancement_layer"]["top_m"] == pytest.approx(500.0)
     assert prov["enhancement_layer"]["pressure_atm"] == pytest.approx(0.971, abs=0.005)
     assert "layered" in prov["model"]
+    # v4 additions: interfering H2O/CO2 background + TSIS-1 solar weighting.
+    assert "TSIS-1" in prov["solar_reference"]
+    assert prov["interfering_gases"]["co2_vmr_ppm"] == pytest.approx(420.0)
+    assert 550.0 <= prov["interfering_gases"]["h2o_total_column_mol_m2"] <= 1000.0
 
 
 def test_load_lut_is_cached(lut: conversion.CH4Lut) -> None:
@@ -113,13 +119,13 @@ def test_varon_anchor(lut: conversion.CH4Lut) -> None:
     assert abs(m_a) > abs(m_b)
 
 
-def test_v3_regression_pin(lut: conversion.CH4Lut) -> None:
-    # Regression pin against the committed v3 LUT's own anchor values (layered
-    # US Std Atmosphere background + 500 m enhancement slab). A regenerated LUT
-    # that moves these by > 1 % is a physics change and must bump the version.
+def test_v4_regression_pin(lut: conversion.CH4Lut) -> None:
+    # Regression pin against the committed v4 LUT's own anchor values (layered US Std
+    # background + interfering H2O/CO2 + TSIS-1 solar weighting). A regenerated LUT that
+    # moves these by > 1 % is a physics change and must bump the version.
     m_a, m_b = _anchor_signals(lut)
-    assert m_a == pytest.approx(V3_ANCHOR_M_S2A, rel=0.01)
-    assert m_b == pytest.approx(V3_ANCHOR_M_S2B, rel=0.01)
+    assert m_a == pytest.approx(V4_ANCHOR_M_S2A, rel=0.01)
+    assert m_b == pytest.approx(V4_ANCHOR_M_S2B, rel=0.01)
 
 
 # ── Inversion round-trip ──
@@ -221,3 +227,42 @@ def test_enhancement_slab_conditions() -> None:
     p_atm, t_k = gen.slab_conditions(gen.ENHANCEMENT_TOP_M)
     assert p_atm == pytest.approx(0.971, abs=0.002)
     assert t_k == pytest.approx(286.5, abs=0.5)
+
+
+# ── v4: interfering absorbers + solar weighting (generator pure helpers) ──
+
+
+def test_lambda2_jacobian_flat_e_lambda() -> None:
+    # Flat E_λ ⇒ E_ν ∝ λ² = (1e7/ν)². Dropping the Jacobian would visibly reweight the band.
+    gen = _load_generator()
+    nu = np.array([4200.0, 4800.0, 6000.0])
+    wl = np.linspace(1600.0, 2500.0, 8000)
+    e_nu = gen.solar_e_nu_on_grid(nu, wl, np.ones_like(wl))
+    lam = 1e7 / nu
+    assert np.allclose(e_nu / e_nu[0], (lam / lam[0]) ** 2, rtol=1e-4)
+
+
+def test_afgl_h2o_extract_parses_and_column_sane() -> None:
+    gen = _load_generator()
+    p_pa, vmr = gen.load_afgl_h2o(gen.AFGL_H2O_CSV)
+    assert p_pa[0] > p_pa[-1]  # surface-first (decreasing pressure)
+    assert vmr[0] > vmr[-1]  # H2O concentrated near the surface
+    cols = gen.layer_h2o_columns(gen.N_LAYERS, p_pa, vmr)
+    total_kg = float(np.sum(cols)) * 0.018015  # mol/m² → kg/m² precipitable water
+    assert 10.0 <= total_kg <= 25.0  # US Standard PW sanity band
+    assert total_kg == pytest.approx(14.25, rel=0.01)  # pinned to the committed extract
+    assert cols[0] > cols[-1]  # surface layer holds the most water
+
+
+def test_top_hat_identity_unchanged_under_constant_solar() -> None:
+    # A CONSTANT solar weight (like a constant SRF) cancels in the band-weight normalisation,
+    # so the top-hat + constant-k analytic identity m = exp(−AMF·ΔΩ·k) − 1 still holds.
+    gen = _load_generator()
+    nu = np.linspace(4000.0, 4100.0, 2000)
+    weight = np.full_like(nu, 3.7)  # top-hat SRF × constant E_ν
+    k = np.full_like(nu, 1e-21 * gen.AVOGADRO_PER_MOL * 1e-4)
+    tau_bg = 0.65 * 0.7 * k
+    delta_omega, amf = 0.5, 2.3
+    m = gen.band_fractional_signal(nu, weight, tau_bg, k, delta_omega, amf)
+    expected = np.exp(-amf * delta_omega * 1e-21 * gen.AVOGADRO_PER_MOL * 1e-4) - 1.0
+    assert m == pytest.approx(expected, rel=1e-6)
