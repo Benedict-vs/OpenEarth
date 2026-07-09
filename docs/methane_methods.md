@@ -390,3 +390,39 @@ identical code path used at scan time), and the CH4Net masks are regridded onto 
 all 23 sites are Turkmenistan O&G, site-held-out cross-validation controls intra-region leakage
 but *not* geography — expect degraded performance on other surfaces, stated wherever the scan UI
 or docs could imply generality.
+
+### 9.2 Recovering the stripped scene metadata
+
+Rebuilding chips at 20 m needs each tile's **date + footprint**, but the published HF release names
+every tile by an opaque integer index — it carries no date, site, scene id, or georeferencing (the
+preprint-era Zenodo record that did is dead). We recover that mapping self-service in
+`scripts/recover_ch4net_metadata.py` (offline clustering + Earth-Engine matching, all round-trips
+through `ee_call`), keyed only on the 23 published site coordinates (Vaughan et al. 2024, Table 2 —
+from the CC-BY *paper*, not the gated dataset):
+
+1. **Cluster** (offline). The 10,983 tiles fall into 7 pixel-shapes (latitude bands); within each,
+   content-correlation on a plume-invariant NIR band groups tiles by ground footprint. A site's
+   appearance drifts over 2017–2021 (active O&G — new pads, spoil), so clustering *over*-segments
+   a site into several clusters, which is safe (no cluster spans two sites) — it just yields clean
+   single-footprint cores.
+2. **Geolocate** (EE). A median-composite GEE reference is built at each site coordinate; each
+   reliable cluster's median tile is matched by normalised cross-correlation, and the **NCC peak
+   *location*** gives the footprint centre → bbox + nearest published site. Pilots recovered centres
+   a median **~10 m** from the published coordinates.
+3. **Dates** (EE). Per site, one coarse chip per Sentinel-2 overpass (2017–2021); each tile is
+   matched by correlation, with a hard **split-year prior** (train/val ≤ 2020, test = 2021) and a
+   confidence flag.
+
+**Results (aggregate — the per-tile mapping is a CH4Net derivative and is never committed).** All
+10,983 tiles are sited across all 23 sites; the site labels are cross-validated *independently* by
+the paper — recovered positives-per-site rank matches Table 2's plume percentages (the 39/38/37 %
+sites get the most recovered positives; the 0 % sites almost none). Date recovery is **42 %
+confident** (median correlation 0.65) at **100 % split-year consistency**, but uneven: isolated
+sites are near-perfect (T18/T20/T23 ≈ 0.9 correlation) while the northern, high-activity,
+low-contrast cluster (T6/T3/T7) sits near 0.45. A tile is marked **usable** under an asymmetric
+policy: a **positive needs a confident date** (a wrong date rebuilds a plume-free chip under a plume
+mask = label noise), whereas a **negative** only needs any plume-free scene over its footprint. This
+yields **10,395 usable tiles — 409 confident positives (of 997) + all 9,986 negatives.** The reduced
+positive count (and thin coverage at the northern high-emitter sites) is the main cost of working
+from the metadata-stripped release, recorded as a limitation; an official index→(site, date) mapping
+from the authors would supersede the recovered one.

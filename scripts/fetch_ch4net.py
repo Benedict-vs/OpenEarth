@@ -295,16 +295,18 @@ def inventory() -> None:
         },
         "site_coordinates_source": "NOT PRESENT anywhere in the release.",
         "plan_conflict": {
-            "severity": "blocking",
+            "severity": "resolved",
             "summary": (
-                "The published HF release strips all georeferencing/dates/scene IDs. This makes "
-                "the Phase 5 plan's central mechanisms inexecutable as written: (1) chip-rebuild "
-                "via fetch_chip needs date+bbox; (2) our physics channels (MBSP/MBMP ΔR via "
-                "retrieval.py) need a reference scene; (3) GroupKFold-by-site CV needs site labels."
-                " None are recoverable from this dataset. Zenodo 8267966 (the metadata-rich "
-                "preprint version matching the GitHub loaders) is dead (404)."
+                "The published HF release strips all georeferencing/dates/scene IDs, which would "
+                "make the Phase 5 plan's central mechanisms inexecutable as written: (1) chip-"
+                "rebuild via fetch_chip needs date+bbox; (2) our physics channels (MBSP/MBMP ΔR "
+                "via retrieval.py) need a reference scene; (3) GroupKFold-by-site CV needs site "
+                "labels. Zenodo 8267966 (the metadata-rich preprint version) is dead (404)."
             ),
-            "decision_required": "escalated to user — Stage 1 cannot start until resolved.",
+            "resolution": (
+                "scripts/recover_ch4net_metadata.py recovers (site, date, bbox) self-service "
+                "(cluster → GEE NCC-peak geolocation → per-tile date match); see §9.2 for stats."
+            ),
         },
     }
 
