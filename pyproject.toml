@@ -24,6 +24,10 @@ dev = [
 #   uv run --group lut python scripts/generate_ch4_lut.py
 # HAPI/openpyxl must never become runtime deps — the library loads the .npz only.
 lut = ["hitran-api>=1.2", "openpyxl>=3.1"]
+# Used ONLY by scripts/fetch_ch4net.py to acquire the gated CH4Net dataset:
+#   uv run --group ml-data python scripts/fetch_ch4net.py download
+# CC-BY-NC-ND 4.0 — nothing derived is ever committed. Never a package dependency.
+ml-data = ["huggingface-hub>=0.30"]
 
 # ── Lint / format ────────────────────────────────────────────────
 

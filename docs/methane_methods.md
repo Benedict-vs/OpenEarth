@@ -355,3 +355,38 @@ systematically downwind, so not simple advection). The per-pass inversion is wha
 plume, so the frozen-mask-LUT keeps it while still decoupling the footprint from calibration. The
 remaining Korpezhe MC width is genuine plume-footprint ambiguity for this intermittent,
 different-date-reference event — we report the wide band rather than tuning k to shrink it.
+
+## 9. ML tier — a candidate ranker over the physics pipeline (Phase 5)
+
+The ML tier is a **candidate ranker that feeds the human-review detection feed, never an
+autonomous detector.** Physics (§1–§4) stays the load-bearing tier; the U-Net only proposes
+scenes worth a reviewer's attention and does not change any reported column or flux.
+
+### 9.1 Training dataset and the license wall
+
+The model is trained on **CH4Net** (Vaughan et al. 2024, *Atmos. Meas. Tech.* 17, 2583–2593,
+[doi:10.5194/amt-17-2583-2024](https://doi.org/10.5194/amt-17-2583-2024)): 925 hand-annotated
+plume masks drawn from 10,046 Sentinel-2 images over 23 super-emitter sites — **all Turkmenistan
+oil-and-gas** — with a 2017–2020 train / 2021 test split. Tiles are ~200×200 px with all bands
+interpolated to 10 m; the masks were **annotated with MBMP guidance**, so the labels inherit
+MBMP's blind spots (a model that beats an MBMP baseline on these labels ranks candidates better,
+it does not necessarily see plumes MBMP cannot — see §9.2 once populated). The published dataset
+lives on Hugging Face as `av555/ch4net`
+([doi:10.57967/hf/2117](https://doi.org/10.57967/hf/2117)), ~9.8 GB, **CC-BY-NC-ND 4.0 and
+gated**.
+
+**License wall (non-negotiable).** CC-BY-NC-ND forbids redistributing derivatives and commercial
+use. Consequently **nothing derived from CH4Net is ever committed to this repo or published** — no
+imagery, masks, rebuilt chips, per-file manifests, or trained weights. Everything derived lives
+under the git-ignored `data_dir/ml/`; the repo keeps only code, configs, and aggregate
+metrics/provenance JSON. The trained model ships out-of-band (a `data_dir` path + settings), and
+the ND term is recorded in the model manifest and blocks any future *public* deployment of the
+weights. NC is satisfied by private research use.
+
+**Train/serve consistency.** We never train on CH4Net's own imagery: their tiles are Sentinel-Hub
+L1C interpolated to 10 m, whereas our scan pipeline sees GEE L1C at 20 m. Training on theirs would
+deploy a distribution shift, so chips are **rebuilt through our own `fetch_chip` at 20 m** (the
+identical code path used at scan time), and the CH4Net masks are regridded onto our grid. Because
+all 23 sites are Turkmenistan O&G, site-held-out cross-validation controls intra-region leakage
+but *not* geography — expect degraded performance on other surfaces, stated wherever the scan UI
+or docs could imply generality.
