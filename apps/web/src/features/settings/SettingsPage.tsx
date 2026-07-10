@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiDelete } from "../../api/client";
+import { useMlStatus } from "../../api/methaneQueries";
 import { useCatalog, useConfig } from "../../api/queries";
 import { CustomDatasetEditor } from "./CustomDatasetEditor";
 
@@ -38,6 +39,39 @@ function EeStatus() {
       <dt>API version</dt>
       <dd>{config.version}</dd>
     </dl>
+  );
+}
+
+function MlModelStatus() {
+  const { data: status } = useMlStatus();
+  if (!status) return <p className="muted">Loading…</p>;
+  return (
+    <>
+      <dl className="config-list">
+        <dt>Model</dt>
+        <dd>
+          {status.model_loaded ? (
+            <span className="status-ok">installed</span>
+          ) : (
+            <span className="error-text">not installed</span>
+          )}
+        </dd>
+        {status.model_loaded ? (
+          <>
+            <dt>Version</dt>
+            <dd>{status.model_version ?? "—"}</dd>
+            <dt>Latency (p50)</dt>
+            <dd>
+              {status.latency_ms_p50 != null ? `${status.latency_ms_p50.toFixed(1)} ms/chip` : "—"}
+            </dd>
+          </>
+        ) : null}
+      </dl>
+      <p className="muted">
+        Candidate ranker for the Methane Lab — proposes scenes for human review, never an autonomous
+        detector. {status.model_loaded ? "" : "Install the ONNX model under data_dir/ml/models/."}
+      </p>
+    </>
   );
 }
 
@@ -80,6 +114,10 @@ export function SettingsPage() {
       <div className="panel-section">
         <h3>Status</h3>
         <EeStatus />
+      </div>
+      <div className="panel-section">
+        <h3>ML tier</h3>
+        <MlModelStatus />
       </div>
       <div className="panel-section">
         <h3>Custom datasets</h3>

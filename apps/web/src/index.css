@@ -1124,6 +1124,108 @@ button.ghost {
   color: var(--muted);
 }
 
+/* ML tier — candidate ranker (never an autonomous detector) */
+.ml-scan {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+.ml-scan-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ml-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #2a1f45;
+  color: #b794f6;
+}
+.ml-scan-caption {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.ml-scan-window {
+  font-size: 11px;
+  margin: 0;
+}
+.ml-scan-button {
+  margin-top: 2px;
+}
+.source-filter {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.source-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.source-badge.physics {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.source-badge.ml {
+  background: #2a1f45;
+  color: #b794f6;
+}
+.score-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+.ml-candidate-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 8px 10px;
+  border: 1px solid #3a2f55;
+  border-radius: var(--radius);
+  background: #1c1730;
+  color: var(--text);
+}
+.ml-chip-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.model-chip {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.disagreement {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.disagreement.agree {
+  background: #12331c;
+  color: #3fb950;
+}
+.disagreement.ml-only {
+  background: #3a2a12;
+  color: #f0a336;
+}
+
 /* Validation panel */
 .validation-panel summary {
   cursor: pointer;

@@ -411,6 +411,11 @@ def _flags_of(result_json: str) -> list[str]:
     return list(flags) if isinstance(flags, list) else []
 
 
+def _score_of(result_json: str) -> float | None:
+    score = json.loads(result_json).get("score")
+    return float(score) if isinstance(score, int | float) else None
+
+
 def _detection_out(row: Detection) -> DetectionOut:
     return DetectionOut(
         id=row.id,
@@ -425,6 +430,7 @@ def _detection_out(row: Detection) -> DetectionOut:
         xch4_max_ppb=row.xch4_max_ppb,
         u10_ms=row.u10_ms,
         wind_from_deg=row.wind_from_deg,
+        score=_score_of(row.result_json),
         flags=_flags_of(row.result_json),
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -432,7 +438,12 @@ def _detection_out(row: Detection) -> DetectionOut:
 
 
 def list_detections(
-    engine: Engine, site_id: int | None, status: str | None, limit: int, offset: int
+    engine: Engine,
+    site_id: int | None,
+    status: str | None,
+    source: str | None,
+    limit: int,
+    offset: int,
 ) -> list[DetectionOut]:
     with Session(engine) as session:
         query = select(Detection)
@@ -440,6 +451,8 @@ def list_detections(
             query = query.where(Detection.site_id == site_id)
         if status is not None:
             query = query.where(Detection.status == status)
+        if source is not None:
+            query = query.where(Detection.source == source)
         query = query.order_by(Detection.created_at.desc()).limit(limit).offset(offset)  # type: ignore[attr-defined]
         return [_detection_out(r) for r in session.exec(query).all()]
 

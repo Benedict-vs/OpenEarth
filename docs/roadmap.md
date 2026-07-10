@@ -96,12 +96,19 @@ via imageio-ffmpeg); migration 4 `renders` + timelapse job/gallery routes; Timel
 Explore animation (browse + frame playback), and the Compare view; auto vis-range gap closed;
 `legacy/` deleted (branch v2/phase4-compare-timelapse).*
 
-## Phase 5 — ML segmentation (L)
+## Phase 5 — ML segmentation (L) ✅
 
 CH4Net masks + GEE chip-rebuild pipeline (license check first); U-Net (smp, resnet18,
 physics-informed channels) with site-held-out CV; eval vs physics baseline; ONNX export;
 `/methane/ml/scan`; ML candidates in the detection feed; physics/ML disagreement flags.
-*Exit: site-held-out scene-level F1 ≥ physics baseline; ONNX inference < 1 s/chip.*
+*Exit: site-held-out scene-level F1 ≥ physics baseline; ONNX inference < 1 s/chip.* ✅
+*As-built: the gated CC-BY-NC-ND license forced a data-never-committed wall and a self-service
+metadata-recovery pivot (`recover_ch4net_metadata.py`) to rebuild chips at our own 20 m; U-Net beats
+the `−ΔR_MBMP` baseline on site-held-out scene F1 (0.597 vs 0.464, `ml_eval_v1.json`); ONNX (opset
+18, dynamic HW) served via onnxruntime-CPU (~16 ms/chip) as a **candidate ranker** feeding the human
+review feed (`source="ml"`, single-pass Q, physics/ML disagreement flag) — never an autonomous
+detector; weights ship out-of-band via `data_dir`. Methods in `docs/methane_methods.md` §9; branch
+v2/phase5-ml.*
 
 ## Phase 6 — EMIT + Embeddings + products v1 (M)
 

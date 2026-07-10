@@ -10,6 +10,20 @@ package = false
 [tool.uv.workspace]
 members = ["packages/*"]
 
+# Keep CI (Linux) off the default CUDA torch wheels — the ml package never trains
+# in CI, so the multi-GB GPU build is pure waste. macOS keeps the default arm64
+# (CPU) wheel from PyPI; the marker leaves it untouched.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+# torchvision (transitive via smp -> timm) must come from the SAME index as torch:
+# PyPI torchvision against +cpu torch fails at import (torchvision::nms missing).
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3,<9",
@@ -24,6 +38,10 @@ dev = [
 #   uv run --group lut python scripts/generate_ch4_lut.py
 # HAPI/openpyxl must never become runtime deps — the library loads the .npz only.
 lut = ["hitran-api>=1.2", "openpyxl>=3.1"]
+# Used ONLY by scripts/fetch_ch4net.py to acquire the gated CH4Net dataset:
+#   uv run --group ml-data python scripts/fetch_ch4net.py download
+# CC-BY-NC-ND 4.0 — nothing derived is ever committed. Never a package dependency.
+ml-data = ["huggingface-hub>=0.30"]
 
 # ── Lint / format ────────────────────────────────────────────────
 
@@ -37,15 +55,15 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "PT"]
 ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["openearth", "openearth_api"]
+known-first-party = ["openearth", "openearth_api", "openearth_ml"]
 
 # ── Type checking ────────────────────────────────────────────────
 
 [tool.mypy]
 strict = true
 python_version = "3.12"
-mypy_path = "packages/core/src:packages/api/src"
-packages = ["openearth", "openearth_api"]
+mypy_path = "packages/core/src:packages/api/src:packages/ml/src"
+packages = ["openearth", "openearth_api", "openearth_ml"]
 
 [[tool.mypy.overrides]]
 module = [
@@ -58,8 +76,22 @@ module = [
     "rasterio.*",
     "scipy",
     "scipy.*",
+    "segmentation_models_pytorch.*",
+    "onnxruntime",
+    "onnxruntime.*",
 ]
 ignore_missing_imports = true
+
+# The ml package wraps torch/smp (their decorators + methods return Any); signatures
+# stay typed, but "returning Any" and untyped 3rd-party decorators are the library,
+# not us. torch/smp never appear under core or api (test_no_ml_deps.py enforces it).
+[[tool.mypy.overrides]]
+module = ["openearth_ml.*"]
+disallow_untyped_decorators = false
+warn_return_any = false
+# torch's Dataset/DataLoader and NDArray generics are painful to spell out in the
+# training loop; signatures stay typed, but we don't force full generic args here.
+disallow_any_generics = false
 
 # SQLModel/SQLAlchemy return Any from Session.get / exec chains; "returning
 # Any" is inherent to the ORM there, not a defect in our annotations.
@@ -92,7 +124,7 @@ warn_return_any = false
 # ── Tests ────────────────────────────────────────────────────────
 
 [tool.pytest.ini_options]
-testpaths = ["packages/core/tests", "packages/api/tests"]
+testpaths = ["packages/core/tests", "packages/api/tests", "packages/ml/tests"]
 # importlib mode: core and api both have a test_timeseries.py; without it
 # pytest's basename-based import would collide (no __init__.py in test dirs).
 addopts = "-ra -m 'not ee' --import-mode=importlib"

@@ -544,6 +544,17 @@
             "title": "Scene Time Utc",
             "type": "string"
           },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
           "site_id": {
             "anyOf": [
               {
@@ -697,6 +708,17 @@
           "scene_time_utc": {
             "title": "Scene Time Utc",
             "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
           },
           "site_id": {
             "anyOf": [
@@ -1249,6 +1271,81 @@
           "description"
         ],
         "title": "LegendOut",
+        "type": "object"
+      },
+      "MlScanRequest": {
+        "description": "Scan a site's S2 scenes over a date range with the ONNX U-Net ranker.",
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "max_scenes": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Scenes"
+          },
+          "site_id": {
+            "title": "Site Id",
+            "type": "integer"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "start",
+          "end"
+        ],
+        "title": "MlScanRequest",
+        "type": "object"
+      },
+      "MlStatusOut": {
+        "description": "ML model availability for the Settings page (never raises when absent).",
+        "properties": {
+          "latency_ms_p50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms P50"
+          },
+          "model_loaded": {
+            "title": "Model Loaded",
+            "type": "boolean"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version"
+          }
+        },
+        "required": [
+          "model_loaded"
+        ],
+        "title": "MlStatusOut",
         "type": "object"
       },
       "PolygonIn": {
@@ -3708,6 +3805,22 @@
           },
           {
             "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
@@ -4032,6 +4145,68 @@
           }
         },
         "summary": "Validate Detection",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/ml/scan": {
+      "post": {
+        "operationId": "submit_ml_scan_api_methane_ml_scan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MlScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Ml Scan",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/ml/status": {
+      "get": {
+        "operationId": "ml_status_api_methane_ml_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MlStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ml Status",
         "tags": [
           "methane"
         ]

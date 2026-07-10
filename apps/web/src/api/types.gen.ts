@@ -365,6 +365,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/methane/ml/scan": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Submit Ml Scan */
+    post: operations["submit_ml_scan_api_methane_ml_scan_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/methane/ml/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Ml Status */
+    get: operations["ml_status_api_methane_ml_status_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/methane/screening": {
     parameters: {
       query?: never;
@@ -922,6 +956,8 @@ export interface components {
       scene_id: string;
       /** Scene Time Utc */
       scene_time_utc: string;
+      /** Score */
+      score?: number | null;
       /** Site Id */
       site_id: number | null;
       /** Source */
@@ -965,6 +1001,8 @@ export interface components {
       scene_id: string;
       /** Scene Time Utc */
       scene_time_utc: string;
+      /** Score */
+      score?: number | null;
       /** Site Id */
       site_id: number | null;
       /** Source */
@@ -1139,6 +1177,38 @@ export interface components {
       palette: string[];
       /** Unit */
       unit: string;
+    };
+    /**
+     * MlScanRequest
+     * @description Scan a site's S2 scenes over a date range with the ONNX U-Net ranker.
+     */
+    MlScanRequest: {
+      /**
+       * End
+       * Format: date
+       */
+      end: string;
+      /** Max Scenes */
+      max_scenes?: number | null;
+      /** Site Id */
+      site_id: number;
+      /**
+       * Start
+       * Format: date
+       */
+      start: string;
+    };
+    /**
+     * MlStatusOut
+     * @description ML model availability for the Settings page (never raises when absent).
+     */
+    MlStatusOut: {
+      /** Latency Ms P50 */
+      latency_ms_p50?: number | null;
+      /** Model Loaded */
+      model_loaded: boolean;
+      /** Model Version */
+      model_version?: string | null;
     };
     /** PolygonIn */
     PolygonIn: {
@@ -2324,6 +2394,7 @@ export interface operations {
       query?: {
         site_id?: number | null;
         status?: string | null;
+        source?: string | null;
         limit?: number;
         offset?: number;
       };
@@ -2540,6 +2611,59 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  submit_ml_scan_api_methane_ml_scan_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MlScanRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JobCreated"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  ml_status_api_methane_ml_status_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MlStatusOut"];
         };
       };
     };

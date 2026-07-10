@@ -355,3 +355,168 @@ systematically downwind, so not simple advection). The per-pass inversion is wha
 plume, so the frozen-mask-LUT keeps it while still decoupling the footprint from calibration. The
 remaining Korpezhe MC width is genuine plume-footprint ambiguity for this intermittent,
 different-date-reference event — we report the wide band rather than tuning k to shrink it.
+
+## 9. ML tier — a candidate ranker over the physics pipeline (Phase 5)
+
+The ML tier is a **candidate ranker that feeds the human-review detection feed, never an
+autonomous detector.** Physics (§1–§4) stays the load-bearing tier; the U-Net only proposes
+scenes worth a reviewer's attention and does not change any reported column or flux.
+
+### 9.1 Training dataset and the license wall
+
+The model is trained on **CH4Net** (Vaughan et al. 2024, *Atmos. Meas. Tech.* 17, 2583–2593,
+[doi:10.5194/amt-17-2583-2024](https://doi.org/10.5194/amt-17-2583-2024)): 925 hand-annotated
+plume masks drawn from 10,046 Sentinel-2 images over 23 super-emitter sites — **all Turkmenistan
+oil-and-gas** — with a 2017–2020 train / 2021 test split. Tiles are ~200×200 px with all bands
+interpolated to 10 m; the masks were **annotated with MBMP guidance**, so the labels inherit
+MBMP's blind spots (a model that beats an MBMP baseline on these labels ranks candidates better,
+it does not necessarily see plumes MBMP cannot — see §9.2 once populated). The published dataset
+lives on Hugging Face as `av555/ch4net`
+([doi:10.57967/hf/2117](https://doi.org/10.57967/hf/2117)), ~9.8 GB, **CC-BY-NC-ND 4.0 and
+gated**.
+
+**License wall (non-negotiable).** CC-BY-NC-ND forbids redistributing derivatives and commercial
+use. Consequently **nothing derived from CH4Net is ever committed to this repo or published** — no
+imagery, masks, rebuilt chips, per-file manifests, or trained weights. Everything derived lives
+under the git-ignored `data_dir/ml/`; the repo keeps only code, configs, and aggregate
+metrics/provenance JSON. The trained model ships out-of-band (a `data_dir` path + settings), and
+the ND term is recorded in the model manifest and blocks any future *public* deployment of the
+weights. NC is satisfied by private research use.
+
+**Train/serve consistency.** We never train on CH4Net's own imagery: their tiles are Sentinel-Hub
+L1C interpolated to 10 m, whereas our scan pipeline sees GEE L1C at 20 m. Training on theirs would
+deploy a distribution shift, so chips are **rebuilt through our own `fetch_chip` at 20 m** (the
+identical code path used at scan time), and the CH4Net masks are regridded onto our grid. Because
+all 23 sites are Turkmenistan O&G, site-held-out cross-validation controls intra-region leakage
+but *not* geography — expect degraded performance on other surfaces, stated wherever the scan UI
+or docs could imply generality.
+
+### 9.2 Recovering the stripped scene metadata
+
+Rebuilding chips at 20 m needs each tile's **date + footprint**, but the published HF release names
+every tile by an opaque integer index — it carries no date, site, scene id, or georeferencing (the
+preprint-era Zenodo record that did is dead). We recover that mapping self-service in
+`scripts/recover_ch4net_metadata.py` (offline clustering + Earth-Engine matching, all round-trips
+through `ee_call`), keyed only on the 23 published site coordinates (Vaughan et al. 2024, Table 2 —
+from the CC-BY *paper*, not the gated dataset):
+
+1. **Cluster** (offline). The 10,983 tiles fall into 7 pixel-shapes (latitude bands); within each,
+   content-correlation on a plume-invariant NIR band groups tiles by ground footprint. A site's
+   appearance drifts over 2017–2021 (active O&G — new pads, spoil), so clustering *over*-segments
+   a site into several clusters, which is safe (no cluster spans two sites) — it just yields clean
+   single-footprint cores.
+2. **Geolocate** (EE). A median-composite GEE reference is built at each site coordinate; each
+   reliable cluster's median tile is matched by normalised cross-correlation, and the **NCC peak
+   *location*** gives the footprint centre → bbox + nearest published site. Pilots recovered centres
+   a median **~10 m** from the published coordinates.
+3. **Dates** (EE). Per site, one coarse chip per Sentinel-2 overpass (2017–2021); each tile is
+   matched by correlation, with a hard **split-year prior** (train/val ≤ 2020, test = 2021) and a
+   confidence flag.
+
+**Results (aggregate — the per-tile mapping is a CH4Net derivative and is never committed).** All
+10,983 tiles are sited across all 23 sites; the site labels are cross-validated *independently* by
+the paper — recovered positives-per-site rank matches Table 2's plume percentages (the 39/38/37 %
+sites get the most recovered positives; the 0 % sites almost none). Date recovery is **42 %
+confident** (median correlation 0.65) at **100 % split-year consistency**, but uneven: isolated
+sites are near-perfect (T18/T20/T23 ≈ 0.9 correlation) while the northern, high-activity,
+low-contrast cluster (T6/T3/T7) sits near 0.45. A tile is marked **usable** under an asymmetric
+policy: a **positive needs a confident date** (a wrong date rebuilds a plume-free chip under a plume
+mask = label noise), whereas a **negative** only needs any plume-free scene over its footprint. This
+yields **10,395 usable tiles — 409 confident positives (of 997) + all 9,986 negatives.** The reduced
+positive count (and thin coverage at the northern high-emitter sites) is the main cost of working
+from the metadata-stripped release, recorded as a limitation; an official index→(site, date) mapping
+from the authors would supersede the recovered one.
+
+### 9.3 Physics-informed input channels
+
+The U-Net does not see raw reflectance. Its five input channels are built in
+`openearth/methane/channels.py` — **pure NumPy, in `core`, so training and serving call the
+byte-identical function** (the train/serve-consistency invariant, §9.1). The channel order *is* the
+serving contract:
+
+```
+CHANNELS = ("mbmp_delta_r", "mbsp_delta_r", "ratio_b12_b11", "b12", "b11")
+```
+
+The first two are the fractional-signal fields from the retrieval (§1): the multi-band multi-pass
+(MBMP, target vs. a clear reference) and single-pass (MBSP) ΔR maps. These sit **upstream of the
+LUT**, so the channels are invariant to LUT recalibration (Phase 3.5) — a U-Net trained now stays
+valid across LUT versions. Channels 3–5 give the network the raw SWIR context an ΔR field alone
+discards: the B12/B11 band ratio and the two SWIR reflectances that carry the CH₄ absorption. Each
+channel is robust-standardized `(x − median) / (1.4826·MAD)` with per-channel `median`/`MAD` frozen
+into the model manifest (**data, not code** — computed once from the training chips and applied
+verbatim at scan time); invalid pixels resolve to 0 after normalization. The fully convolutional
+network is reflect-padded to a multiple of 32 at serve time (`pad_to_multiple`), so a scan chip need
+not match the training tile size.
+
+### 9.4 Cross-validation design and evaluation
+
+**Site-held-out CV.** All 23 sites are Turkmenistan O&G, so a random tile split would leak surface
+texture between train and test. The evaluation therefore uses **`GroupKFold` by site, 5 folds** — no
+site appears in both the train and the held-out set of a fold. Augmentation is **D4 only** (flips +
+90° rotations); no photometric jitter is applied to physical channels. The gate metric is
+**scene-level F1**: a scene is *predicted positive* iff `candidates_from_prob(prob, threshold=0.5,
+min_px=5)` is non-empty, *truth positive* iff the (regridded) CH4Net mask is non-empty — the same
+rule and same `min_px` score the model and the baseline. The **physics baseline** is
+`plume.detect_plume` on `−ΔR_MBMP` at the pipeline-default `k_sigma`, run on the identical chips and
+folds. Pixel IoU on the true positives is reported (not gated).
+
+Per-fold results (frozen in `scripts/data/ml_eval_v1.json`, `ml_eval_v1`):
+
+| Fold | Held-out sites | n (pos) | **Model F1** | Model P / R | Baseline F1 | Baseline P / R | Pixel IoU (TP) |
+|------|----------------|---------|-------------|-------------|-------------|----------------|----------------|
+| 0 | T1, T10, T20, T6, T9 | 359 (108) | **0.489** | 0.354 / 0.787 | 0.387 | 0.299 / 0.546 | 0.241 |
+| 1 | T13, T16, T18, T21, T22 | 309 (87) | **0.613** | 0.472 / 0.874 | 0.455 | 0.321 / 0.782 | 0.336 |
+| 2 | T15, T23, T4, T7, T8 | 284 (79) | **0.479** | 0.315 / 1.000 | 0.428 | 0.317 / 0.658 | 0.249 |
+| 3 | T11, T17, T3, T5 | 234 (68) | **0.702** | 0.590 / 0.868 | 0.551 | 0.404 / 0.868 | 0.343 |
+| 4 | T12, T14, T19, T2 | 209 (53) | **0.700** | 0.563 / 0.925 | 0.500 | 0.361 / 0.811 | 0.432 |
+| **Mean** | — | — | **0.597** | 0.459 / 0.891 | **0.464** | 0.341 / 0.733 | — |
+
+The model beats the physics baseline on the scene-level F1 gate in every fold (mean **0.597 vs
+0.464**), driven by recall (0.891 vs 0.733) at comparable-or-better precision — it flags more of the
+truly-plumed scenes for the same false-positive budget. Three caveats bound what that means:
+
+- **Label noise (the load-bearing caveat).** The CH4Net masks were drawn with MBMP guidance (§9.1),
+  so they inherit MBMP's blind spots. A model that beats an MBMP-derived baseline on MBMP-derived
+  labels is a **better candidate ranker** — it is *not* evidence it sees plumes MBMP cannot. This is
+  why the tier feeds human review rather than replacing physics.
+- **Geography.** All 23 sites are Turkmenistan O&G. Site-held-out CV controls intra-region leakage,
+  not geography; expect degraded performance on other surfaces. The scan UI and this section say so.
+- **Deployed vs. CV model.** The fold models estimate field performance; the **deployed** model is
+  retrained on *all* data after CV with full-trainset stats (standard practice — shipping fold-0
+  would waste 20 % of a small dataset). Its performance estimate is the CV aggregate above, recorded
+  as `cv_scene_f1` in the manifest.
+
+### 9.5 Serving — the ML scan and the disagreement flag
+
+The trained network is exported to **ONNX (opset 18, dynamic H/W)** and served by the API through
+**onnxruntime (CPU) only — never torch** (`packages/api` has no torch dependency; a
+`test_no_ml_deps` guard enforces it, mirroring the no-UI-deps rule). The session and manifest load
+lazily, so a missing model is a clean `503` at submit and the app boots with nothing installed.
+Single-chip inference is ~16 ms on CPU (`latency_ms_p50` in the manifest), comfortably under the
+1 s/chip budget.
+
+`POST /methane/ml/scan {site_id, start, end, max_scenes?}` walks a site's S2 scenes: for each it
+picks an MBMP reference, `fetch_chip`s target + reference, builds and normalizes the five channels,
+runs the U-Net, and thresholds the probability map into candidate footprints. A scene with ≥ 1
+candidate becomes a **detection row with `source="ml"`, `method="ml_unet"`, `status="candidate"`** —
+it enters the *same* feed as physics detections, carrying a `score` (max candidate probability) and
+a **single-pass Q**: the ΔR→ΔΩ→XCH₄ inversion and IME are run once over the ML footprint
+(`ime.emission_over_mask`, no Monte-Carlo), so `q_kg_h` is magnitude-comparable in the feed while
+`q_sigma_kg_h` is deliberately null — the full MC uncertainty budget stays a physics-tier feature.
+The npz artifact carries `xch4_ppb`/`mask`/`prob`/`rgb`/`grid`, so the existing overlay and
+`array.npz` routes serve ML rows unchanged.
+
+**Disagreement flag.** Each ML row records `disagreement ∈ {agree, ml_only}`: `agree` if a physics
+detection already exists for the same site + scene, else `ml_only`. The symmetric `physics_only`
+view is a feed-level read, never a mutation of a physics row. In the Lab the flag surfaces as a chip
+on the detection detail, next to the model version and score, under the fixed caption **"ML candidate
+— requires review; not an autonomous detection."**
+
+**License / ND consequence (restated because it binds deployment).** The trained weights are a
+CH4Net derivative. CC-BY-NC-ND's **ND** term forbids redistributing them, so — like the chips and
+masks — **no weights, ONNX file, or manifest is ever committed** (they live under the git-ignored
+`data_dir/ml/models/`); the model ships out-of-band via a settings path. The manifest records the
+license and a `not_for_public_deployment` flag; any future *public* deployment of the app must ship
+without these weights (retrain on a redistributable dataset) until an appropriately-licensed model
+exists.

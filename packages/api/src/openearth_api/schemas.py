@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from openearth.geometry import BBox, PolygonROI
 
@@ -430,6 +430,7 @@ class DetectionOut(BaseModel):
     xch4_max_ppb: float | None
     u10_ms: float | None
     wind_from_deg: float | None
+    score: float | None = None  # ML candidate score (max prob); None for physics rows
     flags: list[str]
     created_at: str
     updated_at: str
@@ -478,6 +479,25 @@ class HotspotOut(BaseModel):
     score: float
     weeks_flagged: int
     weeks_observed: int
+
+
+class MlScanRequest(BaseModel):
+    """Scan a site's S2 scenes over a date range with the ONNX U-Net ranker."""
+
+    site_id: int
+    start: date
+    end: date
+    max_scenes: int | None = Field(default=None, ge=1, le=200)
+
+
+class MlStatusOut(BaseModel):
+    """ML model availability for the Settings page (never raises when absent)."""
+
+    model_config = ConfigDict(protected_namespaces=())  # allow model_* field names
+
+    model_loaded: bool
+    model_version: str | None = None
+    latency_ms_p50: float | None = None
 
 
 class ReferenceEventOut(BaseModel):

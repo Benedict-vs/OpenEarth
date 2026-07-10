@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { DetectionDetail } from "../api/types";
 import {
   detectionNumbers,
+  disagreementBadge,
   formatEmission,
   histogramOption,
   kghToTh,
+  mlDetectionNumbers,
   toImageCoordinates,
   verdictBadge,
 } from "./methane";
@@ -87,5 +89,35 @@ describe("detectionNumbers", () => {
     expect(byLabel["Q (median)"]).toBe("8.0 ± 2.0 t/h");
     expect(byLabel["Plume length L"]).toBe("80 m");
     expect(byLabel["c (reference)"]).toBe("—");
+  });
+});
+
+describe("mlDetectionNumbers", () => {
+  it("shows single-pass Q (no ± σ) and candidate count", () => {
+    const detail = {
+      q_kg_h: 12000,
+      q_sigma_kg_h: null,
+      ime_kg: 1500,
+      u10_ms: 3.2,
+      wind_from_deg: 90,
+      xch4_max_ppb: 200,
+      result: { n_candidates: 3 },
+    } as unknown as DetectionDetail;
+    const byLabel = Object.fromEntries(mlDetectionNumbers(detail).map((r) => [r.label, r.value]));
+    expect(byLabel["Q (single-pass)"]).toBe("12.0 t/h");
+    expect(byLabel["Candidates"]).toBe("3");
+    expect(byLabel["ΔXCH4 max"]).toBe("200 ppb");
+  });
+});
+
+describe("disagreementBadge", () => {
+  it("maps agree / ml_only, null otherwise", () => {
+    expect(disagreementBadge("agree")).toEqual({
+      label: "Physics agrees",
+      className: "disagreement agree",
+    });
+    expect(disagreementBadge("ml_only")?.className).toContain("ml-only");
+    expect(disagreementBadge(undefined)).toBeNull();
+    expect(disagreementBadge("nonsense")).toBeNull();
   });
 });

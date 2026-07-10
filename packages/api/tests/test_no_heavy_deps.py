@@ -1,9 +1,14 @@
-"""The API must never import UI frameworks, torch, or ML stacks.
+"""The API must never import UI frameworks or ML stacks at runtime.
 
 Mirrors core's ``test_no_ui_deps.py``: import every ``openearth_api``
 submodule, then assert none of the forbidden top-level packages made it
 into ``sys.modules``. (SQLModel and sse-starlette became first-class API
 dependencies in Phase 2 — the DB/job layer — so they are no longer barred.)
+
+``torch``/``segmentation_models_pytorch`` are covered by the *static*
+``test_no_ml_deps.py`` instead — a runtime ``sys.modules`` check can't test them
+here, since pytest imports the ml package's torch-using test modules during
+collection, so torch is already loaded before this test runs.
 """
 
 from __future__ import annotations
@@ -15,7 +20,6 @@ import sys
 import openearth_api
 
 FORBIDDEN = (
-    "torch",
     "streamlit",
     "folium",
     "branca",

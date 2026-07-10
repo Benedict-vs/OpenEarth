@@ -12,6 +12,7 @@ from openearth.geometry import BBox
 from openearth.methane import ime as ime_mod
 from openearth.methane.ime import (
     McParams,
+    emission_over_mask,
     ime_kg,
     plume_length_m,
     quantify,
@@ -152,5 +153,25 @@ def test_quantify_no_plume_returns_nan_estimate() -> None:
     field[5, 5] = 1.0
     est, mask = quantify(field, grid, _wind(4.0), sigma_u10=1.5)
     assert mask.n_pixels == 0
+    assert np.isnan(est.q_kg_h)
+    assert est.ime_kg == 0.0
+
+
+def test_emission_over_mask_single_pass_matches_formula() -> None:
+    grid = _grid((30, 30))
+    delta_omega = _gauss_field((30, 30), amp=0.05, sigma=4.0)
+    mask = delta_omega > 0.02
+    est = emission_over_mask(delta_omega, grid, mask, _wind(4.0), sigma_u10=1.5)
+    ime = ime_kg(delta_omega, mask, grid)
+    length = plume_length_m(mask, grid)
+    expected = u_eff_ms(4.0) / length * ime * 3600.0
+    assert est.q_kg_h == pytest.approx(expected, rel=1e-9)
+    assert np.isnan(est.q_sigma_kg_h)  # single-pass: no MC budget
+    assert est.n_mc == 0
+
+
+def test_emission_over_mask_empty_mask_is_nan() -> None:
+    grid = _grid((16, 16))
+    est = emission_over_mask(np.zeros((16, 16)), grid, np.zeros((16, 16), bool), _wind(3.0), 1.0)
     assert np.isnan(est.q_kg_h)
     assert est.ime_kg == 0.0

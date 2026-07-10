@@ -1,0 +1,12 @@
+# Default Stage 5 training config (openearth_ml.train). Committed as the pinned
+# recipe; the trained weights it produces are NOT committed (CH4Net derivative).
+name = "plume_unet_v1"
+encoder = "resnet18"
+encoder_weights = "imagenet"
+lr = 3e-4
+weight_decay = 1e-4
+batch_size = 16
+max_epochs = 100
+patience = 12
+seed = 0
+n_splits = 5
