@@ -431,13 +431,15 @@ class DetectionOut(BaseModel):
     u10_ms: float | None
     wind_from_deg: float | None
     score: float | None = None  # ML candidate score (max prob); None for physics rows
+    # EMIT plume matches: count when a cross-match has run, None = never checked.
+    emit_matches: int | None = None
     flags: list[str]
     created_at: str
     updated_at: str
 
 
 class DetectionDetailOut(DetectionOut):
-    """Full detail: numbers, params, mask + overlay geometry, validation."""
+    """Full detail: numbers, params, mask + overlay geometry, validation, EMIT."""
 
     reference_scene_id: str | None
     ime_kg: float | None
@@ -448,6 +450,7 @@ class DetectionDetailOut(DetectionOut):
     # Map image-source corners, [[w,n],[e,n],[e,s],[w,s]] (EPSG:4326).
     overlay_bounds: list[list[float]] | None
     validation: dict[str, Any] | None
+    emit_json: EmitMatchResult | None = None  # EMIT cross-match evidence (migration 5)
 
 
 class DetectionPatch(BaseModel):
@@ -519,6 +522,45 @@ class ValidationImportOut(BaseModel):
 class ValidationOut(BaseModel):
     verdict: Literal["confirmed", "plausible", "unvalidated", "contradicted"]
     matched_event_ids: list[int]
+
+
+# ── EMIT plumes (Phase 6) ────────────────────────────────────
+
+
+class EmitPlumeOut(BaseModel):
+    """One EMIT methane plume complex. ``provenance`` distinguishes the source."""
+
+    plume_id: str
+    outline: dict[str, Any]  # GeoJSON geometry (Polygon/MultiPolygon, EPSG:4326)
+    time_utc: str
+    provenance: Literal["gee_v001", "lpdaac_v002"]
+    max_enh_ppm_m: float | None
+    max_enh_lat: float | None
+    max_enh_lon: float | None
+    q_kg_h: float | None  # emission rate — V002 only; null for the frozen GEE mirror
+    q_sigma_kg_h: float | None
+    source_scenes: list[str]
+
+
+class EmitPlumesOut(BaseModel):
+    """Plume list plus which source paths were queried (the GEE freeze is honest)."""
+
+    plumes: list[EmitPlumeOut]
+    provenance_paths: list[Literal["gee_v001", "lpdaac_v002"]]
+
+
+class EmitMatchOut(BaseModel):
+    plume: EmitPlumeOut
+    distance_km: float
+    dt_hours: float  # signed: plume time − detection scene time
+
+
+class EmitMatchResult(BaseModel):
+    """Stored on a detection (``emit_json``): the outcome of a cross-match run."""
+
+    checked_at: str
+    provenance_paths: list[Literal["gee_v001", "lpdaac_v002"]]
+    matches: list[EmitMatchOut]
 
 
 # ── Timelapse ────────────────────────────────────────────────

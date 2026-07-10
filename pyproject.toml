@@ -79,6 +79,8 @@ module = [
     "segmentation_models_pytorch.*",
     "onnxruntime",
     "onnxruntime.*",
+    "earthaccess",
+    "earthaccess.*",
 ]
 ignore_missing_imports = true
 

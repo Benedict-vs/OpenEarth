@@ -108,6 +108,7 @@ class Detection(SQLModel, table=True):
     array_path: str
     notes: str | None = None
     validation_json: str | None = None
+    emit_json: str | None = None  # EMIT plume cross-match evidence (migration 5)
     created_at: str
     updated_at: str
 
