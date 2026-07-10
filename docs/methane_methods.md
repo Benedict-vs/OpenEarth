@@ -520,3 +520,73 @@ masks — **no weights, ONNX file, or manifest is ever committed** (they live un
 license and a `not_for_public_deployment` flag; any future *public* deployment of the app must ship
 without these weights (retrain on a redistributable dataset) until an appropriately-licensed model
 exists.
+
+## 10. EMIT tier — independent plume evidence (Phase 6)
+
+EMIT (the *Earth surface Mineral dust source InvesTigation* imaging spectrometer on the ISS)
+retrieves methane column enhancements at **60 m** from its SWIR bands — fine enough to resolve
+individual plumes and their source facilities, unlike TROPOMI's ~7 km grid. The EMIT tier attaches
+EMIT's **published plume-complex product** to our detections as *independent evidence from another
+instrument*; it is **not** part of our retrieval and changes no reported column or flux. Two things
+make this an honest add-on rather than a second detector:
+
+- EMIT plumes are stored as an `emit_json` blob **on the existing detection row**, never as
+  detection rows of ours — so the EMIT tier writes no `detections.source` and is fully decoupled
+  from the physics/ML feed. A row that was never cross-matched has `emit_json IS NULL` ("never
+  checked"), distinct from a checked-but-empty result (`matches: []`).
+- Every plume carries a `provenance` tag, because there are **two sources with different coverage**
+  (see §10.1). No UI or number ever implies EMIT covers "now" through the frozen mirror.
+
+### 10.1 Two sources, one plume model
+
+`packages/core/.../methane/emit.py` exposes one `EmitPlume` model fed by two paths, split by a hard
+date boundary (`gee_available` / `GEE_CH4PLM_CUTOFF = 2024-10-26`):
+
+- **GEE V001 mirror** (`NASA/EMIT/L2B/CH4PLM`, band `methane_plume_complex`, ppm·m): a *frozen*
+  copy covering 2022-08-10 → 2024-10-26; V001 was decommissioned at LP DAAC upstream. `provenance =
+  "gee_v001"`, no emission rate (V001 metadata only). The outline is **not** the granule footprint —
+  the band is the full matched-filter field (negatives included) cropped to a small plume tile, so
+  the outline is `reduceToVectors` over the **positive-enhancement mask** `band.gt(0)` (integral, as
+  `reduceToVectors` requires; `selfMask` alone leaves a float band). All outlines in a query are
+  vectorised server-side and pulled in one `ee_call`.
+- **LP DAAC V002 GeoJSON** (`EMITL2BCH4PLM` v002, via **earthaccess**, lazy-imported in the API so
+  `create_app()` stays credential-free): the live collection past the freeze. One granule's
+  `CH4PLMMETA` JSON asset (never the COG) carries the outline, max-enhancement coords, and — new in
+  V002 — an **emission-rate estimate ± uncertainty** (`q_kg_h` / `q_sigma_kg_h`). The parser is
+  tolerant of the DAAC/portal schema variance: missing numerics arrive as the string `"NA"` and
+  coerce to `None`. `provenance = "lpdaac_v002"`. **V001 and V002 rasters are not numerically
+  identical** (V002 changed the matched-filter channel selection), so a quantitative comparison
+  never mixes versions.
+
+Windows straddling the boundary query both paths and de-duplicate (same instant + near-same
+location; the V002 plume wins because it carries the rate). Cross-match against a detection reuses
+`validation.haversine_km`: a plume within **≤ 5 km and ≤ 3 days** of the detection's scene is a
+match, sorted nearest-first (ties by smaller |Δt|), each plume located by its max-enhancement point
+(V002) or outline centroid (V001).
+
+### 10.2 Column-unit cross-check (order-of-magnitude context, **not** a gate)
+
+EMIT reports enhancement in **ppm·m** (mixing-ratio enhancement integrated over the light path);
+our retrieval reports ΔΩ in **mol/m²**. They convert through the air number density
+n = P/(RT): `ΔΩ [mol/m²] = ΔE [ppm·m] × 10⁻⁶ × n`. At **US-Standard surface** (P = 101.325 kPa,
+T = 288.15 K), n = 42.3 mol/m³, so **1 ppm·m ≈ 4.3 × 10⁻⁵ mol/m²** (≈ 3.7 × 10⁻⁵ at the Permian's
+~900 m / 300 K, i.e. ±~15 % across plausible surface P/T — state the assumption, never treat the
+constant as exact).
+
+Applied to one live matched event — the **2023-06-16 Permian super-emitter** (CH4PLM
+`…20230616T211343…`, V001), the strongest EMIT plume in that scene:
+
+| Quantity | EMIT CH4ENH (2023-06-16, masked to plume) | Our S2 MBMP (nearest overpass 2023-06-19, +3 d) |
+|---|---|---|
+| masked-mean ΔΩ | 968 ppm·m ≈ **4.1 × 10⁻² mol/m²** | **1.3 mol/m²** (ΔXCH₄ₘₐₓ ≈ 9500 ppb, Q ≈ 4.1 × 10⁴ kg/h) |
+| peak ΔΩ | 7506 ppm·m ≈ 0.32 mol/m² | 3.4 mol/m² |
+
+The two **independently confirm an extreme column-scale super-emitter at this exact location**, and
+the unit relationship checks out — but the magnitudes differ by ~1.5 orders. This is *expected*, not
+alarming, and is why this is context and never a gate: (a) the overpasses are **3 days and two
+instruments apart** — the plume, wind, and emission all differ between 2023-06-16 and 2023-06-19;
+(b) the masks/thresholds differ (EMIT's positive-enhancement footprint vs our kσ plume core); and
+(c) our MBMP retrieval carries the **known calibration gap** (§7, §8.2) and runs high over the
+Permian's bright soil. The takeaway the docs are allowed to draw is directional only: both sensors
+flag a 10⁻²–10⁰ mol/m² event here; the EMIT plume is genuine independent corroboration of the
+detection, not a calibration reference.

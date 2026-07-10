@@ -6,6 +6,7 @@ import type {
   Detection,
   DetectionDetail,
   DetectionPatch,
+  EmitPlumes,
   JobCreated,
   MlScanRequest,
   MlStatus,
@@ -169,5 +170,41 @@ export function useValidateDetection() {
   return useMutation({
     mutationFn: (id: string) => apiPost<Validation>(`/api/methane/detections/${id}/validate`, {}),
     onSuccess: (_data, id) => qc.invalidateQueries({ queryKey: ["methane", "detection", id] }),
+  });
+}
+
+// ── EMIT plumes (Phase 6) ──
+
+/** EMIT plume complexes over a site's bbox + date window (GEE V001 and/or V002). */
+export function useEmitPlumes(site: Site | null, start: string, end: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["methane", "emit", "plumes", site?.id ?? null, start, end],
+    enabled: enabled && site != null,
+    staleTime: 5 * 60_000,
+    queryFn: () => {
+      const { west, south, east, north } = site!.bbox;
+      const q = new URLSearchParams({
+        west: String(west),
+        south: String(south),
+        east: String(east),
+        north: String(north),
+        start,
+        end,
+      });
+      return apiGet<EmitPlumes>(`/api/methane/emit/plumes?${q.toString()}`);
+    },
+  });
+}
+
+/** Cross-match a detection against EMIT plumes; writes its `emit_json` evidence. */
+export function useEmitMatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiPost<DetectionDetail>(`/api/methane/detections/${id}/emit-match`, {}),
+    onSuccess: (_data, id) => {
+      void qc.invalidateQueries({ queryKey: ["methane", "detection", id] });
+      void qc.invalidateQueries({ queryKey: ["methane", "detections"] });
+    },
   });
 }

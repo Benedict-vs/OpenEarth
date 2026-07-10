@@ -78,6 +78,11 @@ function DetectionCard({
             score {detection.score.toFixed(2)}
           </span>
         ) : null}
+        {detection.emit_matches != null && detection.emit_matches > 0 ? (
+          <span className="emit-tag" title="Coincident EMIT plume(s)">
+            EMIT ×{detection.emit_matches}
+          </span>
+        ) : null}
         {detection.flags
           .filter((f) => f !== "no_plume")
           .map((f) => (

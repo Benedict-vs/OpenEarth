@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   useDetectionDetail,
+  useEmitMatch,
   usePatchDetection,
   useValidateDetection,
 } from "../../api/methaneQueries";
@@ -112,6 +113,61 @@ export function DetectionDetail() {
       </div>
 
       <ValidationPanel />
+
+      <EmitSection detId={detId} detail={detail} />
+    </div>
+  );
+}
+
+/** EMIT cross-match: independent evidence from another instrument's plume product. */
+function EmitSection({ detId, detail }: { detId: string; detail: DetectionDetailT }) {
+  const emitMatch = useEmitMatch();
+  const emit = detail.emit_json;
+
+  return (
+    <div className="emit-section">
+      <div className="emit-head">
+        <h4>EMIT plumes</h4>
+        <button
+          className="mini"
+          onClick={() => emitMatch.mutate(detId)}
+          disabled={emitMatch.isPending}
+        >
+          {emitMatch.isPending ? "Matching…" : emit ? "Re-check" : "Match EMIT"}
+        </button>
+      </div>
+      {emitMatch.isError ? (
+        <p className="muted emit-note">
+          {(emitMatch.error as Error)?.message ?? "EMIT lookup failed."}
+        </p>
+      ) : !emit ? (
+        <p className="muted emit-note">Not checked. Cross-match against EMIT plume complexes.</p>
+      ) : emit.matches.length === 0 ? (
+        <p className="muted emit-note">No EMIT plume within 5 km / 3 days of this scene.</p>
+      ) : (
+        <ul className="emit-matches">
+          {emit.matches.map((m, i) => {
+            const p = m.plume;
+            const v002 = p.provenance === "lpdaac_v002";
+            return (
+              <li key={`${p.plume_id}-${i}`}>
+                <span className={`emit-chip ${v002 ? "v002" : "v001"}`}>
+                  {v002 ? "V002" : "V001"}
+                </span>
+                <span className="emit-dist">
+                  {m.distance_km.toFixed(1)} km · Δt {Math.round(m.dt_hours)} h
+                </span>
+                {p.q_kg_h != null ? (
+                  <span className="emit-q">
+                    {p.q_kg_h.toFixed(0)}
+                    {p.q_sigma_kg_h != null ? ` ± ${p.q_sigma_kg_h.toFixed(0)}` : ""} kg/h
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
