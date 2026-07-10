@@ -20,6 +20,9 @@ explicit = true
 
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+# torchvision (transitive via smp -> timm) must come from the SAME index as torch:
+# PyPI torchvision against +cpu torch fails at import (torchvision::nms missing).
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [dependency-groups]
 dev = [

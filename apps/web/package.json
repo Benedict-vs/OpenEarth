@@ -16,7 +16,7 @@
     "format": "prettier --write src",
     "format:check": "prettier --check src",
     "typecheck": "tsc --noEmit",
-    "gen": "openapi-typescript openapi.json -o src/api/types.gen.ts"
+    "gen": "openapi-typescript openapi.json -o src/api/types.gen.ts && prettier --write src/api/types.gen.ts"
   },
   "dependencies": {
     "@maplibre/maplibre-gl-compare": "^0.5.0",
