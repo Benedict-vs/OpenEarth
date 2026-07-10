@@ -127,3 +127,30 @@ def test_dispatcher_routes_user_datasets_to_generic(
     result = providers.get_collection("DEM", roi, "2024-01-01", "2024-02-01", source="dem")
     assert result == "sentinel-collection"
     assert seen["route"] == ("dem", "DEM")
+
+
+def test_dispatcher_routes_builtin_emit_to_generic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # emit is a *builtin* dataset but not special-cased in the dispatcher, so
+    # CH4ENH must flow through the generic pipeline like a user dataset — the
+    # Stage 0 claim that one raw band needs zero provider code.
+    roi = BBox(-101.9, 32.38, -101.75, 32.49)
+    seen: dict[str, Any] = {}
+
+    def fake_generic(dataset_id: str, product_key: str, *args: Any, **kwargs: Any) -> str:
+        seen["route"] = (dataset_id, product_key)
+        return "emit-collection"
+
+    monkeypatch.setattr(providers, "get_generic_collection", fake_generic)
+    result = providers.get_collection("CH4ENH", roi, "2023-06-01", "2023-07-01", source="emit")
+    assert result == "emit-collection"
+    assert seen["route"] == ("emit", "CH4ENH")
+
+
+def test_emit_ch4enh_computes_as_raw_band() -> None:
+    from openearth.catalog import get_product
+
+    image = FakeImage()
+    _compute_product(image, get_product("emit", "CH4ENH"))  # type: ignore[arg-type]
+    assert image.calls == [("select", "vertical_column_enhancement")]
