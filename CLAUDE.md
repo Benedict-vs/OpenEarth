@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # OpenEarth v2
 
-Satellite-based environmental analysis (**Phase 4 complete** — v1 Streamlit app retired):
+Satellite-based environmental analysis (**Phase 5 complete** — v1 Streamlit app retired):
 Python core library (`packages/core`) + FastAPI backend (`packages/api`) + React/MapLibre
-frontend (`apps/web`), with a physics-honest methane detection suite (the Methane Lab),
-side-by-side Compare, and a Timelapse Studio.
+frontend (`apps/web`) + an offline ML training package (`packages/ml`), with a physics-honest
+methane detection suite (the Methane Lab), side-by-side Compare, and a Timelapse Studio.
 
 ## Commands
 
@@ -52,7 +52,11 @@ OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; neve
     `plume.py` (robust-σ threshold + components + outline), `ime.py` (IME + seeded joint MC;
     `quantify(mask_field=…)` thresholds the frozen-LUT ΔΩ, IME uses reporting ΔΩ),
     `detect.py` (7-step cancellable orchestrator), `tropomi.py` (S5P screening),
-    `validation.py` (IMEO/SRON parse + cross-match). LUT v4 = layered US-Std background +
+    `validation.py` (IMEO/SRON parse + cross-match), `channels.py` (Phase 5 ML input stack:
+    5 physics channels — MBMP/MBSP ΔR + B12/B11 ratio + SWIR — via `build_channels`/`normalize`/
+    `pad_to_multiple`/`candidates_from_prob`; pure NumPy, byte-identical for training and serving),
+    `ime.emission_over_mask` (single-pass IME over a given mask, no MC — used by the ML scan's Q).
+    LUT v4 = layered US-Std background +
     H₂O/CO₂ interfering absorbers + TSIS-1 solar weighting, generated **offline** by
     `scripts/generate_ch4_lut.py` (`uv run --group lut …`, HITRAN+SRFs+committed data extracts);
     HAPI must never be imported under `packages/`. Reproduce events with
@@ -83,15 +87,30 @@ OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; neve
     `aois` + `workspaces` (plain CRUD, 409 on duplicate name; versioned `WorkspaceState`).
   - **Methane routes** (`routers/methane.py`, `services/methane.py`): sites CRUD (7 seeded in
     the lifespan), scene search, the `methane_analyze` job (SSE progress → `{detection_id}`;
-    runner writes the detection row + npz artifact off-loop), detection feed/detail, overlay
-    PNG (`services/methane_render.py`), `array.npz`, the `methane_screening` job, and the
-    validation importer/cross-match. `POST /tiles` `methane_ref` unlocks the `CH4_ANOMALY`
-    quicklook (builder products still 422 without it); `TilesRequest.auto_range` derives the vis
-    range from `compute_vis_range` into the mint + legend.
+    runner writes the detection row + npz artifact off-loop), detection feed/detail (`source`
+    filter param), overlay PNG (`services/methane_render.py`), `array.npz`, the
+    `methane_screening` job, and the validation importer/cross-match. `POST /tiles` `methane_ref`
+    unlocks the `CH4_ANOMALY` quicklook (builder products still 422 without it);
+    `TilesRequest.auto_range` derives the vis range from `compute_vis_range` into the mint + legend.
+  - **ML tier** (`routers/methane.py`, `services/ml.py`): `POST /methane/ml/scan` (`methane_ml_scan`
+    job → `{detection_ids}`; each hit a `source="ml"` detection row with single-pass Q + a
+    `disagreement` flag, written off-loop; npz adds a `prob` map so the overlay/`array.npz` routes
+    serve it unchanged) and `GET /methane/ml/status` (Settings). Lazy `ort.InferenceSession` (CPU) +
+    manifest — missing model = 503 at submit, `create_app()` stays model-free. **onnxruntime only,
+    never torch**; the model is a candidate ranker requiring human review, never autonomous.
   - **Timelapse routes** (`routers/timelapse.py`, `services/timelapse.py`): the `timelapse`
     render job (SSE `frame` events → `{render_id}`; runner writes the `renders` row + frames +
     manifest + movie off-loop), gallery list, detail (row + manifest), immutable frame PNGs,
     movie download, delete (409 while running). Artifacts at `data_dir/timelapse/{render_id}/`.
+- `packages/ml/` (dist `openearth-ml`) — **offline** U-Net training/eval/export; **torch + smp live
+  here only, never in core/api** (`test_no_ml_deps.py` enforces it). `data.py` (npz chip dataset,
+  GroupKFold-by-site), `models.py` (resnet18 U-Net, in_channels=5), `train.py`/`eval.py` (typer CLIs,
+  TOML configs; scene-level F1 vs the `−ΔR_MBMP` baseline → frozen `scripts/data/ml_eval_v1.json`),
+  `export.py` (ONNX opset 18, dynamic HW + torch↔ORT parity test). Imports channel-building from core
+  so training and serving share it. **License wall**: CH4Net is CC-BY-NC-ND 4.0 & gated — nothing
+  derived (chips/masks/weights/onnx/manifest) is ever committed; it all lives under git-ignored
+  `data_dir/ml/`, and the ND term blocks publishing the weights. CI trains nothing / makes no EE
+  calls. See `docs/methane_methods.md` §9.
 - `apps/web/` — Vite + React + TS (pnpm, NOT a uv member). Thin imperative MapLibre binding
   (no react-map-gl). **No-refetch rule**: layer controls only touch paint/layout/moveLayer;
   re-mints go through `setTiles` on the existing source. API types are generated

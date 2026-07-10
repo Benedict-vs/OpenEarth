@@ -43,7 +43,7 @@ from openearth.methane.wind import sample_wind_at
 from openearth.settings import Settings
 from openearth_api.models import Detection, utcnow_iso
 from openearth_api.schemas import JobCreated, MlScanRequest, MlStatusOut
-from openearth_api.services.methane import _detections_dir, _resolve_bbox
+from openearth_api.services.methane import _detections_dir, _overlay_bounds, _resolve_bbox
 
 # Nominal 10 m wind σ (m/s): recorded on the row but unused by the single-pass
 # point estimate (only the MC budget, a physics-tier feature, consumes it).
@@ -175,6 +175,9 @@ def _persist_ml_detection(
         "disagreement": disagreement,
         "flags": [],
         "review": "ML candidate — requires review; not an autonomous detection.",
+        # Grid corners so the detail's overlay places on the map and the
+        # validation cross-match can locate the candidate (same key physics writes).
+        "overlay_bounds": _overlay_bounds(target.grid),
     }
     now = utcnow_iso()
     row = Detection(

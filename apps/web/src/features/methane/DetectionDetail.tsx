@@ -4,11 +4,19 @@ import {
   usePatchDetection,
   useValidateDetection,
 } from "../../api/methaneQueries";
-import type { MethaneHistogram } from "../../api/types";
-import { detectionNumbers, verdictBadge } from "../../lib/methane";
+import type { DetectionDetail as DetectionDetailT, MethaneHistogram } from "../../api/types";
+import {
+  detectionNumbers,
+  disagreementBadge,
+  mlDetectionNumbers,
+  verdictBadge,
+} from "../../lib/methane";
 import { useMethaneStore } from "../../stores/methaneStore";
 import { McHistogram } from "./McHistogram";
 import { ValidationPanel } from "./ValidationPanel";
+
+/** Fixed caption — the ML tier is a candidate ranker, never an autonomous detector. */
+const ML_REVIEW_CAPTION = "ML candidate — requires review; not an autonomous detection.";
 
 export function DetectionDetail() {
   const detId = useMethaneStore((s) => s.selectedDetectionId);
@@ -22,6 +30,7 @@ export function DetectionDetail() {
   const result = (detail.result ?? {}) as Record<string, unknown>;
   const histogram = result.histogram as MethaneHistogram | undefined;
   const noPlume = detail.flags.includes("no_plume");
+  const isMl = detail.source === "ml";
   const verdict = detail.validation?.verdict as string | undefined;
   const badge = verdictBadge(verdict);
 
@@ -40,7 +49,9 @@ export function DetectionDetail() {
         <span className={`status-chip ${detail.status}`}>{detail.status}</span>
       </div>
 
-      {noPlume ? (
+      {isMl ? (
+        <MlCandidatePanel detail={detail} />
+      ) : noPlume ? (
         <p className="muted no-plume">No plume detected above the kσ threshold at this scene.</p>
       ) : (
         <>
@@ -102,5 +113,48 @@ export function DetectionDetail() {
 
       <ValidationPanel />
     </div>
+  );
+}
+
+/** ML-candidate body: the review caption, model provenance, and single-pass numbers. */
+function MlCandidatePanel({ detail }: { detail: DetectionDetailT }) {
+  const result = (detail.result ?? {}) as Record<string, unknown>;
+  const modelVersion = typeof result.model_version === "string" ? result.model_version : "—";
+  const disagreement = disagreementBadge(
+    typeof result.disagreement === "string" ? result.disagreement : undefined,
+  );
+
+  return (
+    <>
+      <div className="ml-candidate-banner">
+        <span className="ml-badge">ML</span>
+        <span>{ML_REVIEW_CAPTION}</span>
+      </div>
+      <div className="ml-chip-row">
+        <span className="model-chip" title="Serving model version">
+          {modelVersion}
+        </span>
+        {detail.score != null ? (
+          <span className="score-tag" title="Max candidate probability">
+            score {detail.score.toFixed(2)}
+          </span>
+        ) : null}
+        {disagreement ? (
+          <span className={disagreement.className} title="Physics vs ML agreement">
+            {disagreement.label}
+          </span>
+        ) : null}
+      </div>
+      <table className="numbers-table">
+        <tbody>
+          {mlDetectionNumbers(detail).map((row) => (
+            <tr key={row.label}>
+              <th>{row.label}</th>
+              <td>{row.value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }

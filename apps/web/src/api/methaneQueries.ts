@@ -7,6 +7,8 @@ import type {
   DetectionDetail,
   DetectionPatch,
   JobCreated,
+  MlScanRequest,
+  MlStatus,
   ReferenceEvent,
   SceneInfo,
   ScreeningRequest,
@@ -19,7 +21,8 @@ import type {
 
 const SITES_KEY = ["methane", "sites"] as const;
 const EVENTS_KEY = ["methane", "events"] as const;
-const detectionsKey = (siteId: number | null) => ["methane", "detections", siteId] as const;
+const detectionsKey = (siteId: number | null, source: string | null) =>
+  ["methane", "detections", siteId, source ?? "all"] as const;
 
 // ── Sites ──
 
@@ -75,14 +78,32 @@ export function submitScreening(body: ScreeningRequest): Promise<JobCreated> {
   return apiPost<JobCreated>("/api/methane/screening", body);
 }
 
+// ── ML scan (candidate ranker; never an autonomous detector) ──
+
+export function submitMlScan(body: MlScanRequest): Promise<JobCreated> {
+  return apiPost<JobCreated>("/api/methane/ml/scan", body);
+}
+
+export function useMlStatus() {
+  return useQuery({
+    queryKey: ["methane", "ml", "status"],
+    queryFn: () => apiGet<MlStatus>("/api/methane/ml/status"),
+    staleTime: 60_000,
+  });
+}
+
 // ── Detections ──
 
-export function useDetections(siteId: number | null) {
+/** Feed rows for a site, optionally filtered by source ("physics" | "ml"). */
+export function useDetections(siteId: number | null, source: string | null = null) {
   return useQuery({
-    queryKey: detectionsKey(siteId),
+    queryKey: detectionsKey(siteId, source),
     queryFn: () => {
-      const q = siteId != null ? `?site_id=${siteId}` : "";
-      return apiGet<Detection[]>(`/api/methane/detections${q}`);
+      const q = new URLSearchParams();
+      if (siteId != null) q.set("site_id", String(siteId));
+      if (source) q.set("source", source);
+      const qs = q.toString();
+      return apiGet<Detection[]>(`/api/methane/detections${qs ? `?${qs}` : ""}`);
     },
   });
 }

@@ -142,6 +142,9 @@ def test_ml_scan_end_to_end(client: TestClient, scan_ready: None) -> None:
     assert result["disagreement"] == "ml_only"  # no physics row for this site+scene
     assert result["review"].startswith("ML candidate")
     assert result["n_candidates"] >= 1
+    # grid corners must be present so the detail overlay places on the map
+    assert detail["overlay_bounds"] is not None
+    assert len(detail["overlay_bounds"]) == 4
 
     # the ML overlay works because the npz carries xch4_ppb
     png = client.get(f"/api/methane/detections/{det_ids[0]}/overlay.png", params={"vmax": 200})

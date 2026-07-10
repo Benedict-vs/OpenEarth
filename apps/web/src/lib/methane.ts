@@ -104,3 +104,28 @@ export function detectionNumbers(detail: DetectionDetail): NumberRow[] {
     { label: "c (reference)", value: fmt(calib.c_ref, 4) },
   ];
 }
+
+/** Numbers for an ML candidate: single-pass Q (no Monte-Carlo σ) + footprint stats. */
+export function mlDetectionNumbers(detail: DetectionDetail): NumberRow[] {
+  const r = (detail.result ?? {}) as Record<string, unknown>;
+  return [
+    { label: "Q (single-pass)", value: formatEmission(detail.q_kg_h, detail.q_sigma_kg_h) },
+    { label: "IME", value: fmt(detail.ime_kg, 1, "kg") },
+    { label: "U10", value: fmt(detail.u10_ms, 1, "m/s") },
+    { label: "Wind from", value: fmt(detail.wind_from_deg, 0, "°") },
+    { label: "ΔXCH4 max", value: fmt(detail.xch4_max_ppb, 0, "ppb") },
+    { label: "Candidates", value: fmt(r.n_candidates, 0) },
+  ];
+}
+
+/** Map a physics/ML disagreement flag to a display label + CSS modifier class. */
+export function disagreementBadge(flag: string | null | undefined): VerdictBadge | null {
+  switch (flag) {
+    case "agree":
+      return { label: "Physics agrees", className: "disagreement agree" };
+    case "ml_only":
+      return { label: "ML-only (no physics detection)", className: "disagreement ml-only" };
+    default:
+      return null;
+  }
+}

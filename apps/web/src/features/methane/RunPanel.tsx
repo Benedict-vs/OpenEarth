@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { submitAnalyze } from "../../api/methaneQueries";
+import { useState } from "react";
+import { submitAnalyze, submitMlScan, useMlStatus } from "../../api/methaneQueries";
 import { subscribeJob } from "../../api/sse";
 import type { AnalyzeRequest } from "../../api/types";
 import { useMethaneStore } from "../../stores/methaneStore";
@@ -112,6 +113,124 @@ export function RunPanel() {
             {job.status === "error"
               ? `Error: ${job.detail}`
               : `${job.step}/${job.total} · ${job.message ?? ""}`}
+          </span>
+        </div>
+      ) : null}
+
+      <MlScanAction />
+    </div>
+  );
+}
+
+interface MlScanState {
+  status: "running" | "done" | "error";
+  done: number;
+  total: number;
+  message: string;
+  hits: number;
+  detail?: string;
+}
+
+/**
+ * ML candidate scan over the current site + date window. It proposes scenes
+ * for review — it is not an autonomous detector; every hit lands in the feed
+ * as a candidate a human still has to accept or reject. SSE UX mirrors the
+ * screening dialog (local state, refetch the feed on done).
+ */
+function MlScanAction() {
+  const qc = useQueryClient();
+  const site = useMethaneStore((s) => s.selectedSite);
+  const dates = useMethaneStore((s) => s.dates);
+  const selectDetection = useMethaneStore((s) => s.selectDetection);
+  const { data: status } = useMlStatus();
+  const [maxScenes, setMaxScenes] = useState<number>(20);
+  const [scan, setScan] = useState<MlScanState | null>(null);
+
+  const running = scan?.status === "running";
+  const modelReady = status?.model_loaded ?? false;
+
+  const run = async () => {
+    if (!site) return;
+    setScan({ status: "running", done: 0, total: 0, message: "Queued", hits: 0 });
+    try {
+      const { job_id } = await submitMlScan({
+        site_id: site.id,
+        start: dates.start,
+        end: dates.end,
+        max_scenes: maxScenes,
+      });
+      subscribeJob(job_id, {
+        onProgress: (d) =>
+          setScan({
+            status: "running",
+            done: d.done,
+            total: d.total,
+            message: d.message ?? "",
+            hits: 0,
+          }),
+        onDone: (d) => {
+          const ids = (d.result as { detection_ids?: string[] }).detection_ids ?? [];
+          setScan((prev) => ({
+            status: "done",
+            done: prev?.total ?? 0,
+            total: prev?.total ?? 0,
+            message: `${ids.length} candidate scene(s)`,
+            hits: ids.length,
+          }));
+          const first = ids[0];
+          if (first) selectDetection(first);
+          void qc.invalidateQueries({ queryKey: ["methane", "detections"] });
+        },
+        onError: (d) =>
+          setScan({ status: "error", done: 0, total: 0, message: "", hits: 0, detail: d.detail }),
+      });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "ML scan failed to start";
+      setScan({ status: "error", done: 0, total: 0, message: "", hits: 0, detail });
+    }
+  };
+
+  return (
+    <div className="ml-scan">
+      <div className="ml-scan-head">
+        <span className="ml-badge">ML</span>
+        <span>Candidate scan</span>
+      </div>
+      <p className="ml-scan-caption">ML candidate ranker — proposes scenes for review.</p>
+      <p className="muted ml-scan-window">
+        Scans the current window: {dates.start} → {dates.end}
+      </p>
+      <label className="num-row">
+        Max scenes
+        <input
+          type="number"
+          min={1}
+          max={200}
+          value={maxScenes}
+          onChange={(e) => setMaxScenes(Number(e.target.value))}
+        />
+      </label>
+      <button
+        className="ghost ml-scan-button"
+        disabled={!site || !modelReady || running}
+        title={modelReady ? undefined : "ML model not installed — see Settings"}
+        onClick={run}
+      >
+        {running ? "Scanning…" : "Run ML scan"}
+      </button>
+      {!modelReady && status ? (
+        <p className="muted ml-scan-window">Model not installed — see Settings.</p>
+      ) : null}
+      {scan ? (
+        <div className={`run-progress ${scan.status}`}>
+          <div className="progress-bar">
+            <div
+              className="progress-fill"
+              style={{ width: scan.total ? `${(scan.done / scan.total) * 100}%` : "0%" }}
+            />
+          </div>
+          <span className="progress-label">
+            {scan.status === "error" ? `Error: ${scan.detail}` : scan.message}
           </span>
         </div>
       ) : null}

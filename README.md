@@ -33,6 +33,14 @@ Three layers, one workspace:
   Integrated Mass Enhancement quantification with Monte-Carlo uncertainty, cross-matched against
   IMEO/SRON reference events. The methods, constants, and their citations are written up in
   [`docs/methane_methods.md`](docs/methane_methods.md).
+- **ML tier (candidate ranker)** — an optional U-Net (resnet18, five physics-informed input
+  channels built from the same retrieval code the physics tier uses) scans a site's scenes and
+  proposes candidates into the *same* review feed as physics, tagged `ml` with a score and a
+  physics/ML agreement flag. It beats the `−ΔR_MBMP` baseline on site-held-out scene-level F1
+  (0.597 vs 0.464) and serves via ONNX/onnxruntime on CPU (~16 ms/chip). It is a **candidate ranker
+  that requires human review, never an autonomous detector** — physics stays the load-bearing tier.
+  Trained on the CC-BY-NC-ND CH4Net dataset, so the weights are never committed and ship out-of-band
+  (see [`docs/methane_methods.md`](docs/methane_methods.md) §9).
 - **Timelapse Studio** — step a date range into frames, render each with burned-in date label,
   scale bar, and colorbar, and encode an MP4/WebM/GIF with a live gallery and in-app player.
 

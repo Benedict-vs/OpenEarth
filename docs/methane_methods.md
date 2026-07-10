@@ -426,3 +426,97 @@ yields **10,395 usable tiles — 409 confident positives (of 997) + all 9,986 ne
 positive count (and thin coverage at the northern high-emitter sites) is the main cost of working
 from the metadata-stripped release, recorded as a limitation; an official index→(site, date) mapping
 from the authors would supersede the recovered one.
+
+### 9.3 Physics-informed input channels
+
+The U-Net does not see raw reflectance. Its five input channels are built in
+`openearth/methane/channels.py` — **pure NumPy, in `core`, so training and serving call the
+byte-identical function** (the train/serve-consistency invariant, §9.1). The channel order *is* the
+serving contract:
+
+```
+CHANNELS = ("mbmp_delta_r", "mbsp_delta_r", "ratio_b12_b11", "b12", "b11")
+```
+
+The first two are the fractional-signal fields from the retrieval (§1): the multi-band multi-pass
+(MBMP, target vs. a clear reference) and single-pass (MBSP) ΔR maps. These sit **upstream of the
+LUT**, so the channels are invariant to LUT recalibration (Phase 3.5) — a U-Net trained now stays
+valid across LUT versions. Channels 3–5 give the network the raw SWIR context an ΔR field alone
+discards: the B12/B11 band ratio and the two SWIR reflectances that carry the CH₄ absorption. Each
+channel is robust-standardized `(x − median) / (1.4826·MAD)` with per-channel `median`/`MAD` frozen
+into the model manifest (**data, not code** — computed once from the training chips and applied
+verbatim at scan time); invalid pixels resolve to 0 after normalization. The fully convolutional
+network is reflect-padded to a multiple of 32 at serve time (`pad_to_multiple`), so a scan chip need
+not match the training tile size.
+
+### 9.4 Cross-validation design and evaluation
+
+**Site-held-out CV.** All 23 sites are Turkmenistan O&G, so a random tile split would leak surface
+texture between train and test. The evaluation therefore uses **`GroupKFold` by site, 5 folds** — no
+site appears in both the train and the held-out set of a fold. Augmentation is **D4 only** (flips +
+90° rotations); no photometric jitter is applied to physical channels. The gate metric is
+**scene-level F1**: a scene is *predicted positive* iff `candidates_from_prob(prob, threshold=0.5,
+min_px=5)` is non-empty, *truth positive* iff the (regridded) CH4Net mask is non-empty — the same
+rule and same `min_px` score the model and the baseline. The **physics baseline** is
+`plume.detect_plume` on `−ΔR_MBMP` at the pipeline-default `k_sigma`, run on the identical chips and
+folds. Pixel IoU on the true positives is reported (not gated).
+
+Per-fold results (frozen in `scripts/data/ml_eval_v1.json`, `ml_eval_v1`):
+
+| Fold | Held-out sites | n (pos) | **Model F1** | Model P / R | Baseline F1 | Baseline P / R | Pixel IoU (TP) |
+|------|----------------|---------|-------------|-------------|-------------|----------------|----------------|
+| 0 | T1, T10, T20, T6, T9 | 359 (108) | **0.489** | 0.354 / 0.787 | 0.387 | 0.299 / 0.546 | 0.241 |
+| 1 | T13, T16, T18, T21, T22 | 309 (87) | **0.613** | 0.472 / 0.874 | 0.455 | 0.321 / 0.782 | 0.336 |
+| 2 | T15, T23, T4, T7, T8 | 284 (79) | **0.479** | 0.315 / 1.000 | 0.428 | 0.317 / 0.658 | 0.249 |
+| 3 | T11, T17, T3, T5 | 234 (68) | **0.702** | 0.590 / 0.868 | 0.551 | 0.404 / 0.868 | 0.343 |
+| 4 | T12, T14, T19, T2 | 209 (53) | **0.700** | 0.563 / 0.925 | 0.500 | 0.361 / 0.811 | 0.432 |
+| **Mean** | — | — | **0.597** | 0.459 / 0.891 | **0.464** | 0.341 / 0.733 | — |
+
+The model beats the physics baseline on the scene-level F1 gate in every fold (mean **0.597 vs
+0.464**), driven by recall (0.891 vs 0.733) at comparable-or-better precision — it flags more of the
+truly-plumed scenes for the same false-positive budget. Three caveats bound what that means:
+
+- **Label noise (the load-bearing caveat).** The CH4Net masks were drawn with MBMP guidance (§9.1),
+  so they inherit MBMP's blind spots. A model that beats an MBMP-derived baseline on MBMP-derived
+  labels is a **better candidate ranker** — it is *not* evidence it sees plumes MBMP cannot. This is
+  why the tier feeds human review rather than replacing physics.
+- **Geography.** All 23 sites are Turkmenistan O&G. Site-held-out CV controls intra-region leakage,
+  not geography; expect degraded performance on other surfaces. The scan UI and this section say so.
+- **Deployed vs. CV model.** The fold models estimate field performance; the **deployed** model is
+  retrained on *all* data after CV with full-trainset stats (standard practice — shipping fold-0
+  would waste 20 % of a small dataset). Its performance estimate is the CV aggregate above, recorded
+  as `cv_scene_f1` in the manifest.
+
+### 9.5 Serving — the ML scan and the disagreement flag
+
+The trained network is exported to **ONNX (opset 18, dynamic H/W)** and served by the API through
+**onnxruntime (CPU) only — never torch** (`packages/api` has no torch dependency; a
+`test_no_ml_deps` guard enforces it, mirroring the no-UI-deps rule). The session and manifest load
+lazily, so a missing model is a clean `503` at submit and the app boots with nothing installed.
+Single-chip inference is ~16 ms on CPU (`latency_ms_p50` in the manifest), comfortably under the
+1 s/chip budget.
+
+`POST /methane/ml/scan {site_id, start, end, max_scenes?}` walks a site's S2 scenes: for each it
+picks an MBMP reference, `fetch_chip`s target + reference, builds and normalizes the five channels,
+runs the U-Net, and thresholds the probability map into candidate footprints. A scene with ≥ 1
+candidate becomes a **detection row with `source="ml"`, `method="ml_unet"`, `status="candidate"`** —
+it enters the *same* feed as physics detections, carrying a `score` (max candidate probability) and
+a **single-pass Q**: the ΔR→ΔΩ→XCH₄ inversion and IME are run once over the ML footprint
+(`ime.emission_over_mask`, no Monte-Carlo), so `q_kg_h` is magnitude-comparable in the feed while
+`q_sigma_kg_h` is deliberately null — the full MC uncertainty budget stays a physics-tier feature.
+The npz artifact carries `xch4_ppb`/`mask`/`prob`/`rgb`/`grid`, so the existing overlay and
+`array.npz` routes serve ML rows unchanged.
+
+**Disagreement flag.** Each ML row records `disagreement ∈ {agree, ml_only}`: `agree` if a physics
+detection already exists for the same site + scene, else `ml_only`. The symmetric `physics_only`
+view is a feed-level read, never a mutation of a physics row. In the Lab the flag surfaces as a chip
+on the detection detail, next to the model version and score, under the fixed caption **"ML candidate
+— requires review; not an autonomous detection."**
+
+**License / ND consequence (restated because it binds deployment).** The trained weights are a
+CH4Net derivative. CC-BY-NC-ND's **ND** term forbids redistributing them, so — like the chips and
+masks — **no weights, ONNX file, or manifest is ever committed** (they live under the git-ignored
+`data_dir/ml/models/`); the model ships out-of-band via a settings path. The manifest records the
+license and a `not_for_public_deployment` flag; any future *public* deployment of the app must ship
+without these weights (retrain on a redistributable dataset) until an appropriately-licensed model
+exists.
