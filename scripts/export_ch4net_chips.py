@@ -25,8 +25,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import sys
 from datetime import date, timedelta
+from types import FrameType
 
 import numpy as np
 
@@ -46,6 +48,11 @@ CHIPS_DIR = CH4NET / "chips"
 SCALE_M = 20
 REF_WINDOW_DAYS = 150
 CLOUD_FRACTION_MAX = 0.5  # reject a target chip more than half masked
+CHIP_TIMEOUT_S = 120  # a single EE round-trip that hangs longer than this → skip the chip
+
+
+def _raise_timeout(signum: int, frame: FrameType | None) -> None:
+    raise TimeoutError("chip timed out")
 
 
 def _load_mask(key: str) -> np.ndarray:
@@ -127,6 +134,8 @@ def main() -> None:
         json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
     )
 
+    signal.signal(signal.SIGALRM, _raise_timeout)  # a hung EE socket must not stall the run
+
     counts: dict[str, int] = {}
     for i, key in enumerate(keys):
         out = CHIPS_DIR / f"{key}.npz"
@@ -134,18 +143,21 @@ def main() -> None:
             counts["skip"] = counts.get("skip", 0) + 1
             continue
         try:
+            signal.alarm(CHIP_TIMEOUT_S)
             status, prov, channels, mask = export_one(key, tiles[key])
-        except Exception as exc:  # per-sample fault isolation — record and continue
+        except Exception as exc:  # per-sample fault isolation (incl. timeout) — record + continue
             status = f"error:{type(exc).__name__}"
             prov, channels, mask = {"error": str(exc)}, None, None
+        finally:
+            signal.alarm(0)
         counts[status] = counts.get(status, 0) + 1
         manifest[key] = {"status": status, **prov}
         if status == "ok" and channels is not None and mask is not None:
             out.parent.mkdir(parents=True, exist_ok=True)
             np.savez_compressed(out, channels=channels, mask=mask)
-        if (i + 1) % 50 == 0 or i + 1 == len(keys):
+        if (i + 1) % 25 == 0 or i + 1 == len(keys):
             manifest_path.write_text(json.dumps(manifest))
-            print(f"  {i + 1}/{len(keys)}  {counts}")
+            print(f"  {i + 1}/{len(keys)}  {counts}", flush=True)
     manifest_path.write_text(json.dumps(manifest))
     print(f"done: {counts}")
     print("  (chips + manifest are CH4Net derivatives — never commit; under data_dir/ml)")

@@ -86,6 +86,9 @@ ignore_missing_imports = true
 module = ["openearth_ml.*"]
 disallow_untyped_decorators = false
 warn_return_any = false
+# torch's Dataset/DataLoader and NDArray generics are painful to spell out in the
+# training loop; signatures stay typed, but we don't force full generic args here.
+disallow_any_generics = false
 
 # SQLModel/SQLAlchemy return Any from Session.get / exec chains; "returning
 # Any" is inherent to the ORM there, not a defect in our annotations.
