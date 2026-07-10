@@ -197,3 +197,41 @@ def quantify(
         sigma_noise_delta_omega=sigma_noise,
     )
     return estimate, display
+
+
+def emission_over_mask(
+    delta_omega: NDArray[np.float64],
+    grid: GridSpec,
+    mask: NDArray[np.bool_],
+    wind: WindSample,
+    sigma_u10: float,
+) -> EmissionEstimate:
+    """Single-pass ``Q = U_eff/L · IME`` over a **given** mask — no ``detect_plume``,
+    no Monte Carlo (``q_sigma`` is NaN).
+
+    For the ML tier: quantify over the model's own footprint so ML candidates are
+    magnitude-comparable in the feed, without pretending to a full uncertainty budget
+    (the MC budget stays a physics-tier feature). Units match :func:`quantify`.
+    """
+    u10 = wind.speed_ms
+    if int(mask.sum()) == 0:
+        return _nan_estimate(u10, sigma_u10, wind.wind_from_deg, 0)
+    ime = ime_kg(delta_omega, mask, grid)
+    length = plume_length_m(mask, grid)
+    ueff = u_eff_ms(u10)
+    q = ueff / length * ime * 3600.0 if length > 0 else float("nan")
+    off_plume = delta_omega[(~mask) & np.isfinite(delta_omega)]
+    return EmissionEstimate(
+        q_kg_h=q,
+        q_sigma_kg_h=float("nan"),
+        percentiles={p: float("nan") for p in ("p05", "p25", "p50", "p75", "p95")},
+        histogram={"edges": [], "counts": []},
+        ime_kg=ime,
+        l_m=length,
+        u_eff_ms=ueff,
+        u10_ms=u10,
+        sigma_u10_ms=sigma_u10,
+        wind_from_deg=wind.wind_from_deg,
+        n_mc=0,
+        sigma_noise_delta_omega=robust_sigma(off_plume) if off_plume.size else float("nan"),
+    )

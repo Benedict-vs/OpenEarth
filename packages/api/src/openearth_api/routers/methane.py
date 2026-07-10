@@ -22,6 +22,8 @@ from openearth_api.schemas import (
     DetectionOut,
     DetectionPatch,
     JobCreated,
+    MlScanRequest,
+    MlStatusOut,
     ReferenceEventOut,
     SceneInfoOut,
     ScreeningRequest,
@@ -32,6 +34,7 @@ from openearth_api.schemas import (
     ValidationOut,
 )
 from openearth_api.services import methane as svc
+from openearth_api.services import ml as svc_ml
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine
@@ -97,10 +100,11 @@ def list_detections(
     engine: EngineDep,
     site_id: Annotated[int | None, Query()] = None,
     status: Annotated[str | None, Query()] = None,
+    source: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[DetectionOut]:
-    return svc.list_detections(engine, site_id, status, limit, offset)
+    return svc.list_detections(engine, site_id, status, source, limit, offset)
 
 
 @router.get("/methane/detections/{det_id}")
@@ -154,6 +158,21 @@ def detection_array(det_id: str, engine: EngineDep, settings: SettingsDep) -> Fi
 @router.post("/methane/screening", dependencies=[Depends(ensure_ee)])
 async def submit_screening(body: ScreeningRequest, jobs: JobsDep) -> JobCreated:
     return await svc.submit_screening(body, jobs)
+
+
+# ── ML tier (candidate ranker; never an autonomous detector) ──
+
+
+@router.post("/methane/ml/scan", dependencies=[Depends(ensure_ee)])
+async def submit_ml_scan(
+    body: MlScanRequest, jobs: JobsDep, engine: EngineDep, settings: SettingsDep
+) -> JobCreated:
+    return await svc_ml.submit_ml_scan(body, jobs, engine, settings)
+
+
+@router.get("/methane/ml/status")
+def ml_status(settings: SettingsDep) -> MlStatusOut:
+    return svc_ml.ml_status(settings)
 
 
 # ── Validation ──

@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # getMapId tile URLs are valid for ~4 h (undocumented, treated as an
     # assumption to measure). Consumers re-mint well before this expires.
     tile_ttl_seconds: int = 4 * 3600
+    # ML tier (Phase 5): the ONNX model served via onnxruntime; None resolves to
+    # ``data_dir/ml/models/plume_unet_v1.onnx`` (manifest = sibling ``.json``). The
+    # weights are a CH4Net derivative, so they live in data_dir, never the repo.
+    ml_model_path: Path | None = None
 
 
 @lru_cache(maxsize=1)
