@@ -111,6 +111,7 @@ module = [
     "openearth.analytics.conversions",
     "openearth.analytics.source_classification",
     "openearth.methane.wind",
+    "openearth.methane.emit",
     "openearth.methane.scenes",
     "openearth.methane.retrieval",
     "openearth.methane.detect",
