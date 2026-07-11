@@ -1,0 +1,66 @@
+{
+ "description": "Aggregate-only summary of the offline label-Q instrument used in the Tier 2 ML review. The underlying per-CH4Net-tile rows are a license-walled derivative (CH4Net is CC-BY-NC-ND 4.0; methods §9.1 forbids per-file manifests) and live git-ignored at data_dir/ml/review/ml_label_q_estimate.json. Only these distributional aggregates — the facts the Tier 2 findings actually cite — are committed.",
+ "method": "For each usable positive chip, ΔΩ was inverted offline from the chip's own MBMP ΔR (reporting LUT v4, solar-geometry AMF, Sentinel-2A assumed) and Q estimated over the CH4Net label footprint at the nominal wind below. Order-of-magnitude only; the distributional statements are robust to the wind assumption. See docs/reviews/tier2-ml-protocol-findings.md §F3.",
+ "n_labels": 395,
+ "n_sites": 22,
+ "u10_nominal_ms": 3.9786478918215358,
+ "q_t_h_percentiles": {
+  "p5": -2.464,
+  "p25": 1.28,
+  "p50": 4.84,
+  "p75": 8.825,
+  "p95": 26.939
+ },
+ "per_site_counts": {
+  "T1": 33,
+  "T2": 2,
+  "T3": 3,
+  "T4": 3,
+  "T5": 20,
+  "T6": 1,
+  "T7": 22,
+  "T8": 6,
+  "T9": 12,
+  "T10": 4,
+  "T11": 5,
+  "T12": 6,
+  "T14": 40,
+  "T15": 1,
+  "T16": 8,
+  "T17": 40,
+  "T18": 51,
+  "T19": 5,
+  "T20": 58,
+  "T21": 3,
+  "T22": 25,
+  "T23": 47
+ },
+ "negative_delta_omega": {
+  "count": 65,
+  "n": 395,
+  "frac": 0.1646,
+  "note": "label masks whose footprint integrates to strictly-negative ΔΩ in the rebuilt chips — net-negative column enhancement; internally contradictory labels (recovered-date error, reference contamination, or annotation noise)."
+ },
+ "below_noise_floor_shares": {
+  "tier1_median_floor": {
+   "floor_t_h": 6.3,
+   "share": 0.6101,
+   "count": 241
+  },
+  "tier1_best_arid_floor": {
+   "floor_t_h": 4.0,
+   "share": 0.4481,
+   "count": 177
+  },
+  "tier1_mean_floor": {
+   "floor_t_h": 13.9,
+   "share": 0.8456,
+   "count": 334
+  }
+ },
+ "floor_provenance": "Tier 1 noise-chip floors (docs/reviews/tier1-quantification-findings.md §F1): median 6.3, best-arid 4.0, mean 13.9 t/h.",
+ "provenance": {
+  "source_instrument": "data_dir/ml/review/ml_label_q_estimate.json (git-ignored)",
+  "committed_scope": "aggregates only — license wall (no per-tile keys)"
+ }
+}

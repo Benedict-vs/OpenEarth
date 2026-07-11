@@ -1,0 +1,746 @@
+[
+  {
+    "id": "hassi-messaoud-2020-01-19",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 6.99,
+    "clip": {
+      "target": {
+        "n_finite": 52851,
+        "frac_lo": 0.0102174036442073,
+        "frac_hi": 0.0,
+        "in_mask_n": 37,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      },
+      "reference": {
+        "n_finite": 52851,
+        "frac_lo": 0.03369851090802445,
+        "frac_hi": 1.8921117859643148e-05,
+        "in_mask_n": 37,
+        "in_mask_frac_lo": 0.35135135135135137,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 7.628304358432175,
+    "sigma_ours_t_h": 3.7622831867298627,
+    "ime_kg": 223.65470227931158,
+    "l_m": 121.65527177592676,
+    "u10_ms": 4.180404409825076,
+    "sigma_u10_ms": 1.5488071197752349,
+    "u_eff_ms": 1.8295334552422753,
+    "sigma_noise_delta_omega": 0.32960861067668623,
+    "n_pixels": 37,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 0.9421321040318554,
+    "percentiles": {
+      "p05": 3619.0042679495664,
+      "p25": 5759.131004125349,
+      "p50": 7628.304358432175,
+      "p75": 10747.030891354421,
+      "p95": 15525.864097127778
+    }
+  },
+  {
+    "id": "algeria-ghardaia-2020-08-27",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 6.472,
+    "clip": {
+      "target": {
+        "n_finite": 52182,
+        "frac_lo": 0.06795446705760608,
+        "frac_hi": 0.0003066191406998582,
+        "in_mask_n": 19,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.15789473684210525
+      },
+      "reference": {
+        "n_finite": 52182,
+        "frac_lo": 0.03259744739565367,
+        "frac_hi": 0.00011498217776244682,
+        "in_mask_n": 19,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 5.492634781595558,
+    "sigma_ours_t_h": 1.9943392899216403,
+    "ime_kg": 78.73120923690355,
+    "l_m": 87.17799475142176,
+    "u10_ms": 4.577821094580203,
+    "sigma_u10_ms": 1.5139030564547935,
+    "u_eff_ms": 1.960680961211467,
+    "sigma_noise_delta_omega": 0.09832203097616726,
+    "n_pixels": 19,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 0.6458457520103836,
+    "percentiles": {
+      "p05": 2400.897433955086,
+      "p25": 4214.320006998459,
+      "p50": 5492.634781595558,
+      "p75": 6993.446052807869,
+      "p95": 8882.113359507059
+    }
+  },
+  {
+    "id": "neuquen-2022-06-11",
+    "surface": "vegetated",
+    "method": "mbmp",
+    "published_q_t_h": 14.878,
+    "clip": {
+      "target": {
+        "n_finite": 50175,
+        "frac_lo": 0.14455406078724464,
+        "frac_hi": 0.013831589436970602,
+        "in_mask_n": 27,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.037037037037037035
+      },
+      "reference": {
+        "n_finite": 50175,
+        "frac_lo": 0.13656203288490285,
+        "frac_hi": 0.010901843547583457,
+        "in_mask_n": 27,
+        "in_mask_frac_lo": 0.07407407407407407,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 11.937827746599906,
+    "sigma_ours_t_h": 3.476188170464113,
+    "ime_kg": 143.18643978535152,
+    "l_m": 103.92302685876429,
+    "u10_ms": 5.904162534840504,
+    "sigma_u10_ms": 1.7061123403274772,
+    "u_eff_ms": 2.3983736364973662,
+    "sigma_noise_delta_omega": 0.1736081828402328,
+    "n_pixels": 27,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 0.8265591766768975,
+    "percentiles": {
+      "p05": 6961.706553282148,
+      "p25": 9897.432645281504,
+      "p50": 11937.827746599905,
+      "p75": 14499.766163430211,
+      "p95": 17999.944109591852
+    }
+  },
+  {
+    "id": "libya-sirte-2020-01-21",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 14.694,
+    "clip": {
+      "target": {
+        "n_finite": 54412,
+        "frac_lo": 0.010181577593177976,
+        "frac_hi": 0.01275453943982945,
+        "in_mask_n": 9,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      },
+      "reference": {
+        "n_finite": 6913,
+        "frac_lo": 0.00014465499783017504,
+        "frac_hi": 0.004918269926225951,
+        "in_mask_n": 9,
+        "in_mask_frac_lo": 0.1111111111111111,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 1.7688944431548412,
+    "sigma_ours_t_h": 0.7593915774232023,
+    "ime_kg": 15.201836181131483,
+    "l_m": 60.00000934888778,
+    "u10_ms": 5.0934435839248735,
+    "sigma_u10_ms": 1.5202701189982948,
+    "u_eff_ms": 2.1308363826952084,
+    "sigma_noise_delta_omega": 0.054453144842799124,
+    "n_pixels": 9,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 0.26326252846686365,
+    "percentiles": {
+      "p05": 189.75493962438514,
+      "p25": 1375.9345402696426,
+      "p50": 1768.8944431548412,
+      "p75": 2081.996316386246,
+      "p95": 2597.748400552392
+    }
+  },
+  {
+    "id": "campeche-2024-09-13",
+    "surface": "water",
+    "method": "mbsp",
+    "published_q_t_h": 25.411,
+    "clip": {
+      "target": {
+        "n_finite": 58649,
+        "frac_lo": 0.21816228750703337,
+        "frac_hi": 0.004109191972582652,
+        "in_mask_n": 9,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.5555555555555556
+      }
+    },
+    "flags": [
+      "wind_fallback_used",
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 21.595047696911294,
+    "sigma_ours_t_h": 6.623798659033245,
+    "ime_kg": 164.8337870443928,
+    "l_m": 60.000006018198775,
+    "u10_ms": 4.970882330781386,
+    "sigma_u10_ms": 1.5447071185966352,
+    "u_eff_ms": 2.0903911691578574,
+    "sigma_noise_delta_omega": 0.7210350716982127,
+    "n_pixels": 9,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 2.8545607158778044,
+    "percentiles": {
+      "p05": 12634.546660762857,
+      "p25": 17427.525275287295,
+      "p50": 21595.047696911293,
+      "p75": 26407.272487416492,
+      "p95": 33989.3316791059
+    }
+  },
+  {
+    "id": "ahvaz-2023-12-08",
+    "surface": "arid",
+    "method": "mbsp",
+    "published_q_t_h": 7.529,
+    "clip": {
+      "target": {
+        "n_finite": 53297,
+        "frac_lo": 0.1832560932135017,
+        "frac_hi": 0.06349325477981875,
+        "in_mask_n": 9,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.1111111111111111
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 11.050951391430353,
+    "sigma_ours_t_h": 10.031082627353417,
+    "ime_kg": 140.17593263045666,
+    "l_m": 60.00001017223612,
+    "u10_ms": 1.1091372445805228,
+    "sigma_u10_ms": 1.5848665800237154,
+    "u_eff_ms": 0.8160152907115725,
+    "sigma_noise_delta_omega": 0.968848266452351,
+    "n_pixels": 9,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 2.4275402656618748,
+    "percentiles": {
+      "p05": 4756.933158907736,
+      "p25": 6460.8607148854835,
+      "p50": 11050.951391430353,
+      "p75": 15885.304414694125,
+      "p95": 35811.714500232134
+    }
+  },
+  {
+    "id": "gulf-of-thailand-2023-10-05",
+    "surface": "water",
+    "method": "mbmp",
+    "published_q_t_h": 15.267,
+    "clip": {
+      "target": {
+        "n_finite": 61548,
+        "frac_lo": 0.17167089101189315,
+        "frac_hi": 0.011421979593163059,
+        "in_mask_n": 12,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.6666666666666666
+      },
+      "reference": {
+        "n_finite": 61548,
+        "frac_lo": 0.14573991031390135,
+        "frac_hi": 0.03470462078377851,
+        "in_mask_n": 12,
+        "in_mask_frac_lo": 0.25,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "wind_fallback_used",
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 17.238720411454004,
+    "sigma_ours_t_h": 6.225181233965897,
+    "ime_kg": 208.55683014982512,
+    "l_m": 69.28203490897508,
+    "u10_ms": 4.085624772055604,
+    "sigma_u10_ms": 1.5115535722223663,
+    "u_eff_ms": 1.7982561747783492,
+    "sigma_noise_delta_omega": 0.9866668539562744,
+    "n_pixels": 12,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 2.7088114928698306,
+    "percentiles": {
+      "p05": 8976.02232047861,
+      "p25": 13446.039229752618,
+      "p50": 17238.720411454004,
+      "p75": 21518.33308123622,
+      "p95": 29161.173534530964
+    }
+  },
+  {
+    "id": "turkmenistan-caspian-2017-11-26",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 12.293,
+    "clip": {
+      "target": {
+        "n_finite": 47945,
+        "frac_lo": 0.11283762644697048,
+        "frac_hi": 0.15513609344040047,
+        "in_mask_n": 12,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.16666666666666666
+      },
+      "reference": {
+        "n_finite": 47945,
+        "frac_lo": 0.10618416936072583,
+        "frac_hi": 0.12843883616644072,
+        "in_mask_n": 12,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 11.947442070211668,
+    "sigma_ours_t_h": 7.235248265033317,
+    "ime_kg": 94.81600977364556,
+    "l_m": 69.28204841854239,
+    "u10_ms": 4.516497635500513,
+    "sigma_u10_ms": 1.531141290219276,
+    "u_eff_ms": 1.9404442197151692,
+    "sigma_noise_delta_omega": 0.3047415660038226,
+    "n_pixels": 12,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 1.2315041259234756,
+    "percentiles": {
+      "p05": 5708.675467229357,
+      "p25": 8695.620516246332,
+      "p50": 11947.442070211668,
+      "p75": 19178.290788630224,
+      "p95": 27700.580245025812
+    }
+  },
+  {
+    "id": "permian-2023-09-27",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 6.946,
+    "clip": {
+      "target": {
+        "n_finite": 52405,
+        "frac_lo": 0.17941036160671692,
+        "frac_hi": 0.20059154660814807,
+        "in_mask_n": 15,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.13333333333333333
+      },
+      "reference": {
+        "n_finite": 48738,
+        "frac_lo": 0.21176494726907136,
+        "frac_hi": 0.2045016209118142,
+        "in_mask_n": 15,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 13.402321610624433,
+    "sigma_ours_t_h": 4.623301209893531,
+    "ime_kg": 175.9174942692019,
+    "l_m": 77.4596808154958,
+    "u10_ms": 3.9786478918215358,
+    "sigma_u10_ms": 1.5815620600313671,
+    "u_eff_ms": 1.7629538043011068,
+    "sigma_noise_delta_omega": 0.17584556761052259,
+    "n_pixels": 15,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 1.8279034826720166,
+    "percentiles": {
+      "p05": 7038.577965652205,
+      "p25": 10263.065512834342,
+      "p50": 13402.321610624433,
+      "p75": 16430.5035169738,
+      "p95": 21190.389049406225
+    }
+  },
+  {
+    "id": "maturin-2024-02-20",
+    "surface": "vegetated",
+    "method": "mbsp",
+    "published_q_t_h": 25.037,
+    "clip": {
+      "target": {
+        "n_finite": 61325,
+        "frac_lo": 0.2860986547085202,
+        "frac_hi": 0.536045658377497,
+        "in_mask_n": 0,
+        "in_mask_frac_lo": null,
+        "in_mask_frac_hi": null
+      }
+    },
+    "flags": [
+      "clipped_inversion",
+      "no_plume"
+    ],
+    "q_ours_t_h": NaN,
+    "sigma_ours_t_h": NaN,
+    "ime_kg": 0.0,
+    "l_m": 0.0,
+    "u10_ms": 3.5774700969339155,
+    "sigma_u10_ms": 1.5051059515962912,
+    "u_eff_ms": 1.6305651319881922,
+    "sigma_noise_delta_omega": NaN,
+    "n_pixels": 0,
+    "neg_frac_in_mask": null,
+    "mean_do_in_mask": null,
+    "percentiles": {
+      "p05": NaN,
+      "p25": NaN,
+      "p50": NaN,
+      "p75": NaN,
+      "p95": NaN
+    }
+  },
+  {
+    "id": "marib-2024-11-02",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 7.052,
+    "clip": {
+      "target": {
+        "n_finite": 59987,
+        "frac_lo": 0.01036891326454065,
+        "frac_hi": 0.004367612982812943,
+        "in_mask_n": 22,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      },
+      "reference": {
+        "n_finite": 59987,
+        "frac_lo": 0.014169736776301532,
+        "frac_hi": 0.010118859086135329,
+        "in_mask_n": 22,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 2.374472547376832,
+    "sigma_ours_t_h": 1.2816443576211272,
+    "ime_kg": 80.94447406688111,
+    "l_m": 93.80832257011068,
+    "u10_ms": 1.1683253883883746,
+    "sigma_u10_ms": 1.6206707824518318,
+    "u_eff_ms": 0.8355473781681637,
+    "sigma_noise_delta_omega": 0.14087812809056952,
+    "n_pixels": 22,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 0.5734560002116788,
+    "percentiles": {
+      "p05": 1186.2902905465928,
+      "p25": 1565.0889240501692,
+      "p50": 2374.472547376832,
+      "p75": 3505.0262788392124,
+      "p95": 4928.017728216878
+    }
+  },
+  {
+    "id": "gulf-of-suez-2023-09-20",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 19.998,
+    "clip": {
+      "target": {
+        "n_finite": 53966,
+        "frac_lo": 0.17155245895563873,
+        "frac_hi": 0.04163732720601861,
+        "in_mask_n": 316,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.06645569620253164
+      },
+      "reference": {
+        "n_finite": 53966,
+        "frac_lo": 0.143553348404551,
+        "frac_hi": 0.03520735277767483,
+        "in_mask_n": 316,
+        "in_mask_frac_lo": 0.17405063291139242,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 51.89678528022003,
+    "sigma_ours_t_h": 18.073892592718494,
+    "ime_kg": 3198.3223139373194,
+    "l_m": 355.5278337676441,
+    "u10_ms": 3.522755959092045,
+    "sigma_u10_ms": 1.5716318269437939,
+    "u_eff_ms": 1.6125094665003747,
+    "sigma_noise_delta_omega": 0.17402523778989404,
+    "n_pixels": 316,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 1.5775046595564015,
+    "percentiles": {
+      "p05": 25568.43955634688,
+      "p25": 40075.1280029003,
+      "p50": 51896.78528022003,
+      "p75": 64063.670213227546,
+      "p95": 83400.60700512017
+    }
+  },
+  {
+    "id": "rub-al-khali-2023-12-09",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 5.185,
+    "clip": {
+      "target": {
+        "n_finite": 57311,
+        "frac_lo": 0.003454834150512118,
+        "frac_hi": 0.003838704611680131,
+        "in_mask_n": 136,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      },
+      "reference": {
+        "n_finite": 57311,
+        "frac_lo": 0.0022508767950306222,
+        "frac_hi": 0.003454834150512118,
+        "in_mask_n": 136,
+        "in_mask_frac_lo": 0.23529411764705882,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 12.84011351535578,
+    "sigma_ours_t_h": 4.340102233631849,
+    "ime_kg": 520.5495757761819,
+    "l_m": 233.23810356270985,
+    "u10_ms": 3.5626065703454137,
+    "sigma_u10_ms": 1.5159529914589038,
+    "u_eff_ms": 1.6256601682139866,
+    "sigma_noise_delta_omega": 0.07296181956951366,
+    "n_pixels": 136,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 0.596566318377823,
+    "percentiles": {
+      "p05": 6526.274037546067,
+      "p25": 10203.190940320434,
+      "p50": 12840.11351535578,
+      "p75": 15852.973494813441,
+      "p95": 20546.26059678161
+    }
+  },
+  {
+    "id": "kazakhstan-almaty-2019-09-18",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 9.62,
+    "clip": {
+      "target": {
+        "n_finite": 45046,
+        "frac_lo": 0.16221196110642455,
+        "frac_hi": 0.08509079607512321,
+        "in_mask_n": 120,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.016666666666666666
+      },
+      "reference": {
+        "n_finite": 45046,
+        "frac_lo": 0.09001909159525819,
+        "frac_hi": 0.06155929494294721,
+        "in_mask_n": 120,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 24.34583694952849,
+    "sigma_ours_t_h": 7.66746398734552,
+    "ime_kg": 800.2232967512266,
+    "l_m": 219.08908164183097,
+    "u10_ms": 3.9661403631888423,
+    "sigma_u10_ms": 1.5113364806793073,
+    "u_eff_ms": 1.758826319852318,
+    "sigma_noise_delta_omega": 0.15996881875196897,
+    "n_pixels": 120,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 1.0393584637203555,
+    "percentiles": {
+      "p05": 13105.546499249267,
+      "p25": 19265.161826441286,
+      "p50": 24345.83694952849,
+      "p75": 29244.41600571484,
+      "p95": 37713.150782510726
+    }
+  },
+  {
+    "id": "amudarya-2024-05-29",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 11.304,
+    "clip": {
+      "target": {
+        "n_finite": 48614,
+        "frac_lo": 0.09700909203110215,
+        "frac_hi": 0.00012342123668079155,
+        "in_mask_n": 9,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      },
+      "reference": {
+        "n_finite": 48614,
+        "frac_lo": 0.025157362076768008,
+        "frac_hi": 4.114041222693051e-05,
+        "in_mask_n": 9,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 5.8078386978425645,
+    "sigma_ours_t_h": 1.69244195554588,
+    "ime_kg": 45.06360016860878,
+    "l_m": 60.000013503396254,
+    "u10_ms": 4.839520565545535,
+    "sigma_u10_ms": 1.5040027990787939,
+    "u_eff_ms": 2.0470417866300266,
+    "sigma_noise_delta_omega": 0.164107770269395,
+    "n_pixels": 9,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 0.7804028104200259,
+    "percentiles": {
+      "p05": 3506.8134795351657,
+      "p25": 4670.749484944864,
+      "p50": 5807.838697842564,
+      "p75": 7065.355719215115,
+      "p95": 8885.275827227297
+    }
+  },
+  {
+    "id": "turkmenistan-south-2018-10-02",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 25.098,
+    "clip": {
+      "target": {
+        "n_finite": 49060,
+        "frac_lo": 0.09209131675499388,
+        "frac_hi": 0.05275173257236038,
+        "in_mask_n": 41,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.34146341463414637
+      },
+      "reference": {
+        "n_finite": 29034,
+        "frac_lo": 0.15657504994144797,
+        "frac_hi": 0.13869945581042914,
+        "in_mask_n": 41,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 8.370797381772775,
+    "sigma_ours_t_h": 4.446348708754336,
+    "ime_kg": 455.3879805607958,
+    "l_m": 128.06251289188143,
+    "u10_ms": 1.0108948563443851,
+    "sigma_u10_ms": 1.5200984924086836,
+    "u_eff_ms": 0.7835953025936471,
+    "sigma_noise_delta_omega": 0.36954641852760856,
+    "n_pixels": 41,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 1.7311438644517638,
+    "percentiles": {
+      "p05": 4580.995509155484,
+      "p25": 5801.559519508348,
+      "p50": 8370.797381772774,
+      "p75": 12392.527127131274,
+      "p95": 17268.138302831285
+    }
+  },
+  {
+    "id": "korpezhe-2018-06-19",
+    "surface": "arid",
+    "method": "mbmp",
+    "published_q_t_h": 11.2,
+    "clip": {
+      "target": {
+        "n_finite": 48614,
+        "frac_lo": 0.1625869091208294,
+        "frac_hi": 0.07100835150368207,
+        "in_mask_n": 9,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      },
+      "reference": {
+        "n_finite": 48614,
+        "frac_lo": 0.09423211420578434,
+        "frac_hi": 0.027996050520426214,
+        "in_mask_n": 9,
+        "in_mask_frac_lo": 0.0,
+        "in_mask_frac_hi": 0.0
+      }
+    },
+    "flags": [
+      "clipped_inversion"
+    ],
+    "q_ours_t_h": 5.730083882406588,
+    "sigma_ours_t_h": 4.9766627553718426,
+    "ime_kg": 33.29983668619432,
+    "l_m": 60.00001346409999,
+    "u10_ms": 3.652024725620131,
+    "sigma_u10_ms": 1.5984280568005407,
+    "u_eff_ms": 1.6551681594546432,
+    "sigma_noise_delta_omega": 0.16886132205184193,
+    "n_pixels": 9,
+    "neg_frac_in_mask": 0.0,
+    "mean_do_in_mask": 0.5766802047160164,
+    "percentiles": {
+      "p05": 2300.2635529768377,
+      "p25": 3848.689724204935,
+      "p50": 5730.083882406589,
+      "p75": 10795.981147990049,
+      "p95": 17407.477652492238
+    }
+  }
+]
