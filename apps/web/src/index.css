@@ -1395,6 +1395,120 @@ button.ghost {
   font-variant-numeric: tabular-nums;
 }
 
+/* Embeddings Explorer */
+.embeddings-view {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+.embed-panel {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.embed-panel h3 {
+  margin: 4px 0 0;
+}
+.embed-intro,
+.embed-hint {
+  font-size: 12px;
+  margin: 0;
+}
+.embed-map-wrap {
+  position: relative;
+  min-width: 0;
+}
+.embed-map {
+  position: absolute;
+  inset: 0;
+}
+.embed-modes {
+  display: flex;
+  gap: 4px;
+}
+.embed-modes .toggle {
+  flex: 1;
+}
+.embed-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.embed-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.embed-controls select,
+.embed-controls input[type="range"] {
+  width: 100%;
+}
+.embed-krow {
+  gap: 6px;
+}
+.embed-error {
+  font-size: 12px;
+  color: var(--danger);
+  margin: 0;
+}
+.embed-legend {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.embed-legend-title {
+  font-size: 12px;
+  color: var(--text);
+}
+.embed-norm {
+  color: var(--muted);
+}
+.embed-ramp {
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+.embed-ramp-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.embed-legend-desc {
+  font-size: 11px;
+  margin: 0;
+}
+.embed-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.embed-swatch {
+  width: 20px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+.embed-attribution {
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 /* Screening modal */
 .modal-backdrop {
   position: fixed;
