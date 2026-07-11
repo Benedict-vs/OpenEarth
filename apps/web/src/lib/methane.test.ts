@@ -37,7 +37,9 @@ describe("analysis area", () => {
   });
 
   it("defaults to a 10 km box centred on the site", () => {
-    const area = defaultAnalysisArea(siteWith({ west: 53.7, south: 38.2, east: 54.7, north: 38.8 }));
+    const area = defaultAnalysisArea(
+      siteWith({ west: 53.7, south: 38.2, east: 54.7, north: 38.8 }),
+    );
     expect(area.lon).toBeCloseTo(54.2, 9);
     expect(area.lat).toBeCloseTo(38.5, 9);
     expect(area.sizeKm).toBe(DEFAULT_ANALYSIS_KM);

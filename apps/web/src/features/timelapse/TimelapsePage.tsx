@@ -194,8 +194,8 @@ export function TimelapsePage() {
             </div>
             <p className="muted step-note">
               A frame starts every <b>{form.intervalDays}</b> days; each frame averages{" "}
-              <b>{form.windowDays ?? form.intervalDays}</b> days of scenes. A window wider than
-              the interval overlaps frames, smoothing cloud gaps.
+              <b>{form.windowDays ?? form.intervalDays}</b> days of scenes. A window wider than the
+              interval overlaps frames, smoothing cloud gaps.
             </p>
           </>
         ) : null}
