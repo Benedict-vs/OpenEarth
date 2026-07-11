@@ -257,6 +257,16 @@
           "source": {
             "title": "Source",
             "type": "string"
+          },
+          "unit": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "t_h",
+              "kg_h"
+            ],
+            "title": "Unit",
+            "type": "string"
           }
         },
         "required": [
@@ -3154,6 +3164,11 @@
         "properties": {
           "imported": {
             "title": "Imported",
+            "type": "integer"
+          },
+          "rates_dropped": {
+            "default": 0,
+            "title": "Rates Dropped",
             "type": "integer"
           },
           "skipped": {

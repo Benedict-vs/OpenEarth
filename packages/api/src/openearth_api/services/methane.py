@@ -610,10 +610,14 @@ def _count_records(data: bytes, fmt: str) -> int:
     return sum(1 for f in features if (f.get("geometry") or {}).get("type") == "Point")
 
 
-def import_events(engine: Engine, data: bytes, source: str, fmt: str) -> ValidationImportOut:
+def import_events(
+    engine: Engine, data: bytes, source: str, fmt: str, unit: str = "auto"
+) -> ValidationImportOut:
     if fmt not in ("csv", "geojson"):
         raise HTTPException(422, "fmt must be 'csv' or 'geojson'.")
-    events = parse_events(data, fmt=fmt, source=source)  # type: ignore[arg-type]
+    if unit not in ("auto", "t_h", "kg_h"):
+        raise HTTPException(422, "unit must be 'auto', 't_h', or 'kg_h'.")
+    events = parse_events(data, fmt=fmt, source=source, unit=unit)  # type: ignore[arg-type]
     total = _count_records(data, fmt)
     now = utcnow_iso()
     with Session(engine) as session:
@@ -631,7 +635,13 @@ def import_events(engine: Engine, data: bytes, source: str, fmt: str) -> Validat
                 )
             )
         session.commit()
-    return ValidationImportOut(imported=len(events), skipped=max(0, total - len(events)))
+    # A rate was present in the source but not stored (ambiguous unit or guard).
+    rates_dropped = sum(1 for e in events if "rate_dropped" in e.raw)
+    return ValidationImportOut(
+        imported=len(events),
+        skipped=max(0, total - len(events)),
+        rates_dropped=rates_dropped,
+    )
 
 
 def list_events(engine: Engine) -> list[ReferenceEventOut]:

@@ -26,6 +26,38 @@ if TYPE_CHECKING:
 
 _FETCH_TIMEOUT_S = 120
 
+# Cache-key field classification (fix 12 / Tier 3 P4). Every field on
+# ``ThumbnailRequest`` (its own + those inherited from ``TilesRequest``) must
+# appear in exactly one of these two sets. ``test_thumbnail_key_covers_all_fields``
+# asserts the union equals ``ThumbnailRequest.model_fields`` and fails when a new
+# field is added until it is classified here — so a render-affecting field can
+# never again be silently omitted from the key (the bug where two thumbnails of a
+# ``needs_ref`` product differing only in ``ref`` collided onto one cached PNG).
+_KEYED_FIELDS = frozenset(
+    {
+        "dataset",  # selects the collection
+        "product",  # selects the band math / builder
+        "roi",  # footprint (rounded via roi_key_part)
+        "composite",  # mean / date_window / single_scene
+        "dates",  # mean window; also the post-window for needs_ref compares
+        "target_date",  # date_window center (and CH4_ANOMALY target)
+        "half_window_days",  # date_window half-width
+        "timestamp_ms",  # single_scene acquisition
+        "viz_overrides",  # explicit vis range → different pixels
+        "methane_ref",  # CH4_ANOMALY reference window → different image
+        "ref",  # needs_ref compare reference window → different image
+        "width",  # thumbnail output dimension
+    }
+)
+_DECLARED_IRRELEVANT = frozenset(
+    {
+        # unused by the thumbnail path — viz comes from viz_overrides; add to the
+        # key if that ever changes. auto_range drives the tile mint + legend
+        # (mint_tiles), never build_image / the thumbnail bytes.
+        "auto_range",
+    }
+)
+
 
 def _fetch_bytes(url: str) -> bytes:
     """Fetch the rendered thumbnail (monkeypatch seam for offline tests)."""
@@ -62,6 +94,10 @@ def render_thumbnail(req: ThumbnailRequest, cache: diskcache.Cache) -> bytes:
         timestamp_ms=req.timestamp_ms,
         width=req.width,
         viz=req.viz_overrides.model_dump() if req.viz_overrides else None,
+        # build_image consumes both reference windows — omitting them collided
+        # thumbnails that differ only in the reference (Tier 3 P4).
+        ref=[req.ref.start, req.ref.end] if req.ref else None,
+        methane_ref=[req.methane_ref.start, req.methane_ref.end] if req.methane_ref else None,
     )
     cached = cache.get(key)
     if cached is not None:

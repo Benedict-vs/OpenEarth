@@ -356,7 +356,9 @@ def test_validation_import_and_cross_match(client: TestClient, analyze_ready: No
         data={"source": "imeo", "fmt": "csv"},
     )
     assert imp.status_code == 200
-    assert imp.json() == {"imported": 2, "skipped": 0}
+    # `rate` is unit-agnostic + default unit="auto" → rates dropped (never guessed),
+    # but the events still import and cross-match on space + time.
+    assert imp.json() == {"imported": 2, "skipped": 0, "rates_dropped": 2}
 
     events = client.get("/api/methane/validation/events").json()
     assert len(events) == 2
@@ -391,4 +393,41 @@ def test_validation_import_counts_skipped(client: TestClient) -> None:
         files={"file": ("e.csv", csv, "text/csv")},
         data={"source": "manual", "fmt": "csv"},
     )
-    assert imp.json() == {"imported": 1, "skipped": 1}
+    assert imp.json() == {"imported": 1, "skipped": 1, "rates_dropped": 1}
+
+
+def test_validation_import_unit_field_and_imeo_kg_h(client: TestClient) -> None:
+    """The `unit` form field scales agnostic columns; IMEO kg/h passes through."""
+    # Unit-declared IMEO kg/h column → stored verbatim, nothing dropped.
+    imeo = client.post(
+        "/api/methane/validation/import",
+        files={
+            "file": (
+                "imeo.csv",
+                b"lat,lon,tile_date,ch4_fluxrate\n38.5,53.9,2019-11-20,1620.4\n",
+                "text/csv",
+            )
+        },
+        data={"source": "imeo", "fmt": "csv"},
+    )
+    assert imeo.json() == {"imported": 1, "skipped": 0, "rates_dropped": 0}
+    stored = client.get("/api/methane/validation/events").json()
+    assert stored[-1]["q_kg_h"] == pytest.approx(1620.4)
+
+    # Unit-agnostic `rate` with an explicit unit=t_h → scaled, nothing dropped.
+    th = client.post(
+        "/api/methane/validation/import",
+        files={"file": ("r.csv", b"lat,lon,date,rate\n10,10,2020-01-01,5.0\n", "text/csv")},
+        data={"source": "x", "fmt": "csv", "unit": "t_h"},
+    )
+    assert th.json() == {"imported": 1, "skipped": 0, "rates_dropped": 0}
+
+    # A > 500 t/h rate is a unit error → dropped by the guard.
+    guard = client.post(
+        "/api/methane/validation/import",
+        files={
+            "file": ("g.csv", b"lat,lon,date,source_rate_t_h\n10,10,2020-01-01,999\n", "text/csv")
+        },
+        data={"source": "x", "fmt": "csv"},
+    )
+    assert guard.json() == {"imported": 1, "skipped": 0, "rates_dropped": 1}

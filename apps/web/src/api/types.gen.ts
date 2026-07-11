@@ -961,6 +961,12 @@ export interface components {
       fmt: "csv" | "geojson";
       /** Source */
       source: string;
+      /**
+       * Unit
+       * @default auto
+       * @enum {string}
+       */
+      unit: "auto" | "t_h" | "kg_h";
     };
     /** CacheStatsOut */
     CacheStatsOut: {
@@ -1946,6 +1952,11 @@ export interface components {
     ValidationImportOut: {
       /** Imported */
       imported: number;
+      /**
+       * Rates Dropped
+       * @default 0
+       */
+      rates_dropped: number;
       /** Skipped */
       skipped: number;
     };

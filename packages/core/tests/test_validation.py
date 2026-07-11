@@ -50,7 +50,7 @@ def test_parse_geojson_points() -> None:
             {
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [53.9, 38.5]},
-                "properties": {"date": "2018-06-19", "q": 11.2},
+                "properties": {"date": "2018-06-19", "source_rate_t_h": 11.2},
             },
             {"type": "Feature", "geometry": {"type": "LineString", "coordinates": []}},
         ],
@@ -59,7 +59,81 @@ def test_parse_geojson_points() -> None:
     assert len(events) == 1
     assert events[0].lon == 53.9
     assert events[0].lat == 38.5
-    assert events[0].q_kg_h == pytest.approx(11200.0)
+    assert events[0].q_kg_h == pytest.approx(11200.0)  # t/h column → ×1000
+    assert events[0].rate_unit == "t_h"
+
+
+# ── fix 13: unit-safe rate import (per-column unit provenance) ──
+
+
+def test_imeo_kg_h_column_not_scaled() -> None:
+    """UNEP-IMEO MARS `ch4_fluxrate` is already kg/h — no ×1000 (Tier 3 P3)."""
+    csv = b"lat,lon,tile_date,ch4_fluxrate,ch4_fluxrate_std\n38.5,53.9,2019-11-20,1620.4,540.2\n"
+    events = parse_events(csv, fmt="csv", source="imeo")
+    assert len(events) == 1
+    assert events[0].q_kg_h == pytest.approx(1620.4)  # kg/h passes through
+    assert events[0].q_sigma_kg_h == pytest.approx(540.2)
+    assert events[0].rate_unit == "kg_h"
+    assert "rate_dropped" not in events[0].raw
+
+
+def test_sron_t_h_column_still_scaled() -> None:
+    csv = b"lat,lon,date,source_rate_t_h\n38.5,53.9,2018-06-19,9.3\n"
+    events = parse_events(csv, fmt="csv", source="sron")
+    assert events[0].q_kg_h == pytest.approx(9300.0)  # t/h → kg/h
+    assert events[0].rate_unit == "t_h"
+
+
+def test_kg_h_suffix_column_self_describes() -> None:
+    csv = b"lat,lon,date,flux_kg_h\n38.5,53.9,2018-06-19,1500\n"
+    events = parse_events(csv, fmt="csv", source="x")
+    assert events[0].q_kg_h == pytest.approx(1500.0)
+    assert events[0].rate_unit == "kg_h"
+
+
+def test_agnostic_rate_dropped_under_auto() -> None:
+    """A unit-agnostic `rate` is never guessed: auto → None, event still imports."""
+    csv = b"lat,lon,date,rate\n38.5,53.9,2018-06-19,11.2\n"
+    events = parse_events(csv, fmt="csv", source="x")  # default unit="auto"
+    assert len(events) == 1  # counted
+    assert events[0].q_kg_h is None
+    assert events[0].rate_unit is None
+    assert events[0].raw["rate_dropped"] == "ambiguous_unit"
+
+
+def test_agnostic_rate_scaled_with_explicit_unit() -> None:
+    csv = b"lat,lon,date,rate\n38.5,53.9,2018-06-19,11.2\n"
+    th = parse_events(csv, fmt="csv", source="x", unit="t_h")
+    assert th[0].q_kg_h == pytest.approx(11200.0)
+    assert th[0].rate_unit == "t_h"
+    kg = parse_events(csv, fmt="csv", source="x", unit="kg_h")
+    assert kg[0].q_kg_h == pytest.approx(11.2)
+    assert kg[0].rate_unit == "kg_h"
+
+
+def test_declared_column_beats_explicit_unit() -> None:
+    """A unit-declared column wins even when the caller passes a different unit."""
+    csv = b"lat,lon,date,source_rate_t_h\n38.5,53.9,2018-06-19,9.3\n"
+    events = parse_events(csv, fmt="csv", source="x", unit="kg_h")
+    assert events[0].q_kg_h == pytest.approx(9300.0)  # t/h column, not kg/h
+    assert events[0].rate_unit == "t_h"
+
+
+def test_absurd_rate_dropped_by_guard() -> None:
+    """> 500 t/h equivalent → rate dropped to None (unit error), event kept."""
+    csv = b"lat,lon,date,source_rate_t_h\n38.5,53.9,2018-06-19,999\n"
+    events = parse_events(csv, fmt="csv", source="x")
+    assert len(events) == 1
+    assert events[0].q_kg_h is None
+    assert events[0].rate_unit == "t_h"  # detected unit kept for diagnosis
+    assert events[0].raw["rate_dropped"] == "over_500_th_guard"
+
+
+def test_agnostic_sigma_inherits_rate_unit() -> None:
+    """`uncertainty` is unit-agnostic — it follows the resolved rate's unit."""
+    csv = b"lat,lon,date,source_rate_t_h,uncertainty\n38.5,53.9,2018-06-19,9.3,2.0\n"
+    events = parse_events(csv, fmt="csv", source="x")
+    assert events[0].q_sigma_kg_h == pytest.approx(2000.0)  # inherited t/h → ×1000
 
 
 # ── haversine ──

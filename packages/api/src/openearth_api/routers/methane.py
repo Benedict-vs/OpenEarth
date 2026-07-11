@@ -232,9 +232,13 @@ async def import_validation(
     file: Annotated[UploadFile, File()],
     source: Annotated[str, Form()],
     fmt: Annotated[Literal["csv", "geojson"], Form()],
+    # Applies to unit-agnostic rate columns only; unit-declared columns
+    # (`*_t_h`, `ch4_fluxrate`/`*_kg_h`) always self-describe. Default "auto"
+    # drops agnostic rates rather than guess their unit.
+    unit: Annotated[Literal["auto", "t_h", "kg_h"], Form()] = "auto",
 ) -> ValidationImportOut:
     data = await file.read()
-    return svc.import_events(engine, data, source, fmt)
+    return svc.import_events(engine, data, source, fmt, unit)
 
 
 @router.get("/methane/validation/events")

@@ -528,6 +528,10 @@ class ReferenceEventOut(BaseModel):
 class ValidationImportOut(BaseModel):
     imported: int
     skipped: int
+    # Imported events whose rate was present in the source but not stored: an
+    # ambiguous unit (unit-agnostic column under unit="auto") or the >500 t/h
+    # sanity guard. The events still import and cross-match (space + time).
+    rates_dropped: int = 0
 
 
 class ValidationOut(BaseModel):
