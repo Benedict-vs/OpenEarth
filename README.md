@@ -79,10 +79,24 @@ make gen                       # regenerate OpenAPI schema + TS client types aft
 OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (opt-in; never in CI)
 ```
 
+## Deploy
+
+One command serves the whole stack — the FastAPI backend and the built SPA behind an
+SSE-safe nginx proxy:
+
+```bash
+docker compose up --build      # → http://localhost:8080
+```
+
+State (SQLite + diskcache + artifacts) persists under `./data`. The app boots with no
+credentials; mount Earth Engine credentials (personal or service-account) and set
+`OPENEARTH_EE_PROJECT` to enable the EE routes. See [`docs/deploy.md`](docs/deploy.md).
+
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — the as-built system, phase by phase.
 - [`docs/roadmap.md`](docs/roadmap.md) — where it has been and where it is going.
+- [`docs/deploy.md`](docs/deploy.md) — Docker Compose, EE/Earthdata auth, persistence.
 - [`docs/methane_methods.md`](docs/methane_methods.md) — the methane retrieval + quantification.
 - [`docs/parity-checklist.md`](docs/parity-checklist.md) — the v1 → v2 feature disposition.
 
