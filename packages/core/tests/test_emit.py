@@ -18,7 +18,51 @@ from openearth.methane.emit import (
     parse_v002_geojson,
 )
 
-_FIXTURE = Path(__file__).parent / "data" / "emit_v002_plumes_sample.geojson"
+# A real, trimmed LP DAAC V002 CH4PLM granule (public-domain NASA data).
+_FIXTURE = Path(__file__).parent / "data" / "emit_v002_plm_granule.geojson"
+
+# A synthetic V002 feature carrying an emission rate + portal Scene FIDs — the
+# real committed granule has an NA rate (no concurrent wind), so these paths are
+# exercised inline (schema-faithful per the addendum's verified keys).
+_V002_WITH_RATE = json.dumps(
+    {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {
+                    "Plume ID": "CH4_PlumeComplex-2015",
+                    "Scene FIDs": ["emit20240402t201133", "emit20240402t201145"],
+                    "UTC Time Observed": "2024-04-02T20:11:33Z",
+                    "Max Plume Concentration (ppm m)": 1187.0,
+                    "Latitude of max concentration": 32.4501,
+                    "Longitude of max concentration": -101.8203,
+                    "Emissions Rate Estimate (kg/hr)": 1620.4,
+                    "Emissions Rate Estimate Uncertainty (kg/hr)": 540.2,
+                    "Wind Speed (m/s)": "NA",
+                    "style": {"color": "#ff0000"},
+                },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [-101.822, 32.448],
+                            [-101.818, 32.448],
+                            [-101.818, 32.452],
+                            [-101.822, 32.452],
+                            [-101.822, 32.448],
+                        ]
+                    ],
+                },
+            },
+            {  # portal aggregate pairs each plume with a max-enhancement Point — skip it
+                "type": "Feature",
+                "properties": {"Plume ID": "CH4_PlumeComplex-2015"},
+                "geometry": {"type": "Point", "coordinates": [-101.8203, 32.4501]},
+            },
+        ],
+    }
+).encode()
 
 
 def _polygon(lon: float, lat: float) -> dict:
@@ -63,33 +107,38 @@ def _plume(
 # ── parse_v002_geojson ──
 
 
-def test_parse_v002_fixture_fields_and_emission_rate() -> None:
+def test_parse_v002_real_daac_granule() -> None:
+    # The committed fixture is a real trimmed LP DAAC V002 granule (plume 3374,
+    # 2025-09-22 Permian). Its emission rate is genuinely "NA" (no wind) → None.
     plumes = parse_v002_geojson(_FIXTURE.read_bytes())
-    # Two Polygon plumes; the trailing Point feature is skipped.
-    assert len(plumes) == 2
-    first = plumes[0]
-    assert first.plume_id == "CH4_PlumeComplex-3374"
-    assert first.provenance == "lpdaac_v002"
-    assert first.time_utc == datetime(2024, 3, 15, 18, 5, 12, tzinfo=UTC)
-    assert first.max_enh_ppm_m == pytest.approx(2841.5)
-    assert first.max_enh_lat == pytest.approx(31.9042)
-    assert first.max_enh_lon == pytest.approx(-102.1187)
+    assert len(plumes) == 1
+    p = plumes[0]
+    assert p.plume_id == "CH4_PlumeComplex-3374"
+    assert p.provenance == "lpdaac_v002"
+    assert p.time_utc == datetime(2025, 9, 22, 20, 49, 33, tzinfo=UTC)
+    assert p.max_enh_ppm_m == pytest.approx(4699.0)
+    assert p.max_enh_lat == pytest.approx(32.24272)
+    assert p.max_enh_lon == pytest.approx(-102.04762)
+    # Real granule: "NA" rate/wind coerce to None (not 0.0, not the literal string).
+    assert p.q_kg_h is None
+    assert p.q_sigma_kg_h is None
+    # DAAC Scene Names (a single-element list) become the source scenes.
+    assert p.source_scenes == ["EMIT_L2B_CH4ENH_V002_20250922T204933_2526514_006"]
+    assert p.outline["type"] == "Polygon"
+
+
+def test_parse_v002_emission_rate_and_fid_fallback() -> None:
+    plumes = parse_v002_geojson(_V002_WITH_RATE)
+    # Two features but the trailing max-enhancement Point is skipped.
+    assert len(plumes) == 1
+    p = plumes[0]
+    assert p.plume_id == "CH4_PlumeComplex-2015"
+    assert p.max_enh_ppm_m == pytest.approx(1187.0)
     # V002 emission rate + uncertainty parsed as plain floats.
-    assert first.q_kg_h == pytest.approx(1620.4)
-    assert first.q_sigma_kg_h == pytest.approx(540.2)
-    # DAAC Scene Names preferred over Scene FIDs for source scenes.
-    assert first.source_scenes == ["EMIT_L2B_CH4ENH_002_20240315T180512_2407512_003"]
-    assert first.outline["type"] == "Polygon"
-
-
-def test_parse_v002_na_coerces_to_none_and_fid_fallback() -> None:
-    second = parse_v002_geojson(_FIXTURE.read_bytes())[1]
-    # "NA" strings coerce to None, not 0.0 and not the literal string.
-    assert second.q_kg_h is None
-    assert second.q_sigma_kg_h is None
-    assert second.max_enh_ppm_m == pytest.approx(1187.0)
+    assert p.q_kg_h == pytest.approx(1620.4)
+    assert p.q_sigma_kg_h == pytest.approx(540.2)
     # No DAAC Scene Names → falls back to the portal Scene FIDs (a 2-element list).
-    assert second.source_scenes == ["emit20240402t201133", "emit20240402t201145"]
+    assert p.source_scenes == ["emit20240402t201133", "emit20240402t201145"]
 
 
 def test_parse_v002_accepts_bare_feature() -> None:
