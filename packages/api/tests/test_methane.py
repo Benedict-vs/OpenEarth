@@ -431,3 +431,48 @@ def test_validation_import_unit_field_and_imeo_kg_h(client: TestClient) -> None:
         data={"source": "x", "fmt": "csv"},
     )
     assert guard.json() == {"imported": 1, "skipped": 0, "rates_dropped": 1}
+
+
+# ── fix 8: read-time ML↔physics agreement derivation ──
+
+
+def _seed_physics(engine: Any, scene_id: str, *, n_pixels: int, no_plume: bool) -> None:
+    import json
+
+    from sqlmodel import Session
+
+    from openearth_api.models import Detection, utcnow_iso
+
+    now = utcnow_iso()
+    result = {"flags": ["no_plume"] if no_plume else [], "plume": {"n_pixels": n_pixels}}
+    row = Detection(
+        id=f"phys_{scene_id}",
+        site_id=1,
+        source="physics",
+        status="candidate",
+        method="mbsp",
+        scene_id=scene_id,
+        scene_time_utc="2020-01-01T00:00:00+00:00",
+        params_json="{}",
+        result_json=json.dumps(result),
+        array_path="x.npz",
+        created_at=now,
+        updated_at=now,
+    )
+    with Session(engine) as session:
+        session.add(row)
+        session.commit()
+
+
+def test_physics_agreement_three_states(tmp_path: Path) -> None:
+    """agree / physics_no_plume / physics_not_run — the fix 8 tri-state (Tier 2 F5)."""
+    engine = create_db_engine(tmp_path / "agree.db")
+    migrate(engine)
+    _seed_physics(engine, "SCENE_PLUME", n_pixels=42, no_plume=False)  # real plume
+    _seed_physics(engine, "SCENE_EMPTY", n_pixels=0, no_plume=True)  # ran, nothing
+
+    assert svc.derive_physics_agreement(engine, 1, "SCENE_PLUME") == "agree"
+    assert svc.derive_physics_agreement(engine, 1, "SCENE_EMPTY") == "physics_no_plume"
+    assert svc.derive_physics_agreement(engine, 1, "SCENE_ABSENT") == "physics_not_run"
+    # A physics row for a different site+scene must not count as agreement.
+    assert svc.derive_physics_agreement(engine, 2, "SCENE_PLUME") == "physics_not_run"

@@ -1282,9 +1282,19 @@ button.ghost {
   background: #12331c;
   color: #3fb950;
 }
-.disagreement.ml-only {
+/* Physics ran on the same scene but found no plume — ML and physics disagree. */
+.disagreement.no-plume {
   background: #3a2a12;
   color: #f0a336;
+}
+/* No physics run exists for the scene — neutral, not a disagreement. */
+.disagreement.not-run {
+  background: #23262d;
+  color: var(--muted);
+}
+.ml-q-note {
+  font-size: 11px;
+  margin-top: 4px;
 }
 
 /* Validation panel */

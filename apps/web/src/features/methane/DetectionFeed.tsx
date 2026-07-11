@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useDetections } from "../../api/methaneQueries";
 import type { Detection } from "../../api/types";
-import { formatEmission } from "../../lib/methane";
+import { ML_Q_CAPTION, disagreementBadge, formatEmission } from "../../lib/methane";
 import { useMethaneStore } from "../../stores/methaneStore";
 
 type SourceFilter = "all" | "physics" | "ml";
@@ -57,6 +57,7 @@ function DetectionCard({
 }) {
   const noPlume = detection.flags.includes("no_plume");
   const isMl = detection.source === "ml";
+  const agreement = isMl ? disagreementBadge(detection.physics_agreement) : null;
   return (
     <li className={active ? "detection-card active" : "detection-card"} onClick={onClick}>
       <div className="card-top">
@@ -66,6 +67,10 @@ function DetectionCard({
       <div className="card-q">
         {noPlume ? (
           <span className="muted">no plume ≥ kσ</span>
+        ) : isMl ? (
+          <span title={ML_Q_CAPTION}>
+            {formatEmission(detection.q_kg_h, detection.q_sigma_kg_h, { approx: true })}
+          </span>
         ) : (
           formatEmission(detection.q_kg_h, detection.q_sigma_kg_h)
         )}
@@ -73,6 +78,11 @@ function DetectionCard({
       <div className="card-meta">
         <span className={`source-badge ${detection.source}`}>{detection.source}</span>
         <span className="method-tag">{detection.method.toUpperCase()}</span>
+        {agreement ? (
+          <span className={agreement.className} title="Physics vs ML agreement">
+            {agreement.label}
+          </span>
+        ) : null}
         {isMl && detection.score != null ? (
           <span className="score-tag" title="Max candidate probability">
             score {detection.score.toFixed(2)}

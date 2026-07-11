@@ -74,13 +74,23 @@ export function kghToTh(value: number | null | undefined): number | null {
   return value == null ? null : value / 1000;
 }
 
-/** Format an emission rate ± σ as "Q ± σ t/h" (or "—" when absent). */
-export function formatEmission(qKgh: number | null, sigmaKgh: number | null): string {
+/** Caption for the ML single-pass Q — it carries strictly less information than
+ * the physics Q ± σ next to it, so it must not read as a comparable number. */
+export const ML_Q_CAPTION =
+  "single-pass point estimate over the ML footprint — no uncertainty budget";
+
+/** Format an emission rate ± σ as "Q ± σ t/h" (or "—" when absent).
+ * ``approx`` marks a point estimate (ML single-pass Q) with a leading "~". */
+export function formatEmission(
+  qKgh: number | null,
+  sigmaKgh: number | null,
+  opts?: { approx?: boolean },
+): string {
   const q = kghToTh(qKgh);
   if (q == null) return "—";
   const s = kghToTh(sigmaKgh);
   const body = s == null ? q.toFixed(1) : `${q.toFixed(1)} ± ${s.toFixed(1)}`;
-  return `${body} t/h`;
+  return `${opts?.approx ? "~" : ""}${body} t/h`;
 }
 
 export interface VerdictBadge {
@@ -159,7 +169,10 @@ export function detectionNumbers(detail: DetectionDetail): NumberRow[] {
 export function mlDetectionNumbers(detail: DetectionDetail): NumberRow[] {
   const r = (detail.result ?? {}) as Record<string, unknown>;
   return [
-    { label: "Q (single-pass)", value: formatEmission(detail.q_kg_h, detail.q_sigma_kg_h) },
+    {
+      label: "Q (single-pass)",
+      value: formatEmission(detail.q_kg_h, detail.q_sigma_kg_h, { approx: true }),
+    },
     { label: "IME", value: fmt(detail.ime_kg, 1, "kg") },
     { label: "U10", value: fmt(detail.u10_ms, 1, "m/s") },
     { label: "Wind from", value: fmt(detail.wind_from_deg, 0, "°") },
@@ -168,13 +181,17 @@ export function mlDetectionNumbers(detail: DetectionDetail): NumberRow[] {
   ];
 }
 
-/** Map a physics/ML disagreement flag to a display label + CSS modifier class. */
-export function disagreementBadge(flag: string | null | undefined): VerdictBadge | null {
-  switch (flag) {
+/** Map the read-derived ML↔physics agreement state (fix 8) to a badge.
+ * ``agree`` means a physics run found an actual plume on the same scene — not
+ * merely that a physics row exists (a no-plume run writes a row too). */
+export function disagreementBadge(state: string | null | undefined): VerdictBadge | null {
+  switch (state) {
     case "agree":
-      return { label: "Physics agrees", className: "disagreement agree" };
-    case "ml_only":
-      return { label: "ML-only (no physics detection)", className: "disagreement ml-only" };
+      return { label: "Physics agrees (plume found)", className: "disagreement agree" };
+    case "physics_no_plume":
+      return { label: "Physics found no plume", className: "disagreement no-plume" };
+    case "physics_not_run":
+      return { label: "Physics not run", className: "disagreement not-run" };
     default:
       return null;
   }

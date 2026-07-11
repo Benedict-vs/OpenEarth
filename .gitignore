@@ -41,6 +41,9 @@ htmlcov/
 # LLMs
 .claude
 
+# Playwright MCP browser-verification artifacts (screenshots, snapshots, console logs)
+.playwright-mcp/
+
 
 deferred products.md
 # OpenEarth v2 local state

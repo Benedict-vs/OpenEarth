@@ -145,19 +145,35 @@ describe("mlDetectionNumbers", () => {
       result: { n_candidates: 3 },
     } as unknown as DetectionDetail;
     const byLabel = Object.fromEntries(mlDetectionNumbers(detail).map((r) => [r.label, r.value]));
-    expect(byLabel["Q (single-pass)"]).toBe("12.0 t/h");
+    expect(byLabel["Q (single-pass)"]).toBe("~12.0 t/h"); // point estimate → tilde (fix 9a)
     expect(byLabel["Candidates"]).toBe("3");
     expect(byLabel["ΔXCH4 max"]).toBe("200 ppb");
   });
 });
 
+describe("formatEmission approx", () => {
+  it("prefixes ~ only when approx is set; physics unchanged", () => {
+    expect(formatEmission(4800, null, { approx: true })).toBe("~4.8 t/h");
+    expect(formatEmission(4800, null)).toBe("4.8 t/h");
+    expect(formatEmission(8000, 2000)).toBe("8.0 ± 2.0 t/h");
+    expect(formatEmission(null, null, { approx: true })).toBe("—");
+  });
+});
+
 describe("disagreementBadge", () => {
-  it("maps agree / ml_only, null otherwise", () => {
+  it("maps the three read-derived agreement states, null otherwise (fix 8)", () => {
     expect(disagreementBadge("agree")).toEqual({
-      label: "Physics agrees",
+      label: "Physics agrees (plume found)",
       className: "disagreement agree",
     });
-    expect(disagreementBadge("ml_only")?.className).toContain("ml-only");
+    expect(disagreementBadge("physics_no_plume")).toEqual({
+      label: "Physics found no plume",
+      className: "disagreement no-plume",
+    });
+    expect(disagreementBadge("physics_not_run")).toEqual({
+      label: "Physics not run",
+      className: "disagreement not-run",
+    });
     expect(disagreementBadge(undefined)).toBeNull();
     expect(disagreementBadge("nonsense")).toBeNull();
   });

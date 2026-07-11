@@ -438,7 +438,63 @@ def _emit_matches_of(emit_json: str | None) -> int | None:
     return len(matches) if isinstance(matches, list) else 0
 
 
-def _detection_out(row: Detection) -> DetectionOut:
+def _physics_has_nonempty_plume(result_json: str) -> bool:
+    """A physics detection that actually found a plume (fix 8).
+
+    ``persist_detection`` writes a row unconditionally — a no-plume run still
+    lands (flags ``["no_plume"]``, empty mask). So "physics agrees" must mean a
+    physics row with an actual footprint, not merely a row's existence.
+    """
+    parsed = json.loads(result_json)
+    flags = parsed.get("flags", [])
+    if isinstance(flags, list) and "no_plume" in flags:
+        return False
+    plume = parsed.get("plume") or {}
+    n_px = plume.get("n_pixels", 0)
+    return isinstance(n_px, int | float) and n_px > 0
+
+
+def _physics_agreement_for_pairs(
+    session: Session, pairs: set[tuple[int | None, str]]
+) -> dict[tuple[int | None, str], str]:
+    """Read-time ML↔physics agreement per (site, scene) pair, one batched query.
+
+    ``agree`` — a physics row for the same site+scene has a non-empty plume;
+    ``physics_no_plume`` — physics ran but found nothing; ``physics_not_run`` —
+    no physics row exists. Derived live so existing ML rows read correctly with
+    no data migration (fix 8 / Tier 2 F5). Agreement is row-level (same scene),
+    not geometric — comparing plume footprints for overlap is a later refinement.
+    """
+    if not pairs:
+        return {}
+    scene_ids = {scene for _, scene in pairs}
+    rows = session.exec(
+        select(Detection).where(
+            Detection.source == "physics",
+            Detection.scene_id.in_(scene_ids),  # type: ignore[attr-defined]
+        )
+    ).all()
+    has_plume: dict[tuple[int | None, str], bool] = {}
+    for r in rows:
+        key = (r.site_id, r.scene_id)
+        has_plume[key] = has_plume.get(key, False) or _physics_has_nonempty_plume(r.result_json)
+    result: dict[tuple[int | None, str], str] = {}
+    for pair in pairs:
+        if pair not in has_plume:
+            result[pair] = "physics_not_run"
+        else:
+            result[pair] = "agree" if has_plume[pair] else "physics_no_plume"
+    return result
+
+
+def derive_physics_agreement(engine: Engine, site_id: int | None, scene_id: str) -> str:
+    """Single-pair physics-agreement state (the scan-time historical snapshot)."""
+    with Session(engine) as session:
+        pair = (site_id, scene_id)
+        return _physics_agreement_for_pairs(session, {pair})[pair]
+
+
+def _detection_out(row: Detection, physics_agreement: str | None = None) -> DetectionOut:
     return DetectionOut(
         id=row.id,
         site_id=row.site_id,
@@ -455,6 +511,7 @@ def _detection_out(row: Detection) -> DetectionOut:
         score=_score_of(row.result_json),
         emit_matches=_emit_matches_of(row.emit_json),
         flags=_flags_of(row.result_json),
+        physics_agreement=physics_agreement,  # type: ignore[arg-type]
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -477,7 +534,15 @@ def list_detections(
         if source is not None:
             query = query.where(Detection.source == source)
         query = query.order_by(Detection.created_at.desc()).limit(limit).offset(offset)  # type: ignore[attr-defined]
-        return [_detection_out(r) for r in session.exec(query).all()]
+        rows = session.exec(query).all()
+        # One grouped query derives physics agreement for the page's ML rows.
+        agreement = _physics_agreement_for_pairs(
+            session, {(r.site_id, r.scene_id) for r in rows if r.source == "ml"}
+        )
+        return [
+            _detection_out(r, agreement.get((r.site_id, r.scene_id)) if r.source == "ml" else None)
+            for r in rows
+        ]
 
 
 def _require_detection(session: Session, det_id: str) -> Detection:
@@ -491,8 +556,15 @@ def get_detection_detail(engine: Engine, det_id: str) -> DetectionDetailOut:
     with Session(engine) as session:
         row = _require_detection(session, det_id)
         result = json.loads(row.result_json)
+        agreement = (
+            _physics_agreement_for_pairs(session, {(row.site_id, row.scene_id)}).get(
+                (row.site_id, row.scene_id)
+            )
+            if row.source == "ml"
+            else None
+        )
         return DetectionDetailOut(
-            **_detection_out(row).model_dump(),
+            **_detection_out(row, agreement).model_dump(),
             reference_scene_id=row.ref_scene_id,
             ime_kg=row.ime_kg,
             notes=row.notes,

@@ -7,6 +7,7 @@ import {
 } from "../../api/methaneQueries";
 import type { DetectionDetail as DetectionDetailT, MethaneHistogram } from "../../api/types";
 import {
+  ML_Q_CAPTION,
   detectionNumbers,
   disagreementBadge,
   mlDetectionNumbers,
@@ -176,9 +177,8 @@ function EmitSection({ detId, detail }: { detId: string; detail: DetectionDetail
 function MlCandidatePanel({ detail }: { detail: DetectionDetailT }) {
   const result = (detail.result ?? {}) as Record<string, unknown>;
   const modelVersion = typeof result.model_version === "string" ? result.model_version : "—";
-  const disagreement = disagreementBadge(
-    typeof result.disagreement === "string" ? result.disagreement : undefined,
-  );
+  // Read-derived typed field (fix 8) — correct for old rows too; not result.disagreement.
+  const disagreement = disagreementBadge(detail.physics_agreement);
 
   return (
     <>
@@ -211,6 +211,7 @@ function MlCandidatePanel({ detail }: { detail: DetectionDetailT }) {
           ))}
         </tbody>
       </table>
+      <p className="muted ml-q-note">{ML_Q_CAPTION}</p>
     </>
   );
 }

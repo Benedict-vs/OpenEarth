@@ -440,6 +440,10 @@ class DetectionOut(BaseModel):
     score: float | None = None  # ML candidate score (max prob); None for physics rows
     # EMIT plume matches: count when a cross-match has run, None = never checked.
     emit_matches: int | None = None
+    # Read-time ML↔physics agreement (fix 8), derived live from physics rows on
+    # the same site+scene: agree (physics found a plume) / physics_no_plume
+    # (physics ran, empty) / physics_not_run. None for physics rows.
+    physics_agreement: Literal["agree", "physics_no_plume", "physics_not_run"] | None = None
     flags: list[str]
     created_at: str
     updated_at: str

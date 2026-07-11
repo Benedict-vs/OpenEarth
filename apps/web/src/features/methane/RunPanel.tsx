@@ -274,6 +274,9 @@ function MlScanAction() {
         <span>Candidate scan</span>
       </div>
       <p className="ml-scan-caption">ML candidate ranker — proposes scenes for review.</p>
+      <p className="muted ml-scan-geo">
+        Trained on Turkmenistan O&amp;G scenes only — expect degraded performance elsewhere.
+      </p>
       <p className="muted ml-scan-window">
         Scans the current window: {dates.start} → {dates.end}
       </p>

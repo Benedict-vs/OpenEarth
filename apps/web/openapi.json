@@ -529,6 +529,22 @@
             "title": "Params",
             "type": "object"
           },
+          "physics_agreement": {
+            "anyOf": [
+              {
+                "enum": [
+                  "agree",
+                  "physics_no_plume",
+                  "physics_not_run"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Physics Agreement"
+          },
           "q_kg_h": {
             "anyOf": [
               {
@@ -720,6 +736,22 @@
           "method": {
             "title": "Method",
             "type": "string"
+          },
+          "physics_agreement": {
+            "anyOf": [
+              {
+                "enum": [
+                  "agree",
+                  "physics_no_plume",
+                  "physics_not_run"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Physics Agreement"
           },
           "q_kg_h": {
             "anyOf": [

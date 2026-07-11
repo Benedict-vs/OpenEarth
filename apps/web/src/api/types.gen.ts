@@ -1056,6 +1056,8 @@ export interface components {
       params: {
         [key: string]: unknown;
       };
+      /** Physics Agreement */
+      physics_agreement?: ("agree" | "physics_no_plume" | "physics_not_run") | null;
       /** Q Kg H */
       q_kg_h: number | null;
       /** Q Sigma Kg H */
@@ -1109,6 +1111,8 @@ export interface components {
       id: string;
       /** Method */
       method: string;
+      /** Physics Agreement */
+      physics_agreement?: ("agree" | "physics_no_plume" | "physics_not_run") | null;
       /** Q Kg H */
       q_kg_h: number | null;
       /** Q Sigma Kg H */
