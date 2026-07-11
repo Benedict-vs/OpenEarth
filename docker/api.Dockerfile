@@ -27,6 +27,10 @@ RUN uv sync --frozen --no-dev --no-editable --package openearth-api
 # ── runtime ──────────────────────────────────────────────────────
 FROM python:3.13-slim-bookworm AS runtime
 
+# rasterio's manylinux wheel links the system libexpat, which slim omits.
+RUN apt-get update && apt-get install -y --no-install-recommends libexpat1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Non-root runtime user; the /data volume is chowned so SQLite/diskcache can write.
 RUN useradd --create-home --uid 10001 openearth \
     && mkdir -p /data && chown openearth:openearth /data
