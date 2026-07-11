@@ -858,8 +858,10 @@ export interface components {
   schemas: {
     /**
      * AnalyzeRequest
-     * @description Exactly one of ``site_id`` / ``roi`` locates the analysis. ``seed`` makes
-     *     the Monte Carlo reproducible; a re-run with the same seed is bit-for-bit.
+     * @description ``site_id`` and/or ``roi`` locate the analysis — with both, ``roi`` is
+     *     the analysis bbox and the detection stays linked to the site (site ROIs
+     *     are browse-scale and exceed the 20 m chip limit). ``seed`` makes the
+     *     Monte Carlo reproducible; a re-run with the same seed is bit-for-bit.
      */
     AnalyzeRequest: {
       /**
@@ -1409,6 +1411,9 @@ export interface components {
     /**
      * MlScanRequest
      * @description Scan a site's S2 scenes over a date range with the ONNX U-Net ranker.
+     *
+     *     ``roi``, when given, is the analysis bbox (site ROIs are browse-scale and
+     *     exceed the 20 m chip limit); hits stay linked to ``site_id`` either way.
      */
     MlScanRequest: {
       /**
@@ -1418,6 +1423,7 @@ export interface components {
       end: string;
       /** Max Scenes */
       max_scenes?: number | null;
+      roi?: components["schemas"]["BBoxIn"] | null;
       /** Site Id */
       site_id: number;
       /**
@@ -3245,6 +3251,10 @@ export interface operations {
         start: string;
         end: string;
         max_cloud?: number;
+        west?: number | null;
+        south?: number | null;
+        east?: number | null;
+        north?: number | null;
       };
       header?: never;
       path: {

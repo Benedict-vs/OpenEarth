@@ -79,6 +79,20 @@ def _fill_to_reflectance(
     return out
 
 
+def check_chip_bbox(bbox: BBox, *, scale_m: int = 20) -> None:
+    """Raise ``ValueError`` if *bbox* would exceed the chip-size limit.
+
+    Pure grid math (no EE round-trip), so callers can validate a bbox at
+    request time instead of failing minutes into a job.
+    """
+    grid = grid_for(bbox, scale_m)
+    if grid.width > _MAX_CHIP_PX or grid.height > _MAX_CHIP_PX:
+        raise ValueError(
+            f"Refusing a {grid.width}×{grid.height} chip (limit "
+            f"{_MAX_CHIP_PX}²); use a smaller bbox or coarser scale."
+        )
+
+
 def fetch_chip(scene: S2Scene, bbox: BBox, *, scale_m: int = 20) -> RetrievalChip:
     """Fetch *scene*'s TOA reflectance chip over *bbox* on a shared grid.
 
@@ -87,12 +101,8 @@ def fetch_chip(scene: S2Scene, bbox: BBox, *, scale_m: int = 20) -> RetrievalChi
     DN are scaled to reflectance by 1e4 (S2_HARMONIZED offsets are already
     harmonized, so this holds across years).
     """
+    check_chip_bbox(bbox, scale_m=scale_m)
     grid = grid_for(bbox, scale_m)
-    if grid.width > _MAX_CHIP_PX or grid.height > _MAX_CHIP_PX:
-        raise ValueError(
-            f"Refusing a {grid.width}×{grid.height} chip (limit "
-            f"{_MAX_CHIP_PX}²); use a smaller bbox or coarser scale."
-        )
     image = _build_scene_image(scene.scene_id)
     cube = fetch_pixels(image, grid, list(CHIP_BANDS))
     return RetrievalChip(scene=scene, grid=grid, bands=_fill_to_reflectance(cube, CHIP_BANDS))

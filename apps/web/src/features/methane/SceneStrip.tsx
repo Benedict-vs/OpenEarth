@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useSiteScenes } from "../../api/methaneQueries";
+import { analysisAreaToBBox } from "../../lib/methane";
 import { useMethaneStore } from "../../stores/methaneStore";
 
 export function SceneStrip() {
@@ -7,12 +9,20 @@ export function SceneStrip() {
   const setDates = useMethaneStore((s) => s.setDates);
   const target = useMethaneStore((s) => s.targetSceneId);
   const setTarget = useMethaneStore((s) => s.setTarget);
+  const area = useMethaneStore((s) => s.analysisArea);
 
+  // Search over the analysis area so every listed scene covers the chip.
   const {
     data: scenes,
     isFetching,
     error,
-  } = useSiteScenes(site?.id ?? null, dates.start, dates.end);
+  } = useSiteScenes(site?.id ?? null, dates.start, dates.end, 80, area && analysisAreaToBBox(area));
+
+  // A moved analysis area can invalidate the picked scene (different S2 tile):
+  // drop the target if it is no longer in the (area-scoped) scene list.
+  useEffect(() => {
+    if (scenes && target && !scenes.some((s) => s.scene_id === target)) setTarget(null);
+  }, [scenes, target, setTarget]);
 
   if (!site) return <p className="muted">Select a site to load scenes.</p>;
 
@@ -58,7 +68,7 @@ export function SceneStrip() {
               <tr
                 key={s.scene_id}
                 className={target === s.scene_id ? "scene-row active" : "scene-row"}
-                onClick={() => setTarget(s.scene_id)}
+                onClick={() => setTarget(s.scene_id, s.time)}
               >
                 <td>{s.time.slice(0, 10)}</td>
                 <td>{s.cloud_pct.toFixed(0)}%</td>

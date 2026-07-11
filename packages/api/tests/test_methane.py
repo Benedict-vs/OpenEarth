@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
 
 KORPEZHE = {"kind": "bbox", "west": 53.7, "south": 38.2, "east": 54.7, "north": 38.8}
+# A chip-sized sub-area of the site — the full site bbox exceeds the 20 m limit.
+KORPEZHE_SUB = {"kind": "bbox", "west": 53.9, "south": 38.4, "east": 54.0, "north": 38.5}
 
 
 def _wait_status(client: TestClient, job_id: str, status: str, timeout: float = 5.0) -> None:
@@ -197,7 +199,12 @@ def test_analyze_flow_end_to_end(client: TestClient, analyze_ready: None) -> Non
     site_id = client.get("/api/methane/sites").json()[0]["id"]
     resp = client.post(
         "/api/methane/analyze",
-        json={"site_id": site_id, "target_scene_id": "20180619T074619_x", "method": "mbsp"},
+        json={
+            "site_id": site_id,
+            "roi": KORPEZHE_SUB,
+            "target_scene_id": "20180619T074619_x",
+            "method": "mbsp",
+        },
     )
     assert resp.status_code == 200
     job_id = resp.json()["job_id"]
@@ -205,10 +212,11 @@ def test_analyze_flow_end_to_end(client: TestClient, analyze_ready: None) -> Non
 
     det_id = client.get(f"/api/jobs/{job_id}").json()["result"]["detection_id"]
 
-    # Feed row
+    # Feed row — the roi analysis area must not break the site linkage
     feed = client.get("/api/methane/detections", params={"site_id": site_id}).json()
     assert len(feed) == 1
     assert feed[0]["id"] == det_id
+    assert feed[0]["site_id"] == site_id
     assert feed[0]["q_kg_h"] == pytest.approx(8000.0)
     assert feed[0]["status"] == "candidate"
 
@@ -246,6 +254,18 @@ def test_analyze_flow_end_to_end(client: TestClient, analyze_ready: None) -> Non
 def test_analyze_requires_site_or_roi(client: TestClient, analyze_ready: None) -> None:
     resp = client.post("/api/methane/analyze", json={"target_scene_id": "x"})
     assert resp.status_code == 422  # neither site_id nor roi
+
+
+def test_analyze_rejects_oversized_bbox_at_submit(client: TestClient, analyze_ready: None) -> None:
+    # Seeded site ROIs are browse-scale (~100 km); without a chip-sized roi the
+    # submit must 422 immediately instead of failing minutes into the job.
+    site_id = client.get("/api/methane/sites").json()[0]["id"]
+    resp = client.post(
+        "/api/methane/analyze",
+        json={"site_id": site_id, "target_scene_id": "20180619T074619_x"},
+    )
+    assert resp.status_code == 422
+    assert "Refusing" in resp.json()["detail"]
 
 
 # ── tiles methane_ref quicklook ──
@@ -345,7 +365,12 @@ def test_validation_import_and_cross_match(client: TestClient, analyze_ready: No
     site_id = client.get("/api/methane/sites").json()[0]["id"]
     job = client.post(
         "/api/methane/analyze",
-        json={"site_id": site_id, "target_scene_id": "20180619T074619_x", "method": "mbsp"},
+        json={
+            "site_id": site_id,
+            "roi": KORPEZHE_SUB,
+            "target_scene_id": "20180619T074619_x",
+            "method": "mbsp",
+        },
     ).json()
     _wait_status(client, job["job_id"], "succeeded")
     det_id = client.get(f"/api/jobs/{job['job_id']}").json()["result"]["detection_id"]

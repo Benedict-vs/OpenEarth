@@ -30,6 +30,7 @@ from openearth.methane.conversion import load_lut
 from openearth.methane.detect import analyze
 from openearth.methane.ime import McParams
 from openearth.methane.plume import mask_outline_geojson
+from openearth.methane.retrieval import check_chip_bbox
 from openearth.methane.scenes import list_scenes
 from openearth.methane.tropomi import screen_region
 from openearth.methane.validation import ReferenceEvent as CoreReferenceEvent
@@ -199,12 +200,19 @@ def delete_site(site_id: int, engine: Engine) -> None:
 
 
 def _resolve_bbox(session: Session, site_id: int | None, roi: Any) -> BBox:
-    """Locate the analysis bbox from a site id or an inline ROI (exactly one)."""
-    if (site_id is None) == (roi is None):
-        raise HTTPException(422, "Provide exactly one of 'site_id' or 'roi'.")
+    """Locate the analysis bbox from a site id and/or an inline ROI.
+
+    An inline ROI wins so a request can stay linked to its site (``site_id``)
+    while analysing a sub-area of it — site ROIs are browse-scale and far
+    exceed the 20 m chip limit. A ``site_id`` given alongside a ROI is still
+    validated (404 on an unknown site).
+    """
+    if site_id is None and roi is None:
+        raise HTTPException(422, "Provide 'site_id' and/or 'roi'.")
     if site_id is not None:
         row = _require_site(session, site_id)
-        return BBox(row.west, row.south, row.east, row.north)
+        if roi is None:
+            return BBox(row.west, row.south, row.east, row.north)
     return roi.to_domain()
 
 
@@ -379,6 +387,12 @@ async def submit_analyze(
     """Validate the request, then submit the ``methane_analyze`` job."""
     with Session(engine) as session:
         bbox = _resolve_bbox(session, req.site_id, req.roi)  # 404/422 at request time
+    try:
+        check_chip_bbox(bbox)  # fail at submit, not minutes into the job
+    except ValueError as exc:
+        raise HTTPException(
+            422, f"{exc} At 20 m the analysis area is limited to ~20 km per side."
+        ) from exc
     source_lonlat = tuple(req.source_lonlat) if req.source_lonlat is not None else None
 
     def runner(ctx: JobContext) -> dict[str, Any]:

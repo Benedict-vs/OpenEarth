@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { DetectionDetail } from "../api/types";
+import type { DetectionDetail, Site } from "../api/types";
 import {
+  DEFAULT_ANALYSIS_KM,
+  MIN_ANALYSIS_KM,
+  analysisAreaPx,
+  analysisAreaToBBox,
+  defaultAnalysisArea,
   detectionNumbers,
   disagreementBadge,
   formatEmission,
@@ -10,6 +15,40 @@ import {
   toImageCoordinates,
   verdictBadge,
 } from "./methane";
+
+function siteWith(bbox: { west: number; south: number; east: number; north: number }): Site {
+  return { id: 1, name: "t", bbox: { kind: "bbox", ...bbox } } as Site;
+}
+
+describe("analysis area", () => {
+  it("builds a square bbox widened by 1/cos(lat)", () => {
+    const box = analysisAreaToBBox({ lon: 54.2, lat: 38.5, sizeKm: 10 });
+    const dLat = box.north - box.south;
+    const dLon = box.east - box.west;
+    expect(dLat).toBeCloseTo(10 / 111.32, 6);
+    expect(dLon).toBeCloseTo(10 / (111.32 * Math.cos((38.5 * Math.PI) / 180)), 6);
+    expect((box.west + box.east) / 2).toBeCloseTo(54.2, 9);
+    expect((box.south + box.north) / 2).toBeCloseTo(38.5, 9);
+  });
+
+  it("stays under the 1024 px chip limit at the max size", () => {
+    expect(analysisAreaPx(20)).toBeLessThanOrEqual(1024);
+    expect(analysisAreaPx(10)).toBe(500);
+  });
+
+  it("defaults to a 10 km box centred on the site", () => {
+    const area = defaultAnalysisArea(siteWith({ west: 53.7, south: 38.2, east: 54.7, north: 38.8 }));
+    expect(area.lon).toBeCloseTo(54.2, 9);
+    expect(area.lat).toBeCloseTo(38.5, 9);
+    expect(area.sizeKm).toBe(DEFAULT_ANALYSIS_KM);
+  });
+
+  it("shrinks the default to fit a small site, never below the minimum", () => {
+    const small = defaultAnalysisArea(siteWith({ west: 0, south: 0, east: 0.05, north: 0.05 }));
+    expect(small.sizeKm).toBeLessThan(DEFAULT_ANALYSIS_KM);
+    expect(small.sizeKm).toBeGreaterThanOrEqual(MIN_ANALYSIS_KM);
+  });
+});
 
 describe("toImageCoordinates", () => {
   it("passes a valid 4-corner bounds through", () => {

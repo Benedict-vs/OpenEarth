@@ -107,21 +107,35 @@ def test_ml_status_absent_when_no_model(client: TestClient) -> None:
     assert body["model_version"] is None
 
 
+# A chip-sized sub-area — seeded site ROIs are browse-scale and exceed the 20 m limit.
+SCAN_ROI = {"kind": "bbox", "west": 53.9, "south": 38.4, "east": 54.0, "north": 38.5}
+
+
 def test_ml_scan_requires_installed_model(client: TestClient, app: FastAPI) -> None:
     app.dependency_overrides[ensure_ee] = lambda: None
     site_id = client.get("/api/methane/sites").json()[0]["id"]
     resp = client.post(
         "/api/methane/ml/scan",
-        json={"site_id": site_id, "start": "2021-07-01", "end": "2021-08-01"},
+        json={"site_id": site_id, "roi": SCAN_ROI, "start": "2021-07-01", "end": "2021-08-01"},
     )
     assert resp.status_code == 503  # model file not installed in the test data_dir
+
+
+def test_ml_scan_rejects_oversized_bbox_at_submit(client: TestClient, scan_ready: None) -> None:
+    site_id = client.get("/api/methane/sites").json()[0]["id"]
+    resp = client.post(
+        "/api/methane/ml/scan",
+        json={"site_id": site_id, "start": "2021-07-01", "end": "2021-08-01"},
+    )
+    assert resp.status_code == 422
+    assert "Refusing" in resp.json()["detail"]
 
 
 def test_ml_scan_end_to_end(client: TestClient, scan_ready: None) -> None:
     site_id = client.get("/api/methane/sites").json()[0]["id"]
     resp = client.post(
         "/api/methane/ml/scan",
-        json={"site_id": site_id, "start": "2021-07-01", "end": "2021-08-01"},
+        json={"site_id": site_id, "roi": SCAN_ROI, "start": "2021-07-01", "end": "2021-08-01"},
     )
     assert resp.status_code == 200
     job = _wait_succeeded(client, resp.json()["job_id"])
