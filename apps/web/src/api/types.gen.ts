@@ -124,6 +124,74 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/embeddings/change": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Embedding Change */
+    post: operations["embedding_change_api_embeddings_change_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/embeddings/cluster": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Embedding Cluster */
+    post: operations["embedding_cluster_api_embeddings_cluster_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/embeddings/similarity": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Embedding Similarity */
+    post: operations["embedding_similarity_api_embeddings_similarity_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/embeddings/years": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Embedding Years */
+    get: operations["embedding_years_api_embeddings_years_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/export/geotiff": {
     parameters: {
       query?: never;
@@ -331,6 +399,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/methane/detections/{det_id}/emit-match": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Emit Match Detection */
+    post: operations["emit_match_detection_api_methane_detections__det_id__emit_match_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/methane/detections/{det_id}/overlay.png": {
     parameters: {
       query?: never;
@@ -359,6 +444,23 @@ export interface paths {
     put?: never;
     /** Validate Detection */
     post: operations["validate_detection_api_methane_detections__det_id__validate_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/methane/emit/plumes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Emit Plumes */
+    get: operations["list_emit_plumes_api_methane_emit_plumes_get"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -917,11 +1019,14 @@ export interface components {
     };
     /**
      * DetectionDetailOut
-     * @description Full detail: numbers, params, mask + overlay geometry, validation.
+     * @description Full detail: numbers, params, mask + overlay geometry, validation, EMIT.
      */
     DetectionDetailOut: {
       /** Created At */
       created_at: string;
+      emit_json?: components["schemas"]["EmitMatchResult"] | null;
+      /** Emit Matches */
+      emit_matches?: number | null;
       /** Flags */
       flags: string[];
       /** Id */
@@ -987,6 +1092,8 @@ export interface components {
     DetectionOut: {
       /** Created At */
       created_at: string;
+      /** Emit Matches */
+      emit_matches?: number | null;
       /** Flags */
       flags: string[];
       /** Id */
@@ -1027,6 +1134,127 @@ export interface components {
       notes?: string | null;
       /** Status */
       status?: ("candidate" | "accepted" | "rejected") | null;
+    };
+    /**
+     * EmbeddingChangeRequest
+     * @description Year-to-year embedding change (1 − cosine) layer.
+     */
+    EmbeddingChangeRequest: {
+      roi?: components["schemas"]["BBoxIn"] | null;
+      /** Year A */
+      year_a: number;
+      /** Year B */
+      year_b: number;
+    };
+    /**
+     * EmbeddingClusterRequest
+     * @description Unsupervised k-means over the embedding within an ROI (required — it trains there).
+     */
+    EmbeddingClusterRequest: {
+      /**
+       * K
+       * @default 6
+       */
+      k: number;
+      roi: components["schemas"]["BBoxIn"];
+      /** Year */
+      year: number;
+    };
+    /**
+     * EmbeddingSimilarityRequest
+     * @description Cosine-similarity layer to the embedding at a clicked seed point.
+     */
+    EmbeddingSimilarityRequest: {
+      /** Lat */
+      lat: number;
+      /** Lon */
+      lon: number;
+      roi?: components["schemas"]["BBoxIn"] | null;
+      /** Year */
+      year: number;
+    };
+    /** EmbeddingTileOut */
+    EmbeddingTileOut: {
+      /** Attribution */
+      attribution: string;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      legend: components["schemas"]["LegendOut"];
+      /** N Clusters */
+      n_clusters?: number | null;
+      /** Seed Norm */
+      seed_norm?: number | null;
+      /** Tile Url */
+      tile_url: string;
+    };
+    /** EmbeddingYearsOut */
+    EmbeddingYearsOut: {
+      /** Years */
+      years: number[];
+    };
+    /** EmitMatchOut */
+    EmitMatchOut: {
+      /** Distance Km */
+      distance_km: number;
+      /** Dt Hours */
+      dt_hours: number;
+      plume: components["schemas"]["EmitPlumeOut"];
+    };
+    /**
+     * EmitMatchResult
+     * @description Stored on a detection (``emit_json``): the outcome of a cross-match run.
+     */
+    EmitMatchResult: {
+      /** Checked At */
+      checked_at: string;
+      /** Matches */
+      matches: components["schemas"]["EmitMatchOut"][];
+      /** Provenance Paths */
+      provenance_paths: ("gee_v001" | "lpdaac_v002")[];
+    };
+    /**
+     * EmitPlumeOut
+     * @description One EMIT methane plume complex. ``provenance`` distinguishes the source.
+     */
+    EmitPlumeOut: {
+      /** Max Enh Lat */
+      max_enh_lat: number | null;
+      /** Max Enh Lon */
+      max_enh_lon: number | null;
+      /** Max Enh Ppm M */
+      max_enh_ppm_m: number | null;
+      /** Outline */
+      outline: {
+        [key: string]: unknown;
+      };
+      /** Plume Id */
+      plume_id: string;
+      /**
+       * Provenance
+       * @enum {string}
+       */
+      provenance: "gee_v001" | "lpdaac_v002";
+      /** Q Kg H */
+      q_kg_h: number | null;
+      /** Q Sigma Kg H */
+      q_sigma_kg_h: number | null;
+      /** Source Scenes */
+      source_scenes: string[];
+      /** Time Utc */
+      time_utc: string;
+    };
+    /**
+     * EmitPlumesOut
+     * @description Plume list plus which source paths were queried (the GEE freeze is honest).
+     */
+    EmitPlumesOut: {
+      /** Plumes */
+      plumes: components["schemas"]["EmitPlumeOut"][];
+      /** Provenance Paths */
+      provenance_paths: ("gee_v001" | "lpdaac_v002")[];
     };
     /**
      * ExportGeotiffRequest
@@ -1236,6 +1464,11 @@ export interface components {
       methane_only: boolean;
       /** Name */
       name: string;
+      /**
+       * Needs Ref
+       * @default false
+       */
+      needs_ref: boolean;
       /** Palette */
       palette: string[];
       /** Requires Builder */
@@ -1530,6 +1763,7 @@ export interface components {
       methane_ref?: components["schemas"]["DateRangeIn"] | null;
       /** Product */
       product: string;
+      ref?: components["schemas"]["DateRangeIn"] | null;
       /** Roi */
       roi?: (components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"]) | null;
       /** Target Date */
@@ -1585,6 +1819,7 @@ export interface components {
       methane_ref?: components["schemas"]["DateRangeIn"] | null;
       /** Product */
       product: string;
+      ref?: components["schemas"]["DateRangeIn"] | null;
       /** Roi */
       roi?: (components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"]) | null;
       /** Target Date */
@@ -2064,6 +2299,125 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ConfigOut"];
+        };
+      };
+    };
+  };
+  embedding_change_api_embeddings_change_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmbeddingChangeRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmbeddingTileOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  embedding_cluster_api_embeddings_cluster_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmbeddingClusterRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmbeddingTileOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  embedding_similarity_api_embeddings_similarity_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmbeddingSimilarityRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmbeddingTileOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  embedding_years_api_embeddings_years_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmbeddingYearsOut"];
         };
       };
     };
@@ -2550,6 +2904,37 @@ export interface operations {
       };
     };
   };
+  emit_match_detection_api_methane_detections__det_id__emit_match_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        det_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DetectionDetailOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   detection_overlay_api_methane_detections__det_id__overlay_png_get: {
     parameters: {
       query?: {
@@ -2602,6 +2987,42 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ValidationOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_emit_plumes_api_methane_emit_plumes_get: {
+    parameters: {
+      query: {
+        west: number;
+        south: number;
+        east: number;
+        north: number;
+        start: string;
+        end: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmitPlumesOut"];
         };
       };
       /** @description Validation Error */

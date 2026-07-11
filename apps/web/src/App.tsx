@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { CompareView } from "./features/compare/CompareView";
+import { EmbeddingsView } from "./features/embeddings/EmbeddingsView";
 import { ExplorePage } from "./features/explore/ExplorePage";
 import { WorkspaceMenu } from "./features/explore/WorkspaceMenu";
 import { MethanePage } from "./features/methane/MethanePage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { TimelapsePage } from "./features/timelapse/TimelapsePage";
 
-type View = "explore" | "compare" | "methane" | "timelapse" | "settings";
+type View = "explore" | "compare" | "methane" | "timelapse" | "embeddings" | "settings";
 
 export function App() {
   const [view, setView] = useState<View>("explore");
@@ -34,6 +35,12 @@ export function App() {
             Timelapse
           </button>
           <button
+            className={view === "embeddings" ? "active" : ""}
+            onClick={() => setView("embeddings")}
+          >
+            Embeddings
+          </button>
+          <button
             className={view === "settings" ? "active" : ""}
             onClick={() => setView("settings")}
           >
@@ -47,6 +54,7 @@ export function App() {
         {view === "compare" ? <CompareView /> : null}
         {view === "methane" ? <MethanePage /> : null}
         {view === "timelapse" ? <TimelapsePage /> : null}
+        {view === "embeddings" ? <EmbeddingsView /> : null}
         {view === "settings" ? <SettingsPage /> : null}
       </main>
     </div>

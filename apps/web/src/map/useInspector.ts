@@ -139,6 +139,7 @@ async function sampleAt(
       product: layer.product,
       vizOverrides: layer.vizOverrides,
       autoRange: layer.autoRange,
+      ref: layer.ref,
     },
     roi,
     { mode, start, end, targetDate, halfWindowDays },

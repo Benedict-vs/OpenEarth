@@ -412,3 +412,75 @@ Commits: `infra: compose.yaml — api (uv multi-stage) + web (nginx, SSE-safe pr
 - **Migration 5 is `ALTER TABLE ADD COLUMN`** — trivially append-only, but test the upgrade
   on a copy of a real v4 `openearth.db`, and remember rows predating the migration have
   `emit_json IS NULL` (feed schemas must treat null as "never checked", not "no match").
+
+---
+
+## Addendum — implementation-time facts (verified 2026-07-10, pre-kickoff)
+
+Pinned so nothing in this plan requires an external lookup at implementation time.
+
+**Repo state (Phase 5 merged to main; this branch is cut from that main):**
+
+- `docs/methane_methods.md` §9 exists → Stage 2/6 write §10 directly; the §9-placeholder
+  contingency is moot. `DetectionFeed.tsx`/`DetectionDetail.tsx` already carry the ML
+  badge/score — the EMIT chip is purely additive; the rebase contingency is moot.
+- `ALGO_VERSION = 5` in-tree (`packages/api/src/openearth_api/cache.py:32`) — the "3.5 ends
+  at 5" premise held; **no bump**, as planned.
+- DB migrations 1–4 in-tree (`db.py`; 4 = `renders`) → the EMIT column is migration 5,
+  exactly as written. Phase 5 added no migration.
+- `TilesRequest.methane_ref` is `DateRangeIn | None` (`schemas.py:117`). Stage 5's
+  `ref: DateWindow | None` sketch means: **reuse `DateRangeIn`** — do not invent a new type.
+- All five EMIT-era calibration events named above exist in
+  `scripts/data/calibration_events.json` under ids `permian-2023-09-27`,
+  `gulf-of-thailand-2023-10-05`, `ahvaz-2023-12-08`, `maturin-2024-02-20`,
+  `campeche-2024-09-13` (schema: `lat`/`lon`/`bbox`/`published_time_utc`/scene ids).
+- `deferred products.md`: dNBR + flood mask are Priority 1; the urban-heat proxy is
+  **Priority 3** — tick each item where it actually lives when updating that doc.
+- `GET /wind/field` exists with `nx, ny ≤ 50` (`routers/wind.py`) as Stage 4 assumes;
+  `View` union in `App.tsx:9` has the expected five entries; `haversine_km` is at
+  `methane/validation.py:139`; `make check` = lint + typecheck + test.
+
+**EMIT V002 GeoJSON schema** (verified against the live JPL portal
+`https://earth.jpl.nasa.gov/emit-mmgis-lb/Missions/EMIT/Layers/coverage/combined_plume_metadata.json`
+— 3 372 features incl. Sep 2025 plumes — and `emit-sds/emit-ghg` `delivery_plume_tiler.py`,
+which produces the DAAC files from exactly that metadata):
+
+- Feature property keys, exact: `"Plume ID"` (`"CH4_PlumeComplex-3374"`), `"Scene FIDs"`
+  (list, `"emit20250922t204933"`), `"Orbit"`, `"DCID"`, `"UTC Time Observed"`
+  (ISO-8601 `"2025-09-22T20:49:33Z"`), `"Max Plume Concentration (ppm m)"`,
+  `"Latitude of max concentration"`, `"Longitude of max concentration"`,
+  `"Emissions Rate Estimate (kg/hr)"` (**"Emissions" plural**),
+  `"Emissions Rate Estimate Uncertainty (kg/hr)"`, `"Wind Speed (m/s)"`,
+  `"Wind Speed Std (m/s)"`, `"Wind Speed Source"` (`"ERA5"`), `"Fetch Length (m)"`,
+  `"plume_complex_count"`, `"style"`.
+- **Missing numeric values are the string `"NA"`** (not `null`, not `"N/A"`); present values
+  are plain floats. The parser must coerce `"NA"` → `None`.
+- DAAC delivery transforms (per `delivery_plume_tiler.py`): one feature per file, adds
+  `"DAAC Scene Names"` (full `EMIT_L2B_CH4ENH_002_<ts>_<orbit>_<scene>` names), deletes
+  `"style"` and `"Data Download"`. V001-era files additionally carried
+  `"Concentration Uncertainty (ppm m)"`. So `parse_v002_geojson` is written **tolerant**:
+  required = `Plume ID`, `UTC Time Observed`, geometry; everything else optional with
+  `"NA"`/absent → `None`. Outline = the `Polygon` feature (the portal aggregate pairs each
+  plume with a max-enhancement `Point` — accept polygon geometry, ignore/skip points).
+- **Granule asset name has a `META` infix**: `EMIT_L2B_CH4PLMMETA_002_<YYYYMMDDTHHMMSS>_<IIIIII>.json`
+  (the COG is `EMIT_L2B_CH4PLM_002_….tif`, plus a `.cmr.json` sidecar). The earthaccess
+  data-link filter must match `CH4PLMMETA`, not a bare `.json` suffix.
+- **Earthdata credentials do not exist on the dev machine at planning time** (no `~/.netrc`,
+  no `EARTHDATA_TOKEN`). They are a Stage 2 prerequisite (committed fixture + earthaccess
+  exit gate): ask the user for a token when Stage 2 starts; do the offline parser work first.
+  The committed fixture must be a trimmed **real DAAC granule**; if credentials are delayed, a
+  schema-faithful interim fixture can be assembled from the public portal file plus the
+  delivery transforms above, but swap in a real granule before Stage 2 exits.
+
+**Other externals re-verified 2026-07-10:**
+
+- `NASA/EMIT/L2B/CH4ENH`: band `vertical_column_enhancement`, ppm·m, 2022-08-10 → 2024-11-30,
+  ImageCollection — all as pinned (the catalog page's "72 km" pixel size is the known artifact).
+- AlphaEarth: the **2025 annual image is now live** — the collection spans 2017–2025. The
+  probe-don't-hardcode instruction stands (Google commits to ongoing annual layers).
+- `ee.Clusterer.wekaKMeans(nClusters, init, canopies, maxCandidates, periodicPruning,
+  minDensity, t1, t2, distanceFunction, maxIterations, preserveOrder, fast, seed)` — the
+  `seed` parameter exists but is last; **pass it by keyword**.
+- `mapbox/webgl-wind`: ISC, repo active (src/ = JS + GLSL) — vendoring green light stands;
+  keep the attribution header.
+- earthaccess 0.18.0 (requires-python ≥ 3.12) is still current on PyPI.

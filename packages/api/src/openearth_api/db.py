@@ -143,6 +143,12 @@ _MIGRATIONS: list[tuple[str, ...]] = [
         """,
         "CREATE INDEX ix_renders_created_at ON renders (created_at)",
     ),
+    # 5 — EMIT plume cross-match evidence (Phase 6). EMIT complexes are another
+    # instrument's product attached to an existing detection, not a detection row
+    # of ours (no detections.source touched). The match result — matched plumes,
+    # query provenance, checked-at — is a JSON blob; rows predating this migration
+    # keep emit_json IS NULL, meaning "never checked" (not "no match").
+    ("ALTER TABLE detections ADD COLUMN emit_json TEXT",),
 ]
 
 

@@ -421,11 +421,32 @@
         "type": "object"
       },
       "DetectionDetailOut": {
-        "description": "Full detail: numbers, params, mask + overlay geometry, validation.",
+        "description": "Full detail: numbers, params, mask + overlay geometry, validation, EMIT.",
         "properties": {
           "created_at": {
             "title": "Created At",
             "type": "string"
+          },
+          "emit_json": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmitMatchResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "emit_matches": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emit Matches"
           },
           "flags": {
             "items": {
@@ -664,6 +685,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "emit_matches": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emit Matches"
+          },
           "flags": {
             "items": {
               "type": "string"
@@ -833,6 +865,349 @@
           }
         },
         "title": "DetectionPatch",
+        "type": "object"
+      },
+      "EmbeddingChangeRequest": {
+        "description": "Year-to-year embedding change (1 \u2212 cosine) layer.",
+        "properties": {
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "year_a": {
+            "title": "Year A",
+            "type": "integer"
+          },
+          "year_b": {
+            "title": "Year B",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year_a",
+          "year_b"
+        ],
+        "title": "EmbeddingChangeRequest",
+        "type": "object"
+      },
+      "EmbeddingClusterRequest": {
+        "description": "Unsupervised k-means over the embedding within an ROI (required \u2014 it trains there).",
+        "properties": {
+          "k": {
+            "default": 6,
+            "title": "K",
+            "type": "integer"
+          },
+          "roi": {
+            "$ref": "#/components/schemas/BBoxIn"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "roi",
+          "year"
+        ],
+        "title": "EmbeddingClusterRequest",
+        "type": "object"
+      },
+      "EmbeddingSimilarityRequest": {
+        "description": "Cosine-similarity layer to the embedding at a clicked seed point.",
+        "properties": {
+          "lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lon",
+            "type": "number"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lat",
+          "lon",
+          "year"
+        ],
+        "title": "EmbeddingSimilarityRequest",
+        "type": "object"
+      },
+      "EmbeddingTileOut": {
+        "properties": {
+          "attribution": {
+            "title": "Attribution",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "legend": {
+            "$ref": "#/components/schemas/LegendOut"
+          },
+          "n_clusters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Clusters"
+          },
+          "seed_norm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed Norm"
+          },
+          "tile_url": {
+            "title": "Tile Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tile_url",
+          "expires_at",
+          "attribution",
+          "legend"
+        ],
+        "title": "EmbeddingTileOut",
+        "type": "object"
+      },
+      "EmbeddingYearsOut": {
+        "properties": {
+          "years": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "required": [
+          "years"
+        ],
+        "title": "EmbeddingYearsOut",
+        "type": "object"
+      },
+      "EmitMatchOut": {
+        "properties": {
+          "distance_km": {
+            "title": "Distance Km",
+            "type": "number"
+          },
+          "dt_hours": {
+            "title": "Dt Hours",
+            "type": "number"
+          },
+          "plume": {
+            "$ref": "#/components/schemas/EmitPlumeOut"
+          }
+        },
+        "required": [
+          "plume",
+          "distance_km",
+          "dt_hours"
+        ],
+        "title": "EmitMatchOut",
+        "type": "object"
+      },
+      "EmitMatchResult": {
+        "description": "Stored on a detection (``emit_json``): the outcome of a cross-match run.",
+        "properties": {
+          "checked_at": {
+            "title": "Checked At",
+            "type": "string"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/EmitMatchOut"
+            },
+            "title": "Matches",
+            "type": "array"
+          },
+          "provenance_paths": {
+            "items": {
+              "enum": [
+                "gee_v001",
+                "lpdaac_v002"
+              ],
+              "type": "string"
+            },
+            "title": "Provenance Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "checked_at",
+          "provenance_paths",
+          "matches"
+        ],
+        "title": "EmitMatchResult",
+        "type": "object"
+      },
+      "EmitPlumeOut": {
+        "description": "One EMIT methane plume complex. ``provenance`` distinguishes the source.",
+        "properties": {
+          "max_enh_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Enh Lat"
+          },
+          "max_enh_lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Enh Lon"
+          },
+          "max_enh_ppm_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Enh Ppm M"
+          },
+          "outline": {
+            "additionalProperties": true,
+            "title": "Outline",
+            "type": "object"
+          },
+          "plume_id": {
+            "title": "Plume Id",
+            "type": "string"
+          },
+          "provenance": {
+            "enum": [
+              "gee_v001",
+              "lpdaac_v002"
+            ],
+            "title": "Provenance",
+            "type": "string"
+          },
+          "q_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Kg H"
+          },
+          "q_sigma_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Sigma Kg H"
+          },
+          "source_scenes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Scenes",
+            "type": "array"
+          },
+          "time_utc": {
+            "title": "Time Utc",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plume_id",
+          "outline",
+          "time_utc",
+          "provenance",
+          "max_enh_ppm_m",
+          "max_enh_lat",
+          "max_enh_lon",
+          "q_kg_h",
+          "q_sigma_kg_h",
+          "source_scenes"
+        ],
+        "title": "EmitPlumeOut",
+        "type": "object"
+      },
+      "EmitPlumesOut": {
+        "description": "Plume list plus which source paths were queried (the GEE freeze is honest).",
+        "properties": {
+          "plumes": {
+            "items": {
+              "$ref": "#/components/schemas/EmitPlumeOut"
+            },
+            "title": "Plumes",
+            "type": "array"
+          },
+          "provenance_paths": {
+            "items": {
+              "enum": [
+                "gee_v001",
+                "lpdaac_v002"
+              ],
+              "type": "string"
+            },
+            "title": "Provenance Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "plumes",
+          "provenance_paths"
+        ],
+        "title": "EmitPlumesOut",
         "type": "object"
       },
       "ExportGeotiffRequest": {
@@ -1409,6 +1784,11 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "needs_ref": {
+            "default": false,
+            "title": "Needs Ref",
+            "type": "boolean"
           },
           "palette": {
             "items": {
@@ -2230,6 +2610,16 @@
             "title": "Product",
             "type": "string"
           },
+          "ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "roi": {
             "anyOf": [
               {
@@ -2383,6 +2773,16 @@
           "product": {
             "title": "Product",
             "type": "string"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "roi": {
             "anyOf": [
@@ -3371,6 +3771,150 @@
         ]
       }
     },
+    "/api/embeddings/change": {
+      "post": {
+        "operationId": "embedding_change_api_embeddings_change_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingTileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Embedding Change",
+        "tags": [
+          "embeddings"
+        ]
+      }
+    },
+    "/api/embeddings/cluster": {
+      "post": {
+        "operationId": "embedding_cluster_api_embeddings_cluster_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingClusterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingTileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Embedding Cluster",
+        "tags": [
+          "embeddings"
+        ]
+      }
+    },
+    "/api/embeddings/similarity": {
+      "post": {
+        "operationId": "embedding_similarity_api_embeddings_similarity_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingSimilarityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingTileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Embedding Similarity",
+        "tags": [
+          "embeddings"
+        ]
+      }
+    },
+    "/api/embeddings/years": {
+      "get": {
+        "operationId": "embedding_years_api_embeddings_years_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingYearsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Embedding Years",
+        "tags": [
+          "embeddings"
+        ]
+      }
+    },
     "/api/export/geotiff": {
       "post": {
         "operationId": "export_geotiff_route_api_export_geotiff_post",
@@ -4038,6 +4582,48 @@
         ]
       }
     },
+    "/api/methane/detections/{det_id}/emit-match": {
+      "post": {
+        "operationId": "emit_match_detection_api_methane_detections__det_id__emit_match_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "det_id",
+            "required": true,
+            "schema": {
+              "title": "Det Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Emit Match Detection",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
     "/api/methane/detections/{det_id}/overlay.png": {
       "get": {
         "operationId": "detection_overlay_api_methane_detections__det_id__overlay_png_get",
@@ -4145,6 +4731,101 @@
           }
         },
         "summary": "Validate Detection",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/emit/plumes": {
+      "get": {
+        "operationId": "list_emit_plumes_api_methane_emit_plumes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "west",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "West",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "south",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "South",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "east",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "East",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "north",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "North",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "title": "End",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmitPlumesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Emit Plumes",
         "tags": [
           "methane"
         ]

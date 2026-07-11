@@ -15,6 +15,7 @@ dependencies = [
     "pillow>=10,<12",
     "python-multipart>=0.0.9",
     "onnxruntime>=1.27",
+    "earthaccess>=0.18,<1",
 ]
 
 [tool.uv.sources]

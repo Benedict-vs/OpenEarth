@@ -416,6 +416,14 @@ def _score_of(result_json: str) -> float | None:
     return float(score) if isinstance(score, int | float) else None
 
 
+def _emit_matches_of(emit_json: str | None) -> int | None:
+    """Match count for the feed chip. None (never checked) is distinct from 0 (checked, none)."""
+    if emit_json is None:
+        return None
+    matches = json.loads(emit_json).get("matches", [])
+    return len(matches) if isinstance(matches, list) else 0
+
+
 def _detection_out(row: Detection) -> DetectionOut:
     return DetectionOut(
         id=row.id,
@@ -431,6 +439,7 @@ def _detection_out(row: Detection) -> DetectionOut:
         u10_ms=row.u10_ms,
         wind_from_deg=row.wind_from_deg,
         score=_score_of(row.result_json),
+        emit_matches=_emit_matches_of(row.emit_json),
         flags=_flags_of(row.result_json),
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -478,6 +487,7 @@ def get_detection_detail(engine: Engine, det_id: str) -> DetectionDetailOut:
             mask_geojson=json.loads(row.mask_geojson) if row.mask_geojson else None,
             overlay_bounds=result.get("overlay_bounds"),
             validation=json.loads(row.validation_json) if row.validation_json else None,
+            emit_json=json.loads(row.emit_json) if row.emit_json else None,
         )
 
 

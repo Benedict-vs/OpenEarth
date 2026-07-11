@@ -110,19 +110,33 @@ review feed (`source="ml"`, single-pass Q, physics/ML disagreement flag) — nev
 detector; weights ship out-of-band via `data_dir`. Methods in `docs/methane_methods.md` §9; branch
 v2/phase5-ml.*
 
-## Phase 6 — EMIT + Embeddings + products v1 (M)
+## Phase 6 — EMIT + Embeddings + products v1 (M) ✅
 
 EMIT provider (GEE ≤ Oct 2024 + earthaccess V2 fallback) with detection cross-validation;
 AlphaEarth embeddings explorer (similarity/change/clusters); wind particle layer; first derived
 products as catalog recipes; compose.yaml + deploy doc.
 *Exit: EMIT plumes overlay a known event and cross-match a detection; similarity search works
-from a clicked seed; `docker compose up` serves the full app.*
+from a clicked seed; `docker compose up` serves the full app.* ✅
+*As-built: EMIT is independent evidence on existing detections (`emit_json`, migration 5), not a
+detection source — a frozen GEE V001 mirror (`emit` builtin dataset + `methane/emit.py` plume
+model) plus an earthaccess V002 GeoJSON fallback (lazy-imported in `services/emit.py`, CH4PLMMETA
+asset only), cross-matched ≤5 km/≤3 d (live: 0.14 km on a Permian super-emitter). AlphaEarth
+embeddings (`embeddings.py` + `/embeddings/*` + a sixth Explore view) do cosine similarity /
+1−cosine change / seeded wekaKMeans over the unit-norm 64-D annual vectors (live: a Neckar seed
+lit every waterway; k-means mapped forest/farmland/urban). Wind particles are a vendored
+webgl-wind MapLibre custom layer fed by `/wind/field` (no deck.gl, no API change). Two-window
+compare recipes (`needs_ref` + `pre_`/`post_` bands + `get_compare_image`): `DNBR` (Rhodes 2023
+burn scar), `URBAN_HEAT` (NDBI−NDVI), `FLOOD_VV_CHANGE` (Emilia-Romagna 2023 inundation).
+`compose.yaml` (uv multi-stage api + nginx web, SSE-safe proxy) + `docs/deploy.md`. Methods
+§10; branch v2/phase6-emit-embeddings.*
 
 ## Backlog (deliberately out of scope until their phase)
 
-- Derived products beyond the Phase 6 trio: deforestation change, urban heat proxy
-  (NDBI−NDVI), phenology SOS/EOS (Savitzky–Golay), soil-moisture & biomass proxies,
-  building damage. Rule: each must be a TOML catalog recipe, not a bespoke endpoint.
+- Multi-*source* fusion products (S1+S2): deforestation change, flood mask (VV + MNDWI change),
+  soil-moisture & biomass proxies, building damage — the compare recipe schema unlocked
+  single-source temporal deltas (Phase 6), but true fusion needs a cross-collection pipeline.
+- Other derived products: phenology SOS/EOS (Savitzky–Golay), Lyzenga bathymetry, AOD downscale.
+  Rule: each must be a TOML catalog recipe, not a bespoke endpoint.
 - STARCOP/AVIRIS data for the EMIT tier; detection fine-tuning on accumulated review decisions.
 - URL-encoded shareable app state; workspace export.
 - Public deployment (revisit GEE licensing terms first).

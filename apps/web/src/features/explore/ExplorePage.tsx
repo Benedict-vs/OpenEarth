@@ -2,6 +2,7 @@ import { MapProvider } from "../../map/MapContext";
 import { useInspector } from "../../map/useInspector";
 import { useTerraDraw } from "../../map/useTerraDraw";
 import { WindOverlay } from "../../map/WindOverlay";
+import { WindParticles } from "../../map/WindParticles";
 import { useWindStore } from "../../stores/windStore";
 import { AnimationBar } from "./AnimationBar";
 import { CatalogBrowser } from "./CatalogBrowser";
@@ -58,6 +59,8 @@ function ExplorePanel() {
 function WindToggle() {
   const enabled = useWindStore((s) => s.enabled);
   const toggle = useWindStore((s) => s.toggle);
+  const particles = useWindStore((s) => s.particlesEnabled);
+  const toggleParticles = useWindStore((s) => s.toggleParticles);
   return (
     <>
       <button
@@ -66,6 +69,13 @@ function WindToggle() {
         title="Overlay ERA5 10 m wind arrows for the active date over the map view"
       >
         {enabled ? "◈ Wind overlay on" : "◈ Show wind overlay"}
+      </button>
+      <button
+        className={particles ? "inspect-toggle active" : "inspect-toggle"}
+        onClick={toggleParticles}
+        title="Animated GPU wind particles advecting along the same ERA5 field"
+      >
+        {particles ? "✳ Wind particles on" : "✳ Show wind particles"}
       </button>
       <p className="muted wind-note">
         ERA5 10 m wind at 12:00 UTC on the active date — weather context, not overpass-matched.
@@ -79,6 +89,7 @@ export function ExplorePage() {
     <MapProvider south={<ChartPanel />}>
       <LayerEngine />
       <WindOverlay />
+      <WindParticles />
       <ExplorePanel />
     </MapProvider>
   );

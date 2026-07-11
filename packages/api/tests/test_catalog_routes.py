@@ -30,13 +30,18 @@ display_unit = "m"
 def test_list_catalog_builtins(client: TestClient) -> None:
     body = client.get("/api/catalog").json()
     ids = {ds["id"] for ds in body}
-    assert ids == {"s5p", "s2", "s1"}
+    assert ids == {"s5p", "s2", "s1", "emit"}
     s2 = next(ds for ds in body if ds["id"] == "s2")
     assert s2["is_custom"] is False
     ndvi = next(p for p in s2["products"] if p["key"] == "NDVI")
     assert ndvi["requires_builder"] is False
     anomaly = next(p for p in s2["products"] if p["key"] == "CH4_ANOMALY")
     assert anomaly["requires_builder"] is True
+    # EMIT ships as a builtin (not custom) and needs no dedicated builder.
+    emit = next(ds for ds in body if ds["id"] == "emit")
+    assert emit["is_custom"] is False
+    ch4enh = next(p for p in emit["products"] if p["key"] == "CH4ENH")
+    assert ch4enh["requires_builder"] is False
 
 
 def test_get_single_dataset_and_404(client: TestClient) -> None:

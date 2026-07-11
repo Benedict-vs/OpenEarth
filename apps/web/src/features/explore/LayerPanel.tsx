@@ -28,7 +28,7 @@ function StatusBadge({ layer, now }: { layer: Layer; now: number }) {
 }
 
 function LayerRow({ layer, isTop, isBottom }: { layer: Layer; isTop: boolean; isBottom: boolean }) {
-  const { removeLayer, setOpacity, toggleVisible, toggleAutoRange, moveLayer } =
+  const { removeLayer, setOpacity, setRef, toggleVisible, toggleAutoRange, moveLayer } =
     useLayersStore.getState();
   const now = useNow(1000);
 
@@ -84,6 +84,27 @@ function LayerRow({ layer, isTop, isBottom }: { layer: Layer; isTop: boolean; is
         title={`Opacity ${(layer.opacity * 100).toFixed(0)} %`}
         onChange={(event) => setOpacity(layer.id, Number(event.target.value))}
       />
+      {layer.needsRef && layer.ref ? (
+        <div className="layer-ref">
+          <span className="layer-ref-label" title="Reference (pre) window; post = the shared dates">
+            Reference window (pre)
+          </span>
+          <div className="layer-ref-inputs">
+            <input
+              type="date"
+              value={layer.ref.start}
+              aria-label="Reference start"
+              onChange={(e) => setRef(layer.id, { start: e.target.value, end: layer.ref!.end })}
+            />
+            <input
+              type="date"
+              value={layer.ref.end}
+              aria-label="Reference end"
+              onChange={(e) => setRef(layer.id, { start: layer.ref!.start, end: e.target.value })}
+            />
+          </div>
+        </div>
+      ) : null}
       {layer.mint ? <Legend legend={layer.mint.legend} /> : null}
       {layer.status === "error" && layer.error ? (
         <p className="muted layer-error">{layer.error}</p>

@@ -50,6 +50,19 @@ export type MlScanRequest = components["schemas"]["MlScanRequest"];
 export type MlStatus = components["schemas"]["MlStatusOut"];
 export type ReferenceEvent = components["schemas"]["ReferenceEventOut"];
 
+// ── EMIT plumes (Phase 6) ──────────────────────────────────
+export type EmitPlume = components["schemas"]["EmitPlumeOut"];
+export type EmitPlumes = components["schemas"]["EmitPlumesOut"];
+export type EmitMatch = components["schemas"]["EmitMatchOut"];
+export type EmitMatchResult = components["schemas"]["EmitMatchResult"];
+
+// ── Embeddings Explorer (Phase 6) ──────────────────────────
+export type EmbeddingTile = components["schemas"]["EmbeddingTileOut"];
+export type EmbeddingYears = components["schemas"]["EmbeddingYearsOut"];
+export type EmbeddingSimilarityRequest = components["schemas"]["EmbeddingSimilarityRequest"];
+export type EmbeddingChangeRequest = components["schemas"]["EmbeddingChangeRequest"];
+export type EmbeddingClusterRequest = components["schemas"]["EmbeddingClusterRequest"];
+
 /** Screening hotspots arrive in the job's (untyped) SSE result, not a schema. */
 export interface Hotspot {
   lat: number;

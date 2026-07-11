@@ -13,6 +13,7 @@ import diskcache
 from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 
+from openearth.geometry import BBox
 from openearth.settings import Settings
 from openearth_api.deps import ensure_ee, get_app_settings, get_cache, get_db_engine, get_jobs
 from openearth_api.jobs import JobManager  # runtime import: FastAPI evaluates route annotations
@@ -21,6 +22,7 @@ from openearth_api.schemas import (
     DetectionDetailOut,
     DetectionOut,
     DetectionPatch,
+    EmitPlumesOut,
     JobCreated,
     MlScanRequest,
     MlStatusOut,
@@ -33,6 +35,7 @@ from openearth_api.schemas import (
     ValidationImportOut,
     ValidationOut,
 )
+from openearth_api.services import emit as svc_emit
 from openearth_api.services import methane as svc
 from openearth_api.services import ml as svc_ml
 
@@ -150,6 +153,28 @@ def detection_array(det_id: str, engine: EngineDep, settings: SettingsDep) -> Fi
     return FileResponse(
         path, media_type="application/octet-stream", filename=f"detection_{det_id}.npz"
     )
+
+
+# ── EMIT plumes (Phase 6) ──
+
+
+@router.get("/methane/emit/plumes", dependencies=[Depends(ensure_ee)])
+def list_emit_plumes(
+    cache: CacheDep,
+    west: Annotated[float, Query(ge=-180, le=180)],
+    south: Annotated[float, Query(ge=-90, le=90)],
+    east: Annotated[float, Query(ge=-180, le=180)],
+    north: Annotated[float, Query(ge=-90, le=90)],
+    start: Annotated[str, Query()],
+    end: Annotated[str, Query()],
+) -> EmitPlumesOut:
+    bbox = BBox(west, south, east, north)  # InvalidROIError → 422
+    return svc_emit.list_plumes_out(bbox, start, end, cache)
+
+
+@router.post("/methane/detections/{det_id}/emit-match", dependencies=[Depends(ensure_ee)])
+def emit_match_detection(det_id: str, engine: EngineDep, cache: CacheDep) -> DetectionDetailOut:
+    return svc_emit.match_detection(engine, cache, det_id)
 
 
 # ── Screening ──

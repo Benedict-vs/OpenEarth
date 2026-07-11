@@ -24,10 +24,24 @@ interface DateParams {
 }
 
 export function buildTilesRequest(
-  layer: Pick<Layer, "dataset" | "product" | "vizOverrides" | "autoRange">,
+  layer: Pick<Layer, "dataset" | "product" | "vizOverrides" | "autoRange" | "ref">,
   roi: TilesRequest["roi"],
   dates: DateParams,
 ): TilesRequest {
+  // Two-window compare product: post = the shared date range, pre = the layer's ref.
+  if (layer.ref) {
+    return {
+      dataset: layer.dataset,
+      product: layer.product,
+      roi: roi ?? null,
+      viz_overrides: layer.vizOverrides ?? null,
+      auto_range: layer.autoRange,
+      composite: "mean",
+      dates: { start: dates.start, end: dates.end },
+      ref: { start: layer.ref.start, end: layer.ref.end },
+      half_window_days: dates.halfWindowDays,
+    };
+  }
   if (dates.mode === "single") {
     return {
       dataset: layer.dataset,
@@ -126,6 +140,7 @@ export function useMintLayer(layer: Layer): void {
         product: layer.product,
         vizOverrides: layer.vizOverrides,
         autoRange: layer.autoRange,
+        ref: layer.ref,
       },
       roi,
       { mode, start, end, targetDate, halfWindowDays },

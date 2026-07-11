@@ -120,6 +120,47 @@ display_unit = "ratio"
     assert product.bands == ["B1", "B2"]
 
 
+def test_needs_ref_product_accepted_in_user_toml() -> None:
+    # needs_ref is a recipe flag (not bespoke code), so user TOML may use it.
+    toml = (
+        MINIMAL_TOML
+        + """
+[products.CHANGE]
+name = "Two-window change"
+bands = ["B1"]
+expression = "post_B1 - pre_B1"
+needs_ref = true
+vis_min = -1.0
+vis_max = 1.0
+valid_min = -2.0
+valid_max = 2.0
+display_unit = "delta"
+"""
+    )
+    product = parse_dataset_toml(toml).get("CHANGE")
+    assert product.needs_ref is True
+    assert product.expression == "post_B1 - pre_B1"
+
+
+def test_needs_ref_without_expression_rejected() -> None:
+    toml = (
+        MINIMAL_TOML
+        + """
+[products.BAD]
+name = "Bad compare"
+bands = ["B1"]
+needs_ref = true
+vis_min = -1.0
+vis_max = 1.0
+valid_min = -2.0
+valid_max = 2.0
+display_unit = "delta"
+"""
+    )
+    with pytest.raises(InvalidDatasetSpecError, match="needs_ref products require an 'expression'"):
+        parse_dataset_toml(toml)
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [

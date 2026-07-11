@@ -72,6 +72,7 @@ class ProductOut(BaseModel):
     is_rgb: bool
     methane_only: bool
     requires_builder: bool
+    needs_ref: bool = False  # two-window compare product (pre + post) → show a ref picker
 
 
 class DatasetOut(BaseModel):
@@ -115,6 +116,10 @@ class TilesRequest(BaseModel):
     # Reference window that unlocks the CH4_ANOMALY quicklook (a builder product
     # that 422s without it): the target is the composite's ``target_date``.
     methane_ref: DateRangeIn | None = None
+    # Reference window for two-window compare products (``needs_ref``, e.g. DNBR /
+    # FLOOD_VV_CHANGE): pre = ``ref``, post = ``dates``. Kept distinct from
+    # ``methane_ref`` (a later cleanup can unify them). 422 when absent.
+    ref: DateRangeIn | None = None
 
 
 class LegendOut(BaseModel):
@@ -431,13 +436,15 @@ class DetectionOut(BaseModel):
     u10_ms: float | None
     wind_from_deg: float | None
     score: float | None = None  # ML candidate score (max prob); None for physics rows
+    # EMIT plume matches: count when a cross-match has run, None = never checked.
+    emit_matches: int | None = None
     flags: list[str]
     created_at: str
     updated_at: str
 
 
 class DetectionDetailOut(DetectionOut):
-    """Full detail: numbers, params, mask + overlay geometry, validation."""
+    """Full detail: numbers, params, mask + overlay geometry, validation, EMIT."""
 
     reference_scene_id: str | None
     ime_kg: float | None
@@ -448,6 +455,7 @@ class DetectionDetailOut(DetectionOut):
     # Map image-source corners, [[w,n],[e,n],[e,s],[w,s]] (EPSG:4326).
     overlay_bounds: list[list[float]] | None
     validation: dict[str, Any] | None
+    emit_json: EmitMatchResult | None = None  # EMIT cross-match evidence (migration 5)
 
 
 class DetectionPatch(BaseModel):
@@ -519,6 +527,86 @@ class ValidationImportOut(BaseModel):
 class ValidationOut(BaseModel):
     verdict: Literal["confirmed", "plausible", "unvalidated", "contradicted"]
     matched_event_ids: list[int]
+
+
+# ── EMIT plumes (Phase 6) ────────────────────────────────────
+
+
+class EmitPlumeOut(BaseModel):
+    """One EMIT methane plume complex. ``provenance`` distinguishes the source."""
+
+    plume_id: str
+    outline: dict[str, Any]  # GeoJSON geometry (Polygon/MultiPolygon, EPSG:4326)
+    time_utc: str
+    provenance: Literal["gee_v001", "lpdaac_v002"]
+    max_enh_ppm_m: float | None
+    max_enh_lat: float | None
+    max_enh_lon: float | None
+    q_kg_h: float | None  # emission rate — V002 only; null for the frozen GEE mirror
+    q_sigma_kg_h: float | None
+    source_scenes: list[str]
+
+
+class EmitPlumesOut(BaseModel):
+    """Plume list plus which source paths were queried (the GEE freeze is honest)."""
+
+    plumes: list[EmitPlumeOut]
+    provenance_paths: list[Literal["gee_v001", "lpdaac_v002"]]
+
+
+class EmitMatchOut(BaseModel):
+    plume: EmitPlumeOut
+    distance_km: float
+    dt_hours: float  # signed: plume time − detection scene time
+
+
+class EmitMatchResult(BaseModel):
+    """Stored on a detection (``emit_json``): the outcome of a cross-match run."""
+
+    checked_at: str
+    provenance_paths: list[Literal["gee_v001", "lpdaac_v002"]]
+    matches: list[EmitMatchOut]
+
+
+# ── Embeddings Explorer (AlphaEarth, Phase 6) ────────────────
+
+
+class EmbeddingSimilarityRequest(BaseModel):
+    """Cosine-similarity layer to the embedding at a clicked seed point."""
+
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    year: int
+    roi: BBoxIn | None = None  # optional client viewport echo; the tile is global
+
+
+class EmbeddingChangeRequest(BaseModel):
+    """Year-to-year embedding change (1 − cosine) layer."""
+
+    year_a: int
+    year_b: int
+    roi: BBoxIn | None = None
+
+
+class EmbeddingClusterRequest(BaseModel):
+    """Unsupervised k-means over the embedding within an ROI (required — it trains there)."""
+
+    roi: BBoxIn
+    year: int
+    k: int = Field(default=6)  # clamped to [2, 12] server-side
+
+
+class EmbeddingTileOut(BaseModel):
+    tile_url: str
+    expires_at: datetime
+    attribution: str
+    legend: LegendOut
+    seed_norm: float | None = None  # similarity: ‖seed‖ sanity echo (≈ 1.0)
+    n_clusters: int | None = None  # cluster: k actually used after clamping
+
+
+class EmbeddingYearsOut(BaseModel):
+    years: list[int]
 
 
 # ── Timelapse ────────────────────────────────────────────────

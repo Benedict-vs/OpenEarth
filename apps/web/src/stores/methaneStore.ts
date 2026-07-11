@@ -26,6 +26,8 @@ interface MethaneState {
   params: RunParams;
   selectedDetectionId: string | null;
   job: JobProgress | null;
+  /** EMIT plume overlay on the Lab map (independent evidence, not our detections). */
+  emitPlumesEnabled: boolean;
 
   selectSite(site: Site | null): void;
   setDates(start: string, end: string): void;
@@ -34,6 +36,7 @@ interface MethaneState {
   setParams(params: Partial<RunParams>): void;
   selectDetection(id: string | null): void;
   setJob(job: JobProgress | null): void;
+  setEmitPlumes(enabled: boolean): void;
 }
 
 const DEFAULT_PARAMS: RunParams = { method: "mbmp", kSigma: 2, minAreaPx: 5, seed: 0 };
@@ -54,6 +57,7 @@ export const useMethaneStore = create<MethaneState>()((set) => ({
   params: DEFAULT_PARAMS,
   selectedDetectionId: null,
   job: null,
+  emitPlumesEnabled: false,
 
   selectSite: (site) =>
     set({
@@ -69,4 +73,5 @@ export const useMethaneStore = create<MethaneState>()((set) => ({
   setParams: (params) => set((s) => ({ params: { ...s.params, ...params } })),
   selectDetection: (id) => set({ selectedDetectionId: id }),
   setJob: (job) => set({ job }),
+  setEmitPlumes: (enabled) => set({ emitPlumesEnabled: enabled }),
 }));

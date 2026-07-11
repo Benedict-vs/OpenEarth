@@ -6,9 +6,9 @@
 import maplibregl from "maplibre-gl";
 import { useEffect, useRef } from "react";
 import { mintTiles } from "../api/queries";
-import { useDetectionDetail } from "../api/methaneQueries";
+import { useDetectionDetail, useEmitPlumes } from "../api/methaneQueries";
 import { overlayUrl } from "../api/methaneQueries";
-import type { DetectionDetail, Site } from "../api/types";
+import type { DetectionDetail, EmitPlume, EmitPlumes, Site } from "../api/types";
 import { toImageCoordinates } from "../lib/methane";
 import { useMethaneStore } from "../stores/methaneStore";
 import { BASEMAP_STYLES, DEFAULT_BASEMAP } from "./basemap";
@@ -17,6 +17,11 @@ const OVERLAY_SRC = "det-overlay";
 const MASK_SRC = "det-mask";
 const BOX_SRC = "site-box";
 const RGB_SRC = "s2-rgb";
+const PLUME_SRC = "emit-plumes";
+
+// Provenance styling: amber = frozen GEE V001 mirror, emerald = live LP DAAC V002.
+const PLUME_COLOR_V001 = "#fbbf24";
+const PLUME_COLOR_V002 = "#34d399";
 
 function boxGeoJSON(site: Site): GeoJSON.Feature {
   const { west, south, east, north } = site.bbox;
@@ -45,6 +50,16 @@ export function LabMap() {
   const site = useMethaneStore((s) => s.selectedSite);
   const detId = useMethaneStore((s) => s.selectedDetectionId);
   const { data: detail } = useDetectionDetail(detId);
+
+  const emitEnabled = useMethaneStore((s) => s.emitPlumesEnabled);
+  const setEmitPlumes = useMethaneStore((s) => s.setEmitPlumes);
+  const dates = useMethaneStore((s) => s.dates);
+  const { data: plumes, isFetching: plumesFetching } = useEmitPlumes(
+    site,
+    dates.start,
+    dates.end,
+    emitEnabled,
+  );
 
   // Create the map once.
   useEffect(() => {
@@ -138,7 +153,159 @@ export function LabMap() {
     }
   }, [detId, detail]);
 
-  return <div ref={containerRef} className="lab-map" data-testid="lab-map" />;
+  // EMIT plume overlay: outlines styled by provenance, click for q ± σ.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    if (!emitEnabled || !plumes) {
+      removePlumeLayers(map);
+      return;
+    }
+    const fc = plumesFeatureCollection(plumes);
+    const existing = map.getSource(PLUME_SRC) as maplibregl.GeoJSONSource | undefined;
+    if (existing) {
+      existing.setData(fc);
+    } else {
+      addPlumeLayers(map, fc);
+    }
+  }, [emitEnabled, plumes]);
+
+  const plumeCount = emitEnabled ? (plumes?.plumes.length ?? null) : null;
+
+  return (
+    <div ref={containerRef} className="lab-map" data-testid="lab-map">
+      <label
+        className="lab-emit-toggle"
+        title="EMIT methane plume complexes (independent evidence)"
+      >
+        <input
+          type="checkbox"
+          checked={emitEnabled}
+          onChange={(e) => setEmitPlumes(e.target.checked)}
+        />
+        <span>EMIT plumes</span>
+        {emitEnabled ? (
+          <span className="lab-emit-count">
+            {plumesFetching ? "…" : plumeCount != null ? plumeCount : "—"}
+          </span>
+        ) : null}
+      </label>
+      {emitEnabled ? (
+        <div className="lab-emit-legend">
+          <span>
+            <i style={{ background: PLUME_COLOR_V002 }} /> V002 (live)
+          </span>
+          <span>
+            <i style={{ background: PLUME_COLOR_V001 }} /> V001 (GEE, ≤ Oct 2024)
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** GeoJSON FeatureCollection from a plume list; properties drive styling + popups. */
+function plumesFeatureCollection(plumes: EmitPlumes): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: plumes.plumes.map((p: EmitPlume) => ({
+      type: "Feature",
+      geometry: p.outline as unknown as GeoJSON.Geometry,
+      properties: {
+        plume_id: p.plume_id,
+        provenance: p.provenance,
+        time_utc: p.time_utc,
+        max_enh_ppm_m: p.max_enh_ppm_m,
+        q_kg_h: p.q_kg_h,
+        q_sigma_kg_h: p.q_sigma_kg_h,
+      },
+    })),
+  };
+}
+
+function addPlumeLayers(map: maplibregl.Map, fc: GeoJSON.FeatureCollection) {
+  map.addSource(PLUME_SRC, { type: "geojson", data: fc });
+  const colorByProvenance: maplibregl.ExpressionSpecification = [
+    "match",
+    ["get", "provenance"],
+    "lpdaac_v002",
+    PLUME_COLOR_V002,
+    PLUME_COLOR_V001,
+  ];
+  map.addLayer({
+    id: `${PLUME_SRC}-fill`,
+    type: "fill",
+    source: PLUME_SRC,
+    paint: { "fill-color": colorByProvenance, "fill-opacity": 0.18 },
+  });
+  // line-dasharray is not data-driven, so split solid (V002) from dashed (V001).
+  map.addLayer({
+    id: `${PLUME_SRC}-line-v002`,
+    type: "line",
+    source: PLUME_SRC,
+    filter: ["==", ["get", "provenance"], "lpdaac_v002"],
+    paint: { "line-color": PLUME_COLOR_V002, "line-width": 2 },
+  });
+  map.addLayer({
+    id: `${PLUME_SRC}-line-v001`,
+    type: "line",
+    source: PLUME_SRC,
+    filter: ["==", ["get", "provenance"], "gee_v001"],
+    paint: { "line-color": PLUME_COLOR_V001, "line-width": 2, "line-dasharray": [2, 2] },
+  });
+
+  const popup = new maplibregl.Popup({ closeButton: false, maxWidth: "260px" });
+  for (const layer of [`${PLUME_SRC}-line-v002`, `${PLUME_SRC}-line-v001`, `${PLUME_SRC}-fill`]) {
+    map.on("mouseenter", layer, () => (map.getCanvas().style.cursor = "pointer"));
+    map.on("mouseleave", layer, () => (map.getCanvas().style.cursor = ""));
+    map.on("click", layer, (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      popup
+        .setLngLat(e.lngLat)
+        .setHTML(plumePopupHtml(f.properties ?? {}))
+        .addTo(map);
+    });
+  }
+}
+
+function removePlumeLayers(map: maplibregl.Map) {
+  for (const layer of [`${PLUME_SRC}-fill`, `${PLUME_SRC}-line-v002`, `${PLUME_SRC}-line-v001`]) {
+    if (map.getLayer(layer)) map.removeLayer(layer);
+  }
+  if (map.getSource(PLUME_SRC)) map.removeSource(PLUME_SRC);
+}
+
+function plumePopupHtml(props: Record<string, unknown>): string {
+  const provenance =
+    props.provenance === "lpdaac_v002" ? "V002 (LP DAAC, live)" : "V001 (GEE mirror)";
+  const time = String(props.time_utc ?? "")
+    .slice(0, 16)
+    .replace("T", " ");
+  const enh = num(props.max_enh_ppm_m);
+  const q = num(props.q_kg_h);
+  const qSigma = num(props.q_sigma_kg_h);
+  const rows: string[] = [
+    `<strong>EMIT plume</strong> · ${provenance}`,
+    `<div class="pp-time">${escapeHtml(time)} UTC</div>`,
+  ];
+  if (enh != null) rows.push(`<div>Max enhancement: ${enh.toFixed(0)} ppm·m</div>`);
+  if (q != null) {
+    const sig = qSigma != null ? ` ± ${qSigma.toFixed(0)}` : "";
+    rows.push(`<div>Emission rate: ${q.toFixed(0)}${sig} kg/h</div>`);
+  }
+  return `<div class="emit-popup">${rows.join("")}</div>`;
+}
+
+function num(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!,
+  );
 }
 
 function clearDetectionLayers(

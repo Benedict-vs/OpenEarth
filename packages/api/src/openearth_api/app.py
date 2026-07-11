@@ -27,6 +27,7 @@ from openearth_api.jobs import JobManager
 from openearth_api.routers import (
     aois,
     catalog,
+    embeddings,
     export,
     inspect,
     jobs,
@@ -124,4 +125,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workspaces.router, prefix="/api")
     app.include_router(methane.router, prefix="/api")
     app.include_router(timelapse.router, prefix="/api")
+    app.include_router(embeddings.router, prefix="/api")
     return app
