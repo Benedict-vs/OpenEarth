@@ -1,0 +1,50 @@
+# OpenEarth v2 — one command to serve the whole app.
+#
+#   docker compose up --build      # → http://localhost:8080
+#
+# The web container serves the SPA and proxies /api to the api container (SSE-safe,
+# see docker/nginx.conf). All state (SQLite + diskcache + detection/timelapse
+# artifacts) lives under ./data, bind-mounted so it survives restarts. The app
+# boots with no Earth Engine or Earthdata credentials — EE routes just 503 until
+# they are provided (see docs/deploy.md for the two EE auth paths + EARTHDATA_TOKEN).
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    environment:
+      OPENEARTH_DATA_DIR: /data
+      # Earth Engine project (required for any EE route). Set in a .env file or the shell.
+      OPENEARTH_EE_PROJECT: ${OPENEARTH_EE_PROJECT:-}
+      # NASA Earthdata token for the EMIT V002 plume fallback (optional).
+      EARTHDATA_TOKEN: ${EARTHDATA_TOKEN:-}
+      # Headless EE auth: point at a mounted service-account JSON (see the volume below).
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+    volumes:
+      - ./data:/data
+      # ── Earth Engine credentials — pick ONE (see docs/deploy.md) ──
+      # Personal use: mount your interactive `earthengine authenticate` creds:
+      #   - ${HOME}/.config/earthengine:/home/openearth/.config/earthengine:ro
+      # Headless: mount a service-account key and set GOOGLE_APPLICATION_CREDENTIALS
+      # to its in-container path, e.g.:
+      #   - ./ee-service-account.json:/run/secrets/ee-sa.json:ro
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

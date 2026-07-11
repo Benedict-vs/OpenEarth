@@ -1,0 +1,16 @@
+# Keep the build context small + reproducible.
+.git
+.github
+data
+**/.venv
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+.mypy_cache
+.ruff_cache
+.pytest_cache
+apps/web/.vite
+# Local + ignored artifacts
+.env
+*.local
