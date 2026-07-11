@@ -53,6 +53,11 @@ export function ScreeningDialog({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
+        <p className="muted screening-note">
+          Regional pre-screen on Sentinel-5P (TROPOMI) XCH4: flags grid cells with persistent
+          enhancement over the background — a coarse where-to-look pass, not a plume detection.
+          Follow up on a hotspot with a site + Sentinel-2 analysis.
+        </p>
         <p className="muted">
           {site ? `Region: ${site.name}` : "Region: default Turkmenistan box"}
         </p>

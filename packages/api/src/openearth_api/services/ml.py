@@ -37,7 +37,7 @@ from openearth.methane.conversion import (
 )
 from openearth.methane.ime import emission_over_mask
 from openearth.methane.plume import mask_outline_geojson
-from openearth.methane.retrieval import RetrievalChip, fetch_chip
+from openearth.methane.retrieval import RetrievalChip, check_chip_bbox, fetch_chip
 from openearth.methane.scenes import S2Scene, list_scenes, pick_reference
 from openearth.methane.wind import sample_wind_at
 from openearth.settings import Settings
@@ -269,7 +269,13 @@ async def submit_ml_scan(
 ) -> JobCreated:
     """Validate the site + model, then submit the ``methane_ml_scan`` job."""
     with Session(engine) as session:
-        bbox = _resolve_bbox(session, req.site_id, None)  # 404 if the site is unknown
+        bbox = _resolve_bbox(session, req.site_id, req.roi)  # 404 if the site is unknown
+    try:
+        check_chip_bbox(bbox)  # fail at submit, not partway through the scan
+    except ValueError as exc:
+        raise HTTPException(
+            422, f"{exc} At 20 m the analysis area is limited to ~20 km per side."
+        ) from exc
     load_model(settings)  # 503 at submit if the model is not installed
 
     def runner(ctx: Any) -> dict[str, Any]:

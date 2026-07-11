@@ -10,7 +10,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated, Literal
 
 import diskcache
-from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 
 from openearth.geometry import BBox
@@ -19,6 +29,7 @@ from openearth_api.deps import ensure_ee, get_app_settings, get_cache, get_db_en
 from openearth_api.jobs import JobManager  # runtime import: FastAPI evaluates route annotations
 from openearth_api.schemas import (
     AnalyzeRequest,
+    BBoxIn,
     DetectionDetailOut,
     DetectionOut,
     DetectionPatch,
@@ -81,8 +92,20 @@ def list_site_scenes(
     start: Annotated[str, Query()],
     end: Annotated[str, Query()],
     max_cloud: Annotated[float, Query(ge=0, le=100)] = 80.0,
+    # Optional analysis-area override (all four or none): scenes are listed over
+    # the area actually analyzed, not the browse-scale site ROI, so a picked
+    # scene is guaranteed to cover the chip.
+    west: Annotated[float | None, Query(ge=-180, le=180)] = None,
+    south: Annotated[float | None, Query(ge=-90, le=90)] = None,
+    east: Annotated[float | None, Query(ge=-180, le=180)] = None,
+    north: Annotated[float | None, Query(ge=-90, le=90)] = None,
 ) -> list[SceneInfoOut]:
-    return svc.list_scenes_for(engine, site_id, None, start, end, max_cloud)
+    roi = None
+    if west is not None and south is not None and east is not None and north is not None:
+        roi = BBoxIn(west=west, south=south, east=east, north=north)
+    elif any(c is not None for c in (west, south, east, north)):
+        raise HTTPException(422, "Provide all of west/south/east/north or none.")
+    return svc.list_scenes_for(engine, site_id, roi, start, end, max_cloud)
 
 
 # ── Analyze ──

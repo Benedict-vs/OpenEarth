@@ -16,9 +16,15 @@ export function sourceIdFor(layerId: string): string {
   return `oe-${layerId}`;
 }
 
-/** The id of the first terra-draw layer, used as a z-ceiling for rasters. */
-function drawCeiling(map: MapLibreMap): string | undefined {
-  return map.getStyle().layers?.find((l) => l.id.startsWith("td-"))?.id;
+/** The wind-particles custom layer stays above all data rasters. */
+const WIND_LAYER_ID = "wind-particles";
+
+function rasterCeiling(map: MapLibreMap): string | undefined {
+  return map.getLayer(WIND_LAYER_ID) ? WIND_LAYER_ID : undefined;
+}
+
+function terraDrawLayerIds(map: MapLibreMap): string[] {
+  return (map.getStyle().layers ?? []).filter((l) => l.id.startsWith("td-")).map((l) => l.id);
 }
 
 export function useRasterLayer(layer: Layer): void {
@@ -48,7 +54,7 @@ export function useRasterLayer(layer: Layer): void {
         paint: { "raster-opacity": layer.opacity },
         layout: { visibility: layer.visible ? "visible" : "none" },
       },
-      drawCeiling(map),
+      rasterCeiling(map),
     );
     // Opacity/visibility deliberately excluded: they must not recreate the
     // source. Their own effects below handle changes.
@@ -82,11 +88,21 @@ export function useRasterLayer(layer: Layer): void {
 }
 
 /** Re-assert store order on the map: bottom→top moveLayer sweeps, capped
- *  below any terra-draw layers. Never touches sources. */
-export function applyLayerOrder(map: MapLibreMap, orderedLayerIds: string[]): void {
-  const ceiling = drawCeiling(map);
+ *  below the wind particles. The terra-draw ROI outline goes on top only
+ *  while the user is drawing; otherwise it sits *beneath* the data rasters
+ *  so it never tints the displayed data. Never touches sources. */
+export function applyLayerOrder(
+  map: MapLibreMap,
+  orderedLayerIds: string[],
+  drawActive = false,
+): void {
+  const ceiling = rasterCeiling(map);
   for (const layerId of orderedLayerIds) {
     const sid = sourceIdFor(layerId);
     if (map.getLayer(sid)) map.moveLayer(sid, ceiling);
   }
+  // Bottom-most existing raster; undefined (→ top) when nothing is minted yet.
+  const bottomRaster = orderedLayerIds.map(sourceIdFor).find((sid) => map.getLayer(sid));
+  const drawTarget = drawActive ? undefined : bottomRaster;
+  for (const id of terraDrawLayerIds(map)) map.moveLayer(id, drawTarget);
 }

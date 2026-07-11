@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm } from "./client";
 import type {
   AnalyzeRequest,
+  BBoxIn,
   Detection,
   DetectionDetail,
   DetectionPatch,
@@ -58,12 +59,26 @@ export function useDeleteSite() {
 
 // ── Scenes ──
 
-export function useSiteScenes(siteId: number | null, start: string, end: string, maxCloud = 80) {
+export function useSiteScenes(
+  siteId: number | null,
+  start: string,
+  end: string,
+  maxCloud = 80,
+  /** Scenes are listed over the analysis area (when set), not the browse-scale
+   *  site ROI, so every listed scene covers the chip actually analyzed. */
+  roi?: BBoxIn | null,
+) {
   return useQuery({
-    queryKey: ["methane", "scenes", siteId, start, end, maxCloud],
+    queryKey: ["methane", "scenes", siteId, start, end, maxCloud, roi ?? null],
     enabled: siteId != null,
     queryFn: () => {
       const q = new URLSearchParams({ start, end, max_cloud: String(maxCloud) });
+      if (roi) {
+        q.set("west", String(roi.west));
+        q.set("south", String(roi.south));
+        q.set("east", String(roi.east));
+        q.set("north", String(roi.north));
+      }
       return apiGet<SceneInfo[]>(`/api/methane/sites/${siteId}/scenes?${q.toString()}`);
     },
   });

@@ -18,6 +18,7 @@ from openearth_api.jobs import JobManager  # runtime import: FastAPI evaluates r
 from openearth_api.schemas import (
     RenderDetailOut,
     RenderOut,
+    RenderUpdateIn,
     TimelapseCreated,
     TimelapseRequest,
 )
@@ -48,6 +49,11 @@ def list_renders(engine: EngineDep) -> list[RenderOut]:
 @router.get("/timelapse/{render_id}")
 def get_render(render_id: str, engine: EngineDep, settings: SettingsDep) -> RenderDetailOut:
     return svc.get_render_detail(engine, settings, render_id)
+
+
+@router.patch("/timelapse/{render_id}")
+def update_render(render_id: str, body: RenderUpdateIn, engine: EngineDep) -> RenderOut:
+    return svc.update_render(engine, render_id, body.title)
 
 
 @router.get(

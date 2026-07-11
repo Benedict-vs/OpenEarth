@@ -18,6 +18,11 @@ export function DateControl() {
           Single date
         </button>
       </div>
+      <p className="muted date-semantics">
+        {mode === "range"
+          ? "All scenes in the range are averaged into one composite (clouds masked out for optical data) — this is not a browsable stack of dates."
+          : "Mean composite of the scenes within ± days around the date (clouds masked out for optical data)."}
+      </p>
       {mode === "range" ? (
         <div className="date-inputs">
           <label>

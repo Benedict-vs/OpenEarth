@@ -8,16 +8,19 @@ import { useEffect, useRef } from "react";
 import { mintTiles } from "../api/queries";
 import { useDetectionDetail, useEmitPlumes } from "../api/methaneQueries";
 import { overlayUrl } from "../api/methaneQueries";
-import type { DetectionDetail, EmitPlume, EmitPlumes, Site } from "../api/types";
-import { toImageCoordinates } from "../lib/methane";
+import type { BBoxIn, EmitPlume, EmitPlumes, Site } from "../api/types";
+import { analysisAreaToBBox, toImageCoordinates } from "../lib/methane";
 import { useMethaneStore } from "../stores/methaneStore";
 import { BASEMAP_STYLES, DEFAULT_BASEMAP } from "./basemap";
 
 const OVERLAY_SRC = "det-overlay";
 const MASK_SRC = "det-mask";
 const BOX_SRC = "site-box";
-const RGB_SRC = "s2-rgb";
+const AREA_SRC = "analysis-area";
+const SCENE_RGB_SRC = "scene-rgb";
 const PLUME_SRC = "emit-plumes";
+
+const AREA_COLOR = "#f472b6";
 
 // Provenance styling: amber = frozen GEE V001 mirror, emerald = live LP DAAC V002.
 const PLUME_COLOR_V001 = "#fbbf24";
@@ -41,6 +44,26 @@ function boxGeoJSON(site: Site): GeoJSON.Feature {
   };
 }
 
+function areaGeoJSON(bbox: BBoxIn): GeoJSON.Feature {
+  const { west, south, east, north } = bbox;
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [west, north],
+          [east, north],
+          [east, south],
+          [west, south],
+          [west, north],
+        ],
+      ],
+    },
+  };
+}
+
 export function LabMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -49,6 +72,17 @@ export function LabMap() {
 
   const site = useMethaneStore((s) => s.selectedSite);
   const detId = useMethaneStore((s) => s.selectedDetectionId);
+  const area = useMethaneStore((s) => s.analysisArea);
+  const placing = useMethaneStore((s) => s.placingArea);
+  const setAnalysisArea = useMethaneStore((s) => s.setAnalysisArea);
+  const setPlacingArea = useMethaneStore((s) => s.setPlacingArea);
+  const targetSceneTime = useMethaneStore((s) => s.targetSceneTime);
+  const rgbEnabled = useMethaneStore((s) => s.rgbPreviewEnabled);
+  const setRgbPreview = useMethaneStore((s) => s.setRgbPreview);
+  const overlayVisible = useMethaneStore((s) => s.overlayVisible);
+  const overlayOpacity = useMethaneStore((s) => s.overlayOpacity);
+  const setOverlayVisible = useMethaneStore((s) => s.setOverlayVisible);
+  const setOverlayOpacity = useMethaneStore((s) => s.setOverlayOpacity);
   const { data: detail } = useDetectionDetail(detId);
 
   const emitEnabled = useMethaneStore((s) => s.emitPlumesEnabled);
@@ -84,6 +118,22 @@ export function LabMap() {
         source: BOX_SRC,
         paint: { "line-color": "#38bdf8", "line-width": 1.5, "line-dasharray": [2, 2] },
       });
+      map.addSource(AREA_SRC, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: `${AREA_SRC}-fill`,
+        type: "fill",
+        source: AREA_SRC,
+        paint: { "fill-color": AREA_COLOR, "fill-opacity": 0.08 },
+      });
+      map.addLayer({
+        id: `${AREA_SRC}-line`,
+        type: "line",
+        source: AREA_SRC,
+        paint: { "line-color": AREA_COLOR, "line-width": 2 },
+      });
     });
     return () => {
       readyRef.current = false;
@@ -107,6 +157,85 @@ export function LabMap() {
     );
   }, [site]);
 
+  // Keep the analysis-area box (the chip actually analyzed) in sync.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    const src = map.getSource(AREA_SRC) as maplibregl.GeoJSONSource | undefined;
+    src?.setData({
+      type: "FeatureCollection",
+      features: area ? [areaGeoJSON(analysisAreaToBBox(area))] : [],
+    });
+  }, [area]);
+
+  // ΔXCH4 overlay visibility/opacity — paint/layout only, never a re-mint.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current || !map.getLayer(`${OVERLAY_SRC}-layer`)) return;
+    map.setLayoutProperty(
+      `${OVERLAY_SRC}-layer`,
+      "visibility",
+      overlayVisible ? "visible" : "none",
+    );
+    map.setPaintProperty(`${OVERLAY_SRC}-layer`, "raster-opacity", overlayOpacity);
+  }, [overlayVisible, overlayOpacity]);
+
+  // True-colour preview of the scene under review, beneath the boxes — surface
+  // context for placing the analysis area and the bare-eye false-positive check.
+  // A selected detection supplies its own scene time, so feed review keeps the
+  // RGB context through this same single layer.
+  const rgbSceneTime = targetSceneTime ?? detail?.scene_time_utc ?? null;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    const remove = () => {
+      if (map.getLayer(`${SCENE_RGB_SRC}-layer`)) map.removeLayer(`${SCENE_RGB_SRC}-layer`);
+      if (map.getSource(SCENE_RGB_SRC)) map.removeSource(SCENE_RGB_SRC);
+    };
+    remove();
+    if (!rgbEnabled || !site || !rgbSceneTime) return;
+
+    let stale = false;
+    void mintTiles({
+      dataset: "s2",
+      product: "RGB",
+      roi: site.bbox,
+      composite: "single_scene",
+      timestamp_ms: Date.parse(rgbSceneTime),
+    } as Parameters<typeof mintTiles>[0])
+      .then((tile) => {
+        if (stale || map.getSource(SCENE_RGB_SRC)) return;
+        map.addSource(SCENE_RGB_SRC, { type: "raster", tiles: [tile.tile_url], tileSize: 256 });
+        map.addLayer(
+          { id: `${SCENE_RGB_SRC}-layer`, type: "raster", source: SCENE_RGB_SRC },
+          "site-box-line", // beneath the site/area boxes and all detection layers
+        );
+      })
+      .catch(() => {
+        // Preview is best-effort; the basemap stays.
+      });
+    return () => {
+      stale = true; // re-runs start with remove(); unmount destroys the map anyway
+    };
+  }, [rgbEnabled, site, rgbSceneTime]);
+
+  // "Place on map": the next click recentres the analysis area.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !placing) return;
+    const canvas = map.getCanvas();
+    canvas.style.cursor = "crosshair";
+    const onClick = (e: maplibregl.MapMouseEvent) => {
+      setAnalysisArea({ lon: e.lngLat.lng, lat: e.lngLat.lat });
+      setPlacingArea(false);
+    };
+    map.once("click", onClick);
+    return () => {
+      map.off("click", onClick);
+      canvas.style.cursor = "";
+    };
+  }, [placing, setAnalysisArea, setPlacingArea]);
+
   // Render the selected detection's overlay + mask + wind + RGB context.
   useEffect(() => {
     const map = mapRef.current;
@@ -116,13 +245,14 @@ export function LabMap() {
 
     const coords = toImageCoordinates(detail.overlay_bounds);
     if (coords) {
-      void addRgbContext(map, detail);
+      const { overlayVisible, overlayOpacity } = useMethaneStore.getState();
       map.addSource(OVERLAY_SRC, { type: "image", url: overlayUrl(detId), coordinates: coords });
       map.addLayer({
         id: `${OVERLAY_SRC}-layer`,
         type: "raster",
         source: OVERLAY_SRC,
-        paint: { "raster-opacity": 0.85 },
+        paint: { "raster-opacity": overlayOpacity },
+        layout: { visibility: overlayVisible ? "visible" : "none" },
       });
       map.fitBounds([coords[3], coords[1]] as [[number, number], [number, number]], {
         padding: 60,
@@ -174,22 +304,62 @@ export function LabMap() {
 
   return (
     <div ref={containerRef} className="lab-map" data-testid="lab-map">
-      <label
-        className="lab-emit-toggle"
-        title="EMIT methane plume complexes (independent evidence)"
-      >
-        <input
-          type="checkbox"
-          checked={emitEnabled}
-          onChange={(e) => setEmitPlumes(e.target.checked)}
-        />
-        <span>EMIT plumes</span>
-        {emitEnabled ? (
-          <span className="lab-emit-count">
-            {plumesFetching ? "…" : plumeCount != null ? plumeCount : "—"}
-          </span>
+      <div className="lab-toggles">
+        {detId && detail?.overlay_bounds ? (
+          <label
+            className="lab-emit-toggle lab-overlay-control"
+            title="ΔXCH4 overlay visibility and opacity — hide it to check the RGB below"
+          >
+            <input
+              type="checkbox"
+              checked={overlayVisible}
+              onChange={(e) => setOverlayVisible(e.target.checked)}
+            />
+            <span>ΔXCH4</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={overlayOpacity}
+              disabled={!overlayVisible}
+              onChange={(e) => setOverlayOpacity(Number(e.target.value))}
+            />
+          </label>
         ) : null}
-      </label>
+        <label
+          className="lab-emit-toggle lab-rgb-toggle"
+          title={
+            rgbSceneTime
+              ? "True-colour view of the scene under review (context for placing the analysis area). Cloud-masked: s2cloudless-flagged pixels render transparent."
+              : "Select a scene or detection to preview its true-colour image"
+          }
+        >
+          <input
+            type="checkbox"
+            checked={rgbEnabled}
+            disabled={!rgbSceneTime}
+            onChange={(e) => setRgbPreview(e.target.checked)}
+          />
+          <span>S2 RGB</span>
+        </label>
+        <label
+          className="lab-emit-toggle"
+          title="EMIT methane plume complexes (independent evidence)"
+        >
+          <input
+            type="checkbox"
+            checked={emitEnabled}
+            onChange={(e) => setEmitPlumes(e.target.checked)}
+          />
+          <span>EMIT plumes</span>
+          {emitEnabled ? (
+            <span className="lab-emit-count">
+              {plumesFetching ? "…" : plumeCount != null ? plumeCount : "—"}
+            </span>
+          ) : null}
+        </label>
+      </div>
       {emitEnabled ? (
         <div className="lab-emit-legend">
           <span>
@@ -312,42 +482,14 @@ function clearDetectionLayers(
   map: maplibregl.Map,
   windMarker: React.MutableRefObject<maplibregl.Marker | null>,
 ) {
-  for (const layer of [`${OVERLAY_SRC}-layer`, `${MASK_SRC}-line`, `${RGB_SRC}-layer`]) {
+  for (const layer of [`${OVERLAY_SRC}-layer`, `${MASK_SRC}-line`]) {
     if (map.getLayer(layer)) map.removeLayer(layer);
   }
-  for (const src of [OVERLAY_SRC, MASK_SRC, RGB_SRC]) {
+  for (const src of [OVERLAY_SRC, MASK_SRC]) {
     if (map.getSource(src)) map.removeSource(src);
   }
   windMarker.current?.remove();
   windMarker.current = null;
-}
-
-/** Best-effort S2 true-colour context under the overlay (silent on failure). */
-async function addRgbContext(map: maplibregl.Map, detail: DetectionDetail) {
-  const coords = toImageCoordinates(detail.overlay_bounds);
-  if (!coords) return;
-  const [tl, , br] = coords;
-  const west = tl[0];
-  const north = tl[1];
-  const east = br[0];
-  const south = br[1];
-  const timestampMs = Date.parse(detail.scene_time_utc);
-  try {
-    const tile = await mintTiles({
-      dataset: "s2",
-      product: "RGB",
-      roi: { kind: "bbox", west, south, east, north },
-      composite: "single_scene",
-      timestamp_ms: timestampMs,
-    } as Parameters<typeof mintTiles>[0]);
-    if (!map.getSource(RGB_SRC) && !map.getLayer(`${OVERLAY_SRC}-layer`)) return;
-    if (map.getSource(RGB_SRC)) return;
-    map.addSource(RGB_SRC, { type: "raster", tiles: [tile.tile_url], tileSize: 256 });
-    const before = map.getLayer(`${OVERLAY_SRC}-layer`) ? `${OVERLAY_SRC}-layer` : undefined;
-    map.addLayer({ id: `${RGB_SRC}-layer`, type: "raster", source: RGB_SRC }, before);
-  } catch {
-    // Context imagery is optional; the basemap remains beneath the overlay.
-  }
 }
 
 function windArrowEl(fromDeg: number): HTMLElement {

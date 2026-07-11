@@ -66,8 +66,13 @@ export function FramePlayer({ renderId, frameCount }: { renderId: string; frameC
           <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
           Loop
         </label>
-        <a className="mini download-link" href={downloadUrl(renderId)} download>
-          ↓ Movie
+        <a
+          className="mini download-link"
+          href={downloadUrl(renderId)}
+          download
+          title="Download the encoded movie file"
+        >
+          Download
         </a>
       </div>
     </div>

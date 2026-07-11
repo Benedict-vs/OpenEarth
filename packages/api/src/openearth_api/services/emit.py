@@ -114,14 +114,19 @@ def _fetch_v002_plumes(bbox: BBox, start: str, end: str) -> list[EmitPlume]:
     """
     import earthaccess  # lazy: keeps create_app() and CI credential-free
 
+    # Env vars first, ~/.netrc as the fallback — never "all", whose last resort
+    # is an interactive prompt that would hang the worker thread.
     try:
         earthaccess.login(strategy="environment")
-    except Exception as exc:  # any auth failure → one actionable 502
-        raise HTTPException(
-            502,
-            "EMIT V002 plumes need NASA Earthdata credentials — set EARTHDATA_TOKEN "
-            "(or EARTHDATA_USERNAME/PASSWORD, or ~/.netrc). See docs/deploy.md.",
-        ) from exc
+    except Exception:
+        try:
+            earthaccess.login(strategy="netrc")
+        except Exception as exc:  # any auth failure → one actionable 502
+            raise HTTPException(
+                502,
+                "EMIT V002 plumes need NASA Earthdata credentials — set EARTHDATA_TOKEN "
+                "(or EARTHDATA_USERNAME/PASSWORD, or ~/.netrc). See docs/deploy.md.",
+            ) from exc
 
     results = earthaccess.search_data(
         short_name=_V002_SHORT_NAME,

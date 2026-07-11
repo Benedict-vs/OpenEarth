@@ -1,6 +1,56 @@
 /** Pure helpers for the Methane Lab (no React, no map — unit-tested). */
 import type { EChartsCoreOption } from "echarts/core";
-import type { DetectionDetail, MethaneHistogram } from "../api/types";
+import type { BBoxIn, DetectionDetail, MethaneHistogram, Site } from "../api/types";
+
+/**
+ * The analysis area sent as the analyze/ML-scan `roi`: a square box centred on
+ * (lon, lat). Site ROIs are browse-scale (~100 km) and exceed the 20 m chip
+ * limit, so analysis always runs on a chip-sized sub-area of the site.
+ */
+export interface AnalysisArea {
+  lon: number;
+  lat: number;
+  sizeKm: number;
+}
+
+const KM_PER_DEG = 111.32;
+
+/** The server refuses chips over 1024 px; at 20 m that is ~20.5 km per side. */
+export const MAX_ANALYSIS_KM = 20;
+export const MIN_ANALYSIS_KM = 2;
+export const DEFAULT_ANALYSIS_KM = 10;
+
+/** Chip side length in 20 m pixels for a given box size. */
+export function analysisAreaPx(sizeKm: number): number {
+  return Math.ceil((sizeKm * 1000) / 20);
+}
+
+/** The square analysis bbox around the area's centre (lon widened by 1/cos φ). */
+export function analysisAreaToBBox(area: AnalysisArea): BBoxIn {
+  const halfLat = area.sizeKm / KM_PER_DEG / 2;
+  // Clamp cos φ away from 0 so polar centres cannot blow up the width.
+  const cosLat = Math.max(Math.cos((area.lat * Math.PI) / 180), 0.01);
+  const halfLon = area.sizeKm / (KM_PER_DEG * cosLat) / 2;
+  return {
+    kind: "bbox",
+    west: area.lon - halfLon,
+    south: area.lat - halfLat,
+    east: area.lon + halfLon,
+    north: area.lat + halfLat,
+  };
+}
+
+/** Default analysis area for a site: centred, 10 km (shrunk to fit small sites). */
+export function defaultAnalysisArea(site: Site): AnalysisArea {
+  const { west, south, east, north } = site.bbox;
+  const lon = (west + east) / 2;
+  const lat = (south + north) / 2;
+  const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.01);
+  const widthKm = (east - west) * KM_PER_DEG * cosLat;
+  const heightKm = (north - south) * KM_PER_DEG;
+  const fitKm = Math.min(DEFAULT_ANALYSIS_KM, widthKm, heightKm);
+  return { lon, lat, sizeKm: Math.max(MIN_ANALYSIS_KM, Math.round(fitKm)) };
+}
 
 /** MapLibre image-source corner order [TL, TR, BR, BL]. */
 export type ImageCoordinates = [

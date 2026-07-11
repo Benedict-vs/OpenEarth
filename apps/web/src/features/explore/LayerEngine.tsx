@@ -18,21 +18,23 @@ function LayerController({ layer }: { layer: Layer }) {
   return null;
 }
 
-export function LayerEngine() {
+export function LayerEngine({ drawActive = false }: { drawActive?: boolean }) {
   const layers = useLayersStore((state) => state.layers);
   const { map, ready } = useMapContext();
 
   // Re-assert z-order whenever the ordered id list (or any mint) changes —
-  // a layer's map-side object only exists after its first mint.
+  // a layer's map-side object only exists after its first mint — and when
+  // drawing starts/stops (the ROI outline moves above/below the rasters).
   const orderKey = layers.map((l) => `${l.id}:${l.mint ? 1 : 0}`).join(",");
   useEffect(() => {
     if (!map || !ready) return;
     applyLayerOrder(
       map,
       layers.map((l) => l.id),
+      drawActive,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, ready, orderKey]);
+  }, [map, ready, orderKey, drawActive]);
 
   return (
     <>

@@ -1,6 +1,6 @@
 /** React-query hooks + plain calls for the Timelapse Studio API. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiDelete, apiGet, apiPost } from "./client";
+import { apiDelete, apiGet, apiPatch, apiPost } from "./client";
 import type { Render, RenderDetail, TimelapseCreated, TimelapseRequest } from "./types";
 
 const RENDERS_KEY = ["timelapse", "renders"] as const;
@@ -25,6 +25,18 @@ export function useRenderDetail(renderId: string | null) {
 
 export function submitTimelapse(body: TimelapseRequest): Promise<TimelapseCreated> {
   return apiPost<TimelapseCreated>("/api/timelapse", body);
+}
+
+export function useRenameRender() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      apiPatch<Render>(`/api/timelapse/${id}`, { title }),
+    onSuccess: (_data, { id }) => {
+      void qc.invalidateQueries({ queryKey: RENDERS_KEY });
+      void qc.invalidateQueries({ queryKey: ["timelapse", "render", id] });
+    },
+  });
 }
 
 export function useDeleteRender() {

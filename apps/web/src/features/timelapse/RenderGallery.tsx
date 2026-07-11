@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { frameUrl, useDeleteRender, useRenders } from "../../api/timelapseQueries";
+import { frameUrl, useDeleteRender, useRenameRender, useRenders } from "../../api/timelapseQueries";
 import type { Render } from "../../api/types";
 
 /** Poster = the middle rendered frame (a representative mid-sequence still). */
@@ -17,7 +17,13 @@ export function RenderGallery({
 }) {
   const { data: renders } = useRenders();
   const del = useDeleteRender();
+  const rename = useRenameRender();
   const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  const promptRename = (r: Render) => {
+    const title = window.prompt("Rename render", r.title)?.trim();
+    if (title && title !== r.title) rename.mutate({ id: r.id, title });
+  };
 
   if (!renders || renders.length === 0) {
     return <p className="muted">No renders yet — configure a timelapse and press Render.</p>;
@@ -53,6 +59,16 @@ export function RenderGallery({
               </span>
             </div>
             <div className="render-actions">
+              <button
+                className="mini"
+                title="Rename render"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  promptRename(r);
+                }}
+              >
+                ✎
+              </button>
               {confirmId === r.id ? (
                 <button
                   className="mini danger"

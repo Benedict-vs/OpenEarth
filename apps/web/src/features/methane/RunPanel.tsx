@@ -3,7 +3,19 @@ import { useState } from "react";
 import { submitAnalyze, submitMlScan, useMlStatus } from "../../api/methaneQueries";
 import { subscribeJob } from "../../api/sse";
 import type { AnalyzeRequest } from "../../api/types";
+import {
+  MAX_ANALYSIS_KM,
+  MIN_ANALYSIS_KM,
+  analysisAreaPx,
+  analysisAreaToBBox,
+} from "../../lib/methane";
 import { useMethaneStore } from "../../stores/methaneStore";
+
+/** One-line method digests (full theory in docs/methane_methods.md §1). */
+const METHOD_TIPS = {
+  mbmp: "MBMP: target-scene SWIR signal minus a clear reference pass — cancels static surface structure. Best default; needs a plume-free reference.",
+  mbsp: "MBSP: single scene, B12 vs B11 only — no reference needed, but bright/dark terrain can mimic plumes. Reliable mainly over uniform arid surfaces.",
+} as const;
 
 export function RunPanel() {
   const qc = useQueryClient();
@@ -14,13 +26,15 @@ export function RunPanel() {
   const job = useMethaneStore((s) => s.job);
   const setJob = useMethaneStore((s) => s.setJob);
   const selectDetection = useMethaneStore((s) => s.selectDetection);
+  const area = useMethaneStore((s) => s.analysisArea);
 
   const running = job?.status === "running";
 
   const run = async () => {
-    if (!site || !target) return;
+    if (!site || !target || !area) return;
     const body: AnalyzeRequest = {
       site_id: site.id,
+      roi: analysisAreaToBBox(area),
       target_scene_id: target,
       method: params.method,
       k_sigma: params.kSigma,
@@ -64,13 +78,18 @@ export function RunPanel() {
             <button
               key={m}
               className={params.method === m ? "toggle active" : "toggle"}
+              title={METHOD_TIPS[m]}
               onClick={() => setParams({ method: m })}
             >
               {m.toUpperCase()}
             </button>
           ))}
         </div>
-        <label className="slider-row">
+        <p className="muted method-note">{METHOD_TIPS[params.method]}</p>
+        <label
+          className="slider-row"
+          title="Detection threshold in robust standard deviations of the ΔXCH4 field — higher k is stricter: fewer false positives, but weaker plumes are missed"
+        >
           k·σ: <b>{params.kSigma.toFixed(2)}</b>
           <input
             type="range"
@@ -81,7 +100,10 @@ export function RunPanel() {
             onChange={(e) => setParams({ kSigma: Number(e.target.value) })}
           />
         </label>
-        <label className="num-row">
+        <label
+          className="num-row"
+          title="Smallest connected group of 20 m pixels kept as a plume candidate — raises the bar against single-pixel noise"
+        >
           Min area (px)
           <input
             type="number"
@@ -90,7 +112,10 @@ export function RunPanel() {
             onChange={(e) => setParams({ minAreaPx: Number(e.target.value) })}
           />
         </label>
-        <label className="num-row">
+        <label
+          className="num-row"
+          title="Random seed for the emission-rate Monte Carlo — the same seed reproduces the same Q ± σ"
+        >
           Seed
           <input
             type="number"
@@ -100,7 +125,13 @@ export function RunPanel() {
         </label>
       </div>
 
-      <button className="primary run-button" disabled={!site || !target || running} onClick={run}>
+      <AnalysisAreaControls />
+
+      <button
+        className="primary run-button"
+        disabled={!site || !target || !area || running}
+        onClick={run}
+      >
         {running ? "Running…" : "Run analysis"}
       </button>
 
@@ -118,6 +149,50 @@ export function RunPanel() {
       ) : null}
 
       <MlScanAction />
+    </div>
+  );
+}
+
+/**
+ * The chip-sized sub-area actually analyzed. Site ROIs are browse-scale
+ * (~100 km) while the 20 m retrieval chip caps at 1024 px (~20 km), so the
+ * user positions a small square within the site: sized here, recentred by
+ * clicking the map ("Place on map").
+ */
+function AnalysisAreaControls() {
+  const area = useMethaneStore((s) => s.analysisArea);
+  const setArea = useMethaneStore((s) => s.setAnalysisArea);
+  const placing = useMethaneStore((s) => s.placingArea);
+  const setPlacing = useMethaneStore((s) => s.setPlacingArea);
+  if (!area) return null;
+
+  const px = analysisAreaPx(area.sizeKm);
+  return (
+    <div className="analysis-area">
+      <div className="analysis-area-head">
+        <span>Analysis area</span>
+        <button
+          className={placing ? "ghost place-button active" : "ghost place-button"}
+          title="Click the map to recentre the analysis area"
+          onClick={() => setPlacing(!placing)}
+        >
+          {placing ? "Click map…" : "Place on map"}
+        </button>
+      </div>
+      <label className="slider-row">
+        Size: <b>{area.sizeKm} km</b>
+        <input
+          type="range"
+          min={MIN_ANALYSIS_KM}
+          max={MAX_ANALYSIS_KM}
+          step={1}
+          value={area.sizeKm}
+          onChange={(e) => setArea({ sizeKm: Number(e.target.value) })}
+        />
+      </label>
+      <p className="muted analysis-area-caption">
+        {px}×{px} px @ 20 m · centre {area.lat.toFixed(3)}°, {area.lon.toFixed(3)}°
+      </p>
     </div>
   );
 }
@@ -142,6 +217,7 @@ function MlScanAction() {
   const site = useMethaneStore((s) => s.selectedSite);
   const dates = useMethaneStore((s) => s.dates);
   const selectDetection = useMethaneStore((s) => s.selectDetection);
+  const area = useMethaneStore((s) => s.analysisArea);
   const { data: status } = useMlStatus();
   const [maxScenes, setMaxScenes] = useState<number>(20);
   const [scan, setScan] = useState<MlScanState | null>(null);
@@ -150,11 +226,12 @@ function MlScanAction() {
   const modelReady = status?.model_loaded ?? false;
 
   const run = async () => {
-    if (!site) return;
+    if (!site || !area) return;
     setScan({ status: "running", done: 0, total: 0, message: "Queued", hits: 0 });
     try {
       const { job_id } = await submitMlScan({
         site_id: site.id,
+        roi: analysisAreaToBBox(area),
         start: dates.start,
         end: dates.end,
         max_scenes: maxScenes,
@@ -212,7 +289,7 @@ function MlScanAction() {
       </label>
       <button
         className="ghost ml-scan-button"
-        disabled={!site || !modelReady || running}
+        disabled={!site || !area || !modelReady || running}
         title={modelReady ? undefined : "ML model not installed — see Settings"}
         onClick={run}
       >

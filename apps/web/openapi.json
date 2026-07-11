@@ -2,7 +2,7 @@
   "components": {
     "schemas": {
       "AnalyzeRequest": {
-        "description": "Exactly one of ``site_id`` / ``roi`` locates the analysis. ``seed`` makes\nthe Monte Carlo reproducible; a re-run with the same seed is bit-for-bit.",
+        "description": "``site_id`` and/or ``roi`` locate the analysis \u2014 with both, ``roi`` is\nthe analysis bbox and the detection stays linked to the site (site ROIs\nare browse-scale and exceed the 20 m chip limit). ``seed`` makes the\nMonte Carlo reproducible; a re-run with the same seed is bit-for-bit.",
         "properties": {
           "k_sigma": {
             "default": 2.0,
@@ -1649,7 +1649,7 @@
         "type": "object"
       },
       "MlScanRequest": {
-        "description": "Scan a site's S2 scenes over a date range with the ONNX U-Net ranker.",
+        "description": "Scan a site's S2 scenes over a date range with the ONNX U-Net ranker.\n\n``roi``, when given, is the analysis bbox (site ROIs are browse-scale and\nexceed the 20 m chip limit); hits stay linked to ``site_id`` either way.",
         "properties": {
           "end": {
             "format": "date",
@@ -1668,6 +1668,16 @@
               }
             ],
             "title": "Max Scenes"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "site_id": {
             "title": "Site Id",
@@ -2112,6 +2122,22 @@
           "updated_at"
         ],
         "title": "RenderOut",
+        "type": "object"
+      },
+      "RenderUpdateIn": {
+        "description": "Editable render metadata \u2014 currently just the gallery title.",
+        "properties": {
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "RenderUpdateIn",
         "type": "object"
       },
       "RoiPresetOut": {
@@ -5125,6 +5151,78 @@
               "title": "Max Cloud",
               "type": "number"
             }
+          },
+          {
+            "in": "query",
+            "name": "west",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180,
+                  "minimum": -180,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "West"
+            }
+          },
+          {
+            "in": "query",
+            "name": "south",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90,
+                  "minimum": -90,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "South"
+            }
+          },
+          {
+            "in": "query",
+            "name": "east",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180,
+                  "minimum": -180,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "East"
+            }
+          },
+          {
+            "in": "query",
+            "name": "north",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90,
+                  "minimum": -90,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "North"
+            }
           }
         ],
         "responses": {
@@ -5507,6 +5605,56 @@
           }
         },
         "summary": "Get Render",
+        "tags": [
+          "timelapse"
+        ]
+      },
+      "patch": {
+        "operationId": "update_render_api_timelapse__render_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "render_id",
+            "required": true,
+            "schema": {
+              "title": "Render Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenderUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Render",
         "tags": [
           "timelapse"
         ]

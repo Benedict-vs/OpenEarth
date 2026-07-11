@@ -528,6 +528,21 @@ code {
   line-height: 1.35;
 }
 
+.date-semantics {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.method-note,
+.scene-cloud-note,
+.screening-note,
+.step-note {
+  margin: 0.25rem 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 /* Theme MapLibre's popup (rendered outside the React tree) to match the app. */
 .maplibregl-popup-content {
   background: var(--panel);
@@ -979,6 +994,32 @@ button.ghost {
 .run-button {
   margin-top: 4px;
 }
+.analysis-area {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.analysis-area-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+.place-button {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+.place-button.active {
+  border-color: #f472b6;
+  color: #f472b6;
+}
+.analysis-area-caption {
+  margin: 0;
+  font-size: 11px;
+}
 .run-progress {
   font-size: 12px;
 }
@@ -1305,6 +1346,32 @@ button.ghost {
 .lab-emit-toggle input {
   accent-color: #34d399;
   cursor: pointer;
+}
+/* Both map chips (S2 RGB + EMIT) share one top-right row. */
+.lab-toggles {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+.lab-toggles .lab-emit-toggle {
+  position: static;
+}
+.lab-rgb-toggle input {
+  accent-color: var(--accent);
+}
+.lab-overlay-control input[type="range"] {
+  width: 72px;
+  accent-color: #d9534f;
+}
+.lab-overlay-control input[type="range"]:disabled {
+  opacity: 0.4;
+}
+.lab-rgb-toggle:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
 }
 .lab-emit-count {
   min-width: 18px;

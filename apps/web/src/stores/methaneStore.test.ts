@@ -38,6 +38,27 @@ describe("methaneStore", () => {
     expect(next.referenceSceneId).toBe("auto");
   });
 
+  it("selecting a site seeds a centred analysis area and disarms placing", () => {
+    useMethaneStore.setState({ placingArea: true });
+    useMethaneStore.getState().selectSite(SITE);
+
+    const next = useMethaneStore.getState();
+    expect(next.analysisArea?.lon).toBeCloseTo(54.2, 9);
+    expect(next.analysisArea?.lat).toBeCloseTo(38.5, 9);
+    expect(next.analysisArea?.sizeKm).toBe(10);
+    expect(next.placingArea).toBe(false);
+
+    next.setAnalysisArea({ lon: 54.0, lat: 38.4 });
+    expect(useMethaneStore.getState().analysisArea).toEqual({ lon: 54.0, lat: 38.4, sizeKm: 10 });
+  });
+
+  it("setTarget carries the scene time; clearing the target clears it", () => {
+    useMethaneStore.getState().setTarget("scene-1", "2024-06-07T07:06:29Z");
+    expect(useMethaneStore.getState().targetSceneTime).toBe("2024-06-07T07:06:29Z");
+    useMethaneStore.getState().setTarget(null);
+    expect(useMethaneStore.getState().targetSceneTime).toBeNull();
+  });
+
   it("run lifecycle: job progress transitions", () => {
     const store = useMethaneStore.getState();
     store.setJob({ jobId: "j1", step: 3, total: 7, message: "Sampling wind", status: "running" });

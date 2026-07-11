@@ -406,8 +406,10 @@ class SceneInfoOut(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    """Exactly one of ``site_id`` / ``roi`` locates the analysis. ``seed`` makes
-    the Monte Carlo reproducible; a re-run with the same seed is bit-for-bit."""
+    """``site_id`` and/or ``roi`` locate the analysis — with both, ``roi`` is
+    the analysis bbox and the detection stays linked to the site (site ROIs
+    are browse-scale and exceed the 20 m chip limit). ``seed`` makes the
+    Monte Carlo reproducible; a re-run with the same seed is bit-for-bit."""
 
     site_id: int | None = None
     roi: BBoxIn | None = None
@@ -490,9 +492,13 @@ class HotspotOut(BaseModel):
 
 
 class MlScanRequest(BaseModel):
-    """Scan a site's S2 scenes over a date range with the ONNX U-Net ranker."""
+    """Scan a site's S2 scenes over a date range with the ONNX U-Net ranker.
+
+    ``roi``, when given, is the analysis bbox (site ROIs are browse-scale and
+    exceed the 20 m chip limit); hits stay linked to ``site_id`` either way."""
 
     site_id: int
+    roi: BBoxIn | None = None
     start: date
     end: date
     max_scenes: int | None = Field(default=None, ge=1, le=200)
@@ -647,6 +653,12 @@ class TimelapseRequest(BaseModel):
 class TimelapseCreated(BaseModel):
     job_id: str
     render_id: str
+
+
+class RenderUpdateIn(BaseModel):
+    """Editable render metadata — currently just the gallery title."""
+
+    title: str = Field(min_length=1, max_length=200)
 
 
 class RenderOut(BaseModel):

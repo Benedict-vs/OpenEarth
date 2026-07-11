@@ -75,8 +75,9 @@ surfaced at `GET /api/config`).
 
 ## Earthdata (EMIT V002) authentication
 
-`earthaccess.login(strategy="environment")` reads `EARTHDATA_TOKEN` (or
-`EARTHDATA_USERNAME`/`EARTHDATA_PASSWORD`, or a mounted `~/.netrc`). Generate a token at
+The V002 fetch tries `earthaccess.login(strategy="environment")` — `EARTHDATA_TOKEN` or
+`EARTHDATA_USERNAME`/`EARTHDATA_PASSWORD` — and falls back to a mounted `~/.netrc`
+(`strategy="netrc"`); it never prompts interactively. Generate a token at
 <https://urs.earthdata.nasa.gov> → *Generate Token*. Without it, the frozen GEE V001
 EMIT path still works; only the V002 fallback 502s.
 
