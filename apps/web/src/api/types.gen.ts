@@ -124,6 +124,74 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/embeddings/change": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Embedding Change */
+    post: operations["embedding_change_api_embeddings_change_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/embeddings/cluster": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Embedding Cluster */
+    post: operations["embedding_cluster_api_embeddings_cluster_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/embeddings/similarity": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Embedding Similarity */
+    post: operations["embedding_similarity_api_embeddings_similarity_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/embeddings/years": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Embedding Years */
+    get: operations["embedding_years_api_embeddings_years_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/export/geotiff": {
     parameters: {
       query?: never;
@@ -1066,6 +1134,66 @@ export interface components {
       notes?: string | null;
       /** Status */
       status?: ("candidate" | "accepted" | "rejected") | null;
+    };
+    /**
+     * EmbeddingChangeRequest
+     * @description Year-to-year embedding change (1 − cosine) layer.
+     */
+    EmbeddingChangeRequest: {
+      roi?: components["schemas"]["BBoxIn"] | null;
+      /** Year A */
+      year_a: number;
+      /** Year B */
+      year_b: number;
+    };
+    /**
+     * EmbeddingClusterRequest
+     * @description Unsupervised k-means over the embedding within an ROI (required — it trains there).
+     */
+    EmbeddingClusterRequest: {
+      /**
+       * K
+       * @default 6
+       */
+      k: number;
+      roi: components["schemas"]["BBoxIn"];
+      /** Year */
+      year: number;
+    };
+    /**
+     * EmbeddingSimilarityRequest
+     * @description Cosine-similarity layer to the embedding at a clicked seed point.
+     */
+    EmbeddingSimilarityRequest: {
+      /** Lat */
+      lat: number;
+      /** Lon */
+      lon: number;
+      roi?: components["schemas"]["BBoxIn"] | null;
+      /** Year */
+      year: number;
+    };
+    /** EmbeddingTileOut */
+    EmbeddingTileOut: {
+      /** Attribution */
+      attribution: string;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      legend: components["schemas"]["LegendOut"];
+      /** N Clusters */
+      n_clusters?: number | null;
+      /** Seed Norm */
+      seed_norm?: number | null;
+      /** Tile Url */
+      tile_url: string;
+    };
+    /** EmbeddingYearsOut */
+    EmbeddingYearsOut: {
+      /** Years */
+      years: number[];
     };
     /** EmitMatchOut */
     EmitMatchOut: {
@@ -2164,6 +2292,125 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ConfigOut"];
+        };
+      };
+    };
+  };
+  embedding_change_api_embeddings_change_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmbeddingChangeRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmbeddingTileOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  embedding_cluster_api_embeddings_cluster_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmbeddingClusterRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmbeddingTileOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  embedding_similarity_api_embeddings_similarity_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EmbeddingSimilarityRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmbeddingTileOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  embedding_years_api_embeddings_years_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EmbeddingYearsOut"];
         };
       };
     };

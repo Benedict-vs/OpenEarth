@@ -120,6 +120,7 @@ module = [
     "openearth.methane.tropomi",
     "openearth.timeseries",
     "openearth.export",
+    "openearth.embeddings",
     "openearth_api.services.*",
 ]
 warn_return_any = false

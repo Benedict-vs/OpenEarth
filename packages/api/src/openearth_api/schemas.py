@@ -563,6 +563,47 @@ class EmitMatchResult(BaseModel):
     matches: list[EmitMatchOut]
 
 
+# ── Embeddings Explorer (AlphaEarth, Phase 6) ────────────────
+
+
+class EmbeddingSimilarityRequest(BaseModel):
+    """Cosine-similarity layer to the embedding at a clicked seed point."""
+
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    year: int
+    roi: BBoxIn | None = None  # optional client viewport echo; the tile is global
+
+
+class EmbeddingChangeRequest(BaseModel):
+    """Year-to-year embedding change (1 − cosine) layer."""
+
+    year_a: int
+    year_b: int
+    roi: BBoxIn | None = None
+
+
+class EmbeddingClusterRequest(BaseModel):
+    """Unsupervised k-means over the embedding within an ROI (required — it trains there)."""
+
+    roi: BBoxIn
+    year: int
+    k: int = Field(default=6)  # clamped to [2, 12] server-side
+
+
+class EmbeddingTileOut(BaseModel):
+    tile_url: str
+    expires_at: datetime
+    attribution: str
+    legend: LegendOut
+    seed_norm: float | None = None  # similarity: ‖seed‖ sanity echo (≈ 1.0)
+    n_clusters: int | None = None  # cluster: k actually used after clamping
+
+
+class EmbeddingYearsOut(BaseModel):
+    years: list[int]
+
+
 # ── Timelapse ────────────────────────────────────────────────
 
 

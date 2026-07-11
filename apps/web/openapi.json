@@ -867,6 +867,162 @@
         "title": "DetectionPatch",
         "type": "object"
       },
+      "EmbeddingChangeRequest": {
+        "description": "Year-to-year embedding change (1 \u2212 cosine) layer.",
+        "properties": {
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "year_a": {
+            "title": "Year A",
+            "type": "integer"
+          },
+          "year_b": {
+            "title": "Year B",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year_a",
+          "year_b"
+        ],
+        "title": "EmbeddingChangeRequest",
+        "type": "object"
+      },
+      "EmbeddingClusterRequest": {
+        "description": "Unsupervised k-means over the embedding within an ROI (required \u2014 it trains there).",
+        "properties": {
+          "k": {
+            "default": 6,
+            "title": "K",
+            "type": "integer"
+          },
+          "roi": {
+            "$ref": "#/components/schemas/BBoxIn"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "roi",
+          "year"
+        ],
+        "title": "EmbeddingClusterRequest",
+        "type": "object"
+      },
+      "EmbeddingSimilarityRequest": {
+        "description": "Cosine-similarity layer to the embedding at a clicked seed point.",
+        "properties": {
+          "lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lon",
+            "type": "number"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lat",
+          "lon",
+          "year"
+        ],
+        "title": "EmbeddingSimilarityRequest",
+        "type": "object"
+      },
+      "EmbeddingTileOut": {
+        "properties": {
+          "attribution": {
+            "title": "Attribution",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "legend": {
+            "$ref": "#/components/schemas/LegendOut"
+          },
+          "n_clusters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Clusters"
+          },
+          "seed_norm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed Norm"
+          },
+          "tile_url": {
+            "title": "Tile Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tile_url",
+          "expires_at",
+          "attribution",
+          "legend"
+        ],
+        "title": "EmbeddingTileOut",
+        "type": "object"
+      },
+      "EmbeddingYearsOut": {
+        "properties": {
+          "years": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "required": [
+          "years"
+        ],
+        "title": "EmbeddingYearsOut",
+        "type": "object"
+      },
       "EmitMatchOut": {
         "properties": {
           "distance_km": {
@@ -3587,6 +3743,150 @@
         "summary": "Config",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/embeddings/change": {
+      "post": {
+        "operationId": "embedding_change_api_embeddings_change_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingTileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Embedding Change",
+        "tags": [
+          "embeddings"
+        ]
+      }
+    },
+    "/api/embeddings/cluster": {
+      "post": {
+        "operationId": "embedding_cluster_api_embeddings_cluster_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingClusterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingTileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Embedding Cluster",
+        "tags": [
+          "embeddings"
+        ]
+      }
+    },
+    "/api/embeddings/similarity": {
+      "post": {
+        "operationId": "embedding_similarity_api_embeddings_similarity_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingSimilarityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingTileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Embedding Similarity",
+        "tags": [
+          "embeddings"
+        ]
+      }
+    },
+    "/api/embeddings/years": {
+      "get": {
+        "operationId": "embedding_years_api_embeddings_years_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingYearsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Embedding Years",
+        "tags": [
+          "embeddings"
         ]
       }
     },
