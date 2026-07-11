@@ -65,11 +65,48 @@ def seams(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
             attribution=kwargs.get("attribution", "test"),
         )
 
+    def fake_compare(
+        data_key: str, roi: Any, ref_start: Any, ref_end: Any, start: Any, end: Any, source: str
+    ) -> str:
+        calls["build"] = ("compare", data_key, roi, ref_start, ref_end, start, end, source)
+        return "fake-image"
+
     monkeypatch.setattr(tiles_service, "build_mean_composite", fake_mean)
     monkeypatch.setattr(tiles_service, "build_date_composite", fake_window)
     monkeypatch.setattr(tiles_service, "build_single_scene", fake_single)
+    monkeypatch.setattr(tiles_service, "get_compare_image", fake_compare)
     monkeypatch.setattr(tiles_service, "mint_tile_url", fake_mint)
     return calls
+
+
+def test_compare_product_requires_ref_422(client: TestClient, seams: dict[str, Any]) -> None:
+    resp = client.post(
+        "/api/tiles",
+        json={"dataset": "s2", "product": "DNBR", "roi": HEIDELBERG, "dates": DATES},
+    )
+    assert resp.status_code == 422
+    assert "ref" in resp.json()["detail"]
+
+
+def test_compare_product_with_ref_reaches_compare_builder(
+    client: TestClient, seams: dict[str, Any]
+) -> None:
+    resp = client.post(
+        "/api/tiles",
+        json={
+            "dataset": "s2",
+            "product": "DNBR",
+            "roi": HEIDELBERG,
+            "dates": {"start": "2023-08-01", "end": "2023-09-01"},  # post window
+            "ref": {"start": "2023-06-01", "end": "2023-07-01"},  # pre window
+        },
+    )
+    assert resp.status_code == 200
+    build = seams["build"]
+    assert build[0] == "compare"
+    assert build[1] == "DNBR"
+    assert (str(build[3]), str(build[4])) == ("2023-06-01", "2023-07-01")  # ref = pre
+    assert (str(build[5]), str(build[6])) == ("2023-08-01", "2023-09-01")  # dates = post
 
 
 def test_mean_composite_with_bbox(client: TestClient, seams: dict[str, Any]) -> None:

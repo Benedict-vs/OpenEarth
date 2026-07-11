@@ -1785,6 +1785,11 @@
             "title": "Name",
             "type": "string"
           },
+          "needs_ref": {
+            "default": false,
+            "title": "Needs Ref",
+            "type": "boolean"
+          },
           "palette": {
             "items": {
               "type": "string"
@@ -2605,6 +2610,16 @@
             "title": "Product",
             "type": "string"
           },
+          "ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "roi": {
             "anyOf": [
               {
@@ -2758,6 +2773,16 @@
           "product": {
             "title": "Product",
             "type": "string"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateRangeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "roi": {
             "anyOf": [

@@ -86,6 +86,8 @@ export function useCompareSide(side: "left" | "right"): CompareSideState {
     visible: true,
     vizOverrides: cfg.viz,
     autoRange: false,
+    needsRef: false,
+    ref: null,
     mint,
     status,
     error,

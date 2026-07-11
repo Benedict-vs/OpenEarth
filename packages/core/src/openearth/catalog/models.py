@@ -63,6 +63,11 @@ class ProductSpec:
     methane_only: bool = False
     source_band: str | None = None
     builder: str | None = None
+    # Two-window compare recipe: ``expression`` references ``pre_``/``post_``-prefixed
+    # bands (from ``bands``), built from a reference and a request window. Refused by
+    # the single-window pipeline; rendered via ``get_compare_image``. Unlike
+    # ``builder`` this is allowed in user TOML (it needs no bespoke code).
+    needs_ref: bool = False
 
     @property
     def band(self) -> str:

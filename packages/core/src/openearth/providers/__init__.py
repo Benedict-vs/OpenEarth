@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import ee
 
 from openearth.catalog import ProductSpec, resolve_product
-from openearth.catalog.registry import resolve_source
 from openearth.ee.client import ee_call
 from openearth.providers.generic import get_generic_collection
 from openearth.providers.s1 import get_s1_collection
@@ -20,6 +19,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "get_collection",
+    "get_compare_image",
     "get_product_config",
     "get_single_image",
     "list_acquisition_times",
@@ -43,7 +43,13 @@ def get_collection(
     Built-in dataset ids route to their sensor-specific pipelines; any other
     id (user-registered TOML datasets) goes through the generic provider.
     """
-    dataset_id = resolve_source(data_key, source)
+    dataset_id, config = resolve_product(data_key, source)
+    if config.needs_ref:
+        raise ValueError(
+            f"Product {data_key!r} needs a reference window (needs_ref); it renders "
+            "only through the two-window compare pipeline (get_compare_image), never a "
+            "single-window collection."
+        )
     if dataset_id == "s1":
         return get_s1_collection(data_key, roi, start_date, end_date)
     if dataset_id == "s2":
@@ -51,6 +57,48 @@ def get_collection(
     if dataset_id == "s5p":
         return get_trace_gas_collection(data_key, roi, start_date, end_date)
     return get_generic_collection(dataset_id, data_key, roi, start_date, end_date)
+
+
+def get_compare_image(
+    data_key: str,
+    roi: ROI,
+    ref_start: str | date | datetime,
+    ref_end: str | date | datetime,
+    start: str | date | datetime,
+    end: str | date | datetime,
+    source: str,
+) -> ee.Image:
+    """Render a two-window compare product (``needs_ref``) → one image.
+
+    Builds a masked mean composite of each raw input band over the reference window
+    (``pre_``) and the request window (``post_``) — reusing the per-source pipeline
+    via :func:`get_collection`, so cloud masking / polarisation handling are
+    inherited — then applies the product's ``pre_``/``post_`` expression.
+    """
+    dataset_id, config = resolve_product(data_key, source)
+    if not config.needs_ref:
+        raise ValueError(f"Product {data_key!r} is not a two-window compare product.")
+    if not config.expression or not config.bands:
+        raise ValueError(f"Compare product {data_key!r} needs an expression over input bands.")
+
+    def _window_band(band: str, s: str | date | datetime, e: str | date | datetime) -> ee.Image:
+        band_out = get_product_config(band, dataset_id).band
+        return get_collection(band, roi, s, e, dataset_id).mean().select(band_out)
+
+    combined: ee.Image | None = None
+    band_map: dict[str, ee.Image] = {}
+    for band in config.bands:
+        for prefix, s, e in (("pre", ref_start, ref_end), ("post", start, end)):
+            name = f"{prefix}_{band}"
+            renamed = _window_band(band, s, e).rename(name)
+            combined = renamed if combined is None else combined.addBands(renamed)
+            band_map[name] = renamed
+    assert combined is not None  # bands is non-empty (checked above)
+
+    result = combined.expression(config.expression, band_map).rename(config.key)
+    if roi.is_global:
+        return result
+    return result.clip(roi.to_ee_geometry())
 
 
 def list_acquisition_times(

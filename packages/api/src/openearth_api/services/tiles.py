@@ -21,6 +21,7 @@ from openearth.composites import (
 from openearth.ee.render import compute_vis_range, mint_tile_url
 from openearth.errors import validate_date_range
 from openearth.geometry import BBox
+from openearth.providers import get_compare_image
 from openearth_api.schemas import TileResponse, TilesRequest, VizOverrides
 from openearth_api.services.legend import legend_for
 
@@ -95,6 +96,29 @@ def build_image(req: TilesRequest, roi: ROI, spec: ProductSpec) -> ee.Image:
             req.half_window_days,
             req.methane_ref.start,
             req.methane_ref.end,
+        )
+
+    if spec.needs_ref:
+        if req.ref is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{req.product} is a two-window compare product; it needs a 'ref' window.",
+            )
+        if req.dates is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{req.product} needs the request window 'dates' (the post window).",
+            )
+        validate_date_range(req.ref.start, req.ref.end)
+        validate_date_range(req.dates.start, req.dates.end)
+        return get_compare_image(
+            req.product,
+            roi,
+            req.ref.start,
+            req.ref.end,
+            req.dates.start,
+            req.dates.end,
+            source=req.dataset,
         )
 
     if req.composite == "mean":

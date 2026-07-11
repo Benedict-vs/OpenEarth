@@ -164,6 +164,34 @@ WATER_QUALITY_PALETTE: list[str] = [
     "#990000",
 ]
 
+# USGS burn-severity ramp for dNBR (post-fire regrowth green → high-severity purple).
+DNBR_PALETTE: list[str] = [
+    "#1a9850",
+    "#66bd63",
+    "#a6d96a",
+    "#d9ef8b",
+    "#ffffbf",
+    "#fee08b",
+    "#fdae61",
+    "#f46d43",
+    "#d73027",
+    "#7a0177",
+]
+
+# Symmetric diverging ramp (blue → grey → red) for signed compare products.
+DIVERGING_PALETTE: list[str] = [
+    "#2166ac",
+    "#4393c3",
+    "#92c5de",
+    "#d1e5f0",
+    "#f7f7f7",
+    "#fddbc7",
+    "#f4a582",
+    "#d6604d",
+    "#b2182b",
+    "#67001f",
+]
+
 S2_COLLECTION_ID = "COPERNICUS/S2_HARMONIZED"
 S2_SR_COLLECTION_ID = "COPERNICUS/S2_SR_HARMONIZED"
 
@@ -962,6 +990,67 @@ S2_PRODUCTS: dict[str, ProductSpec] = {
         valid_max=1.0,
         display_unit="reflectance",
         palette=SWIR_PALETTE,
+    ),
+    # ── Two-window compare recipes (Phase 6) ──
+    "DNBR": ProductSpec(
+        key="DNBR",
+        name="Burn Severity (dNBR, pre − post)",
+        # NBR = (B8A − B12)/(B8A + B12), matching this catalog's NBR (repo uses B8A,
+        # not the plan's B8). dNBR = pre-fire NBR − post-fire NBR: positive over burn.
+        bands=["B8A", "B12"],
+        expression=(
+            "(pre_B8A - pre_B12) / (pre_B8A + pre_B12) - "
+            "(post_B8A - post_B12) / (post_B8A + post_B12)"
+        ),
+        needs_ref=True,
+        vis_min=-0.5,
+        vis_max=1.0,
+        valid_min=-2.0,
+        valid_max=2.0,
+        display_unit="ΔNBR",
+        description=(
+            "**Reading the dNBR scale:** "
+            "Differenced Normalized Burn Ratio = "
+            "pre-fire NBR − post-fire NBR, over a "
+            "reference (pre) and a request (post) "
+            "window. "
+            "**Values near 0** (green) indicate "
+            "unburned or unchanged surfaces. "
+            "**Elevated positive values** (yellow → "
+            "red → purple) indicate increasing burn "
+            "severity, where the fire drove NBR down. "
+            "The USGS severity classes run from low "
+            "(~0.1) to high (>0.66). "
+            "A cloudy pre or post composite biases the "
+            "result — pick clear-sky windows."
+        ),
+        palette=DNBR_PALETTE,
+    ),
+    "URBAN_HEAT": ProductSpec(
+        key="URBAN_HEAT",
+        name="Urban Built-up Index (NDBI − NDVI)",
+        # Single-window (no needs_ref): built-up (NDBI) minus vegetation (NDVI).
+        bands=["B11", "B8", "B4"],
+        expression="(B11 - B8) / (B11 + B8) - (B8 - B4) / (B8 + B4)",
+        vis_min=-1.0,
+        vis_max=1.0,
+        valid_min=-2.0,
+        valid_max=2.0,
+        display_unit="index",
+        description=(
+            "**Reading the NDBI − NDVI scale:** "
+            "Built-up index minus vegetation index, a "
+            "single-date proxy for impervious, "
+            "heat-retaining urban surfaces. "
+            "**High positive values** (red) indicate "
+            "dense built-up land — the surfaces that "
+            "drive the urban heat-island effect. "
+            "**Negative values** (blue) indicate "
+            "vegetated, cooler land. "
+            "Not a temperature; a surface-cover proxy "
+            "for where heat accumulates."
+        ),
+        palette=DIVERGING_PALETTE,
     ),
 }
 

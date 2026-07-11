@@ -154,3 +154,70 @@ def test_emit_ch4enh_computes_as_raw_band() -> None:
     image = FakeImage()
     _compute_product(image, get_product("emit", "CH4ENH"))  # type: ignore[arg-type]
     assert image.calls == [("select", "vertical_column_enhancement")]
+
+
+# ── Two-window compare recipes (needs_ref) ──
+
+
+def test_single_window_get_collection_refuses_needs_ref() -> None:
+    # DNBR renders only through the two-window pipeline; a single-window collection
+    # would apply its pre_/post_ expression to raw bands and silently mis-render.
+    roi = BBox(8.5, 49.3, 8.8, 49.5)
+    with pytest.raises(ValueError, match="needs_ref"):
+        providers.get_collection("DNBR", roi, "2023-06-01", "2023-07-01", source="s2")
+
+
+class _CompareFake:
+    """Records the band map + expression get_compare_image assembles (no Earth Engine)."""
+
+    def __init__(self, name: str, sink: dict[str, Any]) -> None:
+        self.name = name
+        self.sink = sink
+
+    def mean(self) -> _CompareFake:
+        return self
+
+    def select(self, band: str) -> _CompareFake:
+        return _CompareFake(band, self.sink)
+
+    def rename(self, name: str) -> _CompareFake:
+        return _CompareFake(name, self.sink)
+
+    def addBands(self, other: _CompareFake) -> _CompareFake:
+        return self  # keep the first image as the expression target
+
+    def expression(self, expr: str, band_map: dict[str, Any]) -> _CompareFake:
+        self.sink["expr"] = expr
+        self.sink["keys"] = sorted(band_map)
+        return self
+
+    def clip(self, geometry: Any) -> _CompareFake:
+        self.sink["clipped"] = True
+        return self
+
+
+def test_get_compare_image_builds_pre_post_band_map(monkeypatch: pytest.MonkeyPatch) -> None:
+    sink: dict[str, Any] = {}
+    monkeypatch.setattr(
+        providers,
+        "get_collection",
+        lambda band, roi, s, e, source: _CompareFake(band, sink),
+    )
+    # Global ROI → the clip branch is skipped, so no Earth Engine geometry is built.
+    roi = BBox(-180.0, -90.0, 180.0, 90.0)
+    providers.get_compare_image(
+        "DNBR", roi, "2023-06-01", "2023-07-01", "2023-08-01", "2023-09-01", source="s2"
+    )
+    # One pre_ and one post_ band per raw input band (DNBR uses B8A + B12).
+    assert sink["keys"] == ["post_B12", "post_B8A", "pre_B12", "pre_B8A"]
+    assert "pre_B8A" in sink["expr"]
+    assert "post_B12" in sink["expr"]
+    assert "clipped" not in sink  # global ROI is not clipped
+
+
+def test_get_compare_image_refuses_non_compare_product() -> None:
+    roi = BBox(8.5, 49.3, 8.8, 49.5)
+    with pytest.raises(ValueError, match="not a two-window compare"):
+        providers.get_compare_image(
+            "NDVI", roi, "2023-06-01", "2023-07-01", "2023-08-01", "2023-09-01", source="s2"
+        )

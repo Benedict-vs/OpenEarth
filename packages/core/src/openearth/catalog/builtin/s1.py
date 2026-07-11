@@ -143,6 +143,40 @@ S1_PRODUCTS: dict[str, ProductSpec] = {
         ),
         palette=list(_PALETTE_RATIO),
     ),
+    "FLOOD_VV_CHANGE": ProductSpec(
+        key="FLOOD_VV_CHANGE",
+        name="VV Backscatter Change (post − pre, dB)",
+        collection_id=S1_COLLECTION_ID,
+        # Two-window compare (Phase 6): open-water flooding drops VV sharply, so new
+        # inundation reads strongly negative. Single-source S1 (see the deviation note
+        # in the Phase 6 plan — true S1+S2 fusion is not a TOML recipe).
+        bands=["VV"],
+        expression="post_VV - pre_VV",
+        needs_ref=True,
+        vis_min=-10.0,
+        vis_max=10.0,
+        valid_min=-30.0,
+        valid_max=30.0,
+        display_unit="dB",
+        description=(
+            "**Reading the VV-change scale:** "
+            "Post-window minus pre-window VV "
+            "backscatter (dB), for rapid flood "
+            "mapping. "
+            "**Strongly negative values** (blue) "
+            "indicate new open water — a smooth "
+            "surface that specularly reflects the "
+            "radar away, collapsing VV. "
+            "**Values near 0** indicate stable "
+            "backscatter. "
+            "**Positive values** (red) indicate "
+            "increased roughness (e.g. receding water "
+            "or new structures). "
+            "Ascending/descending orbits are mixed "
+            "here; orbit filtering is a refinement."
+        ),
+        palette=list(_PALETTE_RATIO),
+    ),
     "RVI": ProductSpec(
         key="RVI",
         name="Radar Vegetation Index",

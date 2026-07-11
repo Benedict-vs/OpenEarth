@@ -1464,6 +1464,11 @@ export interface components {
       methane_only: boolean;
       /** Name */
       name: string;
+      /**
+       * Needs Ref
+       * @default false
+       */
+      needs_ref: boolean;
       /** Palette */
       palette: string[];
       /** Requires Builder */
@@ -1758,6 +1763,7 @@ export interface components {
       methane_ref?: components["schemas"]["DateRangeIn"] | null;
       /** Product */
       product: string;
+      ref?: components["schemas"]["DateRangeIn"] | null;
       /** Roi */
       roi?: (components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"]) | null;
       /** Target Date */
@@ -1813,6 +1819,7 @@ export interface components {
       methane_ref?: components["schemas"]["DateRangeIn"] | null;
       /** Product */
       product: string;
+      ref?: components["schemas"]["DateRangeIn"] | null;
       /** Roi */
       roi?: (components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"]) | null;
       /** Target Date */

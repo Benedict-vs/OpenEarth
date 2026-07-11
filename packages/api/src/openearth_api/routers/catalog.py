@@ -40,6 +40,7 @@ def _product_out(spec: ProductSpec) -> ProductOut:
         is_rgb=spec.is_rgb,
         methane_only=spec.methane_only,
         requires_builder=spec.builder is not None,
+        needs_ref=spec.needs_ref,
     )
 
 

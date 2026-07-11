@@ -72,6 +72,7 @@ _PRODUCT_OPTIONAL = {
     "is_rgb": bool,
     "collection_id": str,
     "source_band": str,
+    "needs_ref": bool,
 }
 
 _PRODUCT_FORBIDDEN = ("builder", "methane_only", "key")
@@ -153,6 +154,10 @@ def _parse_product(key: str, raw: Any) -> ProductSpec:
     if fields.get("expression") is not None and "bands" not in fields:
         raise InvalidDatasetSpecError(
             f"{table}: 'expression' requires 'bands' listing its input bands."
+        )
+    if fields.get("needs_ref") and fields.get("expression") is None:
+        raise InvalidDatasetSpecError(
+            f"{table}: needs_ref products require an 'expression' over pre_/post_-prefixed bands."
         )
     if fields.get("is_rgb") and "bands" not in fields:
         raise InvalidDatasetSpecError(

@@ -174,7 +174,10 @@ export function LabMap() {
 
   return (
     <div ref={containerRef} className="lab-map" data-testid="lab-map">
-      <label className="lab-emit-toggle" title="EMIT methane plume complexes (independent evidence)">
+      <label
+        className="lab-emit-toggle"
+        title="EMIT methane plume complexes (independent evidence)"
+      >
         <input
           type="checkbox"
           checked={emitEnabled}
@@ -258,7 +261,10 @@ function addPlumeLayers(map: maplibregl.Map, fc: GeoJSON.FeatureCollection) {
     map.on("click", layer, (e) => {
       const f = e.features?.[0];
       if (!f) return;
-      popup.setLngLat(e.lngLat).setHTML(plumePopupHtml(f.properties ?? {})).addTo(map);
+      popup
+        .setLngLat(e.lngLat)
+        .setHTML(plumePopupHtml(f.properties ?? {}))
+        .addTo(map);
     });
   }
 }
@@ -271,8 +277,11 @@ function removePlumeLayers(map: maplibregl.Map) {
 }
 
 function plumePopupHtml(props: Record<string, unknown>): string {
-  const provenance = props.provenance === "lpdaac_v002" ? "V002 (LP DAAC, live)" : "V001 (GEE mirror)";
-  const time = String(props.time_utc ?? "").slice(0, 16).replace("T", " ");
+  const provenance =
+    props.provenance === "lpdaac_v002" ? "V002 (LP DAAC, live)" : "V001 (GEE mirror)";
+  const time = String(props.time_utc ?? "")
+    .slice(0, 16)
+    .replace("T", " ");
   const enh = num(props.max_enh_ppm_m);
   const q = num(props.q_kg_h);
   const qSigma = num(props.q_sigma_kg_h);
@@ -293,7 +302,10 @@ function num(value: unknown): number | null {
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+  return s.replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!,
+  );
 }
 
 function clearDetectionLayers(

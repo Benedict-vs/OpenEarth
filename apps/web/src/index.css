@@ -314,6 +314,26 @@ button.icon.active {
   margin: 0;
 }
 
+.layer-ref {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0;
+}
+.layer-ref-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+.layer-ref-inputs {
+  display: flex;
+  gap: 4px;
+}
+.layer-ref-inputs input {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+}
+
 input[type="range"] {
   width: 100%;
   padding: 0;

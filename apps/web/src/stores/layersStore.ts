@@ -14,6 +14,12 @@ export interface LayerMint {
 
 export type LayerStatus = "idle" | "minting" | "ready" | "error";
 
+/** Reference (pre) window for a two-window compare product; post = the shared dates. */
+export interface RefWindow {
+  start: string;
+  end: string;
+}
+
 export interface Layer {
   /** Unique instance id (one product can be added twice). */
   id: string;
@@ -26,6 +32,9 @@ export interface Layer {
   vizOverrides: VizOverrides | null;
   /** Data-adaptive vis range from the composite's percentiles (server-side). */
   autoRange: boolean;
+  /** Two-window compare product: needs a reference window (`ref`). */
+  needsRef: boolean;
+  ref: RefWindow | null;
   mint: LayerMint | null;
   status: LayerStatus;
   error: string | null;
@@ -34,9 +43,15 @@ export interface Layer {
 interface LayersState {
   /** Bottom-most layer first (matches MapLibre z-order). */
   layers: Layer[];
-  addLayer(dataset: string, product: string, label: string): string;
+  addLayer(
+    dataset: string,
+    product: string,
+    label: string,
+    opts?: { needsRef?: boolean; ref?: RefWindow | null },
+  ): string;
   removeLayer(id: string): void;
   setOpacity(id: string, opacity: number): void;
+  setRef(id: string, ref: RefWindow): void;
   toggleVisible(id: string): void;
   toggleAutoRange(id: string): void;
   /** Move a layer one step up (+1, toward the viewer) or down (−1). */
@@ -55,7 +70,7 @@ function patch(layers: Layer[], id: string, changes: Partial<Layer>): Layer[] {
 export const useLayersStore = create<LayersState>()((set) => ({
   layers: [],
 
-  addLayer: (dataset, product, label) => {
+  addLayer: (dataset, product, label, opts) => {
     const id = `L${nextId++}`;
     set((state) => ({
       layers: [
@@ -69,6 +84,8 @@ export const useLayersStore = create<LayersState>()((set) => ({
           visible: true,
           vizOverrides: null,
           autoRange: false,
+          needsRef: opts?.needsRef ?? false,
+          ref: opts?.ref ?? null,
           mint: null,
           status: "idle",
           error: null,
@@ -82,6 +99,8 @@ export const useLayersStore = create<LayersState>()((set) => ({
     set((state) => ({ layers: state.layers.filter((layer) => layer.id !== id) })),
 
   setOpacity: (id, opacity) => set((state) => ({ layers: patch(state.layers, id, { opacity }) })),
+
+  setRef: (id, ref) => set((state) => ({ layers: patch(state.layers, id, { ref }) })),
 
   toggleVisible: (id) =>
     set((state) => ({

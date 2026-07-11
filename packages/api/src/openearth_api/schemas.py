@@ -72,6 +72,7 @@ class ProductOut(BaseModel):
     is_rgb: bool
     methane_only: bool
     requires_builder: bool
+    needs_ref: bool = False  # two-window compare product (pre + post) → show a ref picker
 
 
 class DatasetOut(BaseModel):
@@ -115,6 +116,10 @@ class TilesRequest(BaseModel):
     # Reference window that unlocks the CH4_ANOMALY quicklook (a builder product
     # that 422s without it): the target is the composite's ``target_date``.
     methane_ref: DateRangeIn | None = None
+    # Reference window for two-window compare products (``needs_ref``, e.g. DNBR /
+    # FLOOD_VV_CHANGE): pre = ``ref``, post = ``dates``. Kept distinct from
+    # ``methane_ref`` (a later cleanup can unify them). 422 when absent.
+    ref: DateRangeIn | None = None
 
 
 class LegendOut(BaseModel):
