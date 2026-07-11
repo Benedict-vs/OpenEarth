@@ -11,6 +11,12 @@ import {
 } from "../../lib/methane";
 import { useMethaneStore } from "../../stores/methaneStore";
 
+/** One-line method digests (full theory in docs/methane_methods.md §1). */
+const METHOD_TIPS = {
+  mbmp: "MBMP: target-scene SWIR signal minus a clear reference pass — cancels static surface structure. Best default; needs a plume-free reference.",
+  mbsp: "MBSP: single scene, B12 vs B11 only — no reference needed, but bright/dark terrain can mimic plumes. Reliable mainly over uniform arid surfaces.",
+} as const;
+
 export function RunPanel() {
   const qc = useQueryClient();
   const site = useMethaneStore((s) => s.selectedSite);
@@ -72,13 +78,18 @@ export function RunPanel() {
             <button
               key={m}
               className={params.method === m ? "toggle active" : "toggle"}
+              title={METHOD_TIPS[m]}
               onClick={() => setParams({ method: m })}
             >
               {m.toUpperCase()}
             </button>
           ))}
         </div>
-        <label className="slider-row">
+        <p className="muted method-note">{METHOD_TIPS[params.method]}</p>
+        <label
+          className="slider-row"
+          title="Detection threshold in robust standard deviations of the ΔXCH4 field — higher k is stricter: fewer false positives, but weaker plumes are missed"
+        >
           k·σ: <b>{params.kSigma.toFixed(2)}</b>
           <input
             type="range"
@@ -89,7 +100,10 @@ export function RunPanel() {
             onChange={(e) => setParams({ kSigma: Number(e.target.value) })}
           />
         </label>
-        <label className="num-row">
+        <label
+          className="num-row"
+          title="Smallest connected group of 20 m pixels kept as a plume candidate — raises the bar against single-pixel noise"
+        >
           Min area (px)
           <input
             type="number"
@@ -98,7 +112,10 @@ export function RunPanel() {
             onChange={(e) => setParams({ minAreaPx: Number(e.target.value) })}
           />
         </label>
-        <label className="num-row">
+        <label
+          className="num-row"
+          title="Random seed for the emission-rate Monte Carlo — the same seed reproduces the same Q ± σ"
+        >
           Seed
           <input
             type="number"

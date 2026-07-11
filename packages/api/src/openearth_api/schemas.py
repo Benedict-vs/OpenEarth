@@ -655,6 +655,12 @@ class TimelapseCreated(BaseModel):
     render_id: str
 
 
+class RenderUpdateIn(BaseModel):
+    """Editable render metadata — currently just the gallery title."""
+
+    title: str = Field(min_length=1, max_length=200)
+
+
 class RenderOut(BaseModel):
     """Gallery row: SQL-only, no manifest parse."""
 

@@ -193,6 +193,22 @@ def test_timelapse_round_trip(
     assert client.get(f"/api/timelapse/{render_id}").status_code == 404
 
 
+def test_rename_render(client: TestClient, timelapse_ready: None) -> None:
+    out = _submit(client)
+    assert out["status"] == 200, out
+    render_id = out["json"]["render_id"]
+    _wait_status(client, out["json"]["job_id"], "succeeded")
+
+    resp = client.patch(f"/api/timelapse/{render_id}", json={"title": "  Heidelberg summer  "})
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "Heidelberg summer"  # stripped
+    assert client.get(f"/api/timelapse/{render_id}").json()["title"] == "Heidelberg summer"
+
+    # Whitespace-only and missing renders are rejected loudly.
+    assert client.patch(f"/api/timelapse/{render_id}", json={"title": "   "}).status_code == 422
+    assert client.patch("/api/timelapse/none", json={"title": "x"}).status_code == 404
+
+
 def test_delete_running_render_conflicts(
     client: TestClient, app: FastAPI, test_settings: Settings
 ) -> None:

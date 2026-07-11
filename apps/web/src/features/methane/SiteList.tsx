@@ -19,7 +19,11 @@ export function SiteList({ onScreen }: { onScreen: () => void }) {
           <button className="mini" onClick={() => setCreating((v) => !v)} title="Add a watch site">
             {creating ? "Cancel" : "+ New"}
           </button>
-          <button className="mini" onClick={onScreen} title="Screen a region with TROPOMI">
+          <button
+            className="mini"
+            onClick={onScreen}
+            title="Coarse TROPOMI (S5P) pre-screen of a whole region for persistent XCH4 hotspots — a where-to-look pass before Sentinel-2 analysis"
+          >
             Screen
           </button>
         </div>

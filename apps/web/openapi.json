@@ -2124,6 +2124,22 @@
         "title": "RenderOut",
         "type": "object"
       },
+      "RenderUpdateIn": {
+        "description": "Editable render metadata \u2014 currently just the gallery title.",
+        "properties": {
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "RenderUpdateIn",
+        "type": "object"
+      },
       "RoiPresetOut": {
         "properties": {
           "bbox": {
@@ -5589,6 +5605,56 @@
           }
         },
         "summary": "Get Render",
+        "tags": [
+          "timelapse"
+        ]
+      },
+      "patch": {
+        "operationId": "update_render_api_timelapse__render_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "render_id",
+            "required": true,
+            "schema": {
+              "title": "Render Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenderUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Render",
         "tags": [
           "timelapse"
         ]

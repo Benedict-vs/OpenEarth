@@ -225,6 +225,21 @@ def _require_render(session: Session, render_id: str) -> Render:
     return row
 
 
+def update_render(engine: Engine, render_id: str, title: str) -> RenderOut:
+    """Rename a gallery render. Allowed while running — the title is pure metadata."""
+    cleaned = title.strip()
+    if not cleaned:
+        raise HTTPException(422, "Title must not be blank.")
+    with Session(engine) as session:
+        row = _require_render(session, render_id)
+        row.title = cleaned
+        row.updated_at = utcnow_iso()
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _render_out(row)
+
+
 def get_render_detail(engine: Engine, settings: Settings, render_id: str) -> RenderDetailOut:
     from openearth_api.schemas import ROI_ADAPTER
 

@@ -1,6 +1,6 @@
 import { MapProvider } from "../../map/MapContext";
 import { useInspector } from "../../map/useInspector";
-import { useTerraDraw } from "../../map/useTerraDraw";
+import { useTerraDraw, type DrawApi } from "../../map/useTerraDraw";
 import { WindOverlay } from "../../map/WindOverlay";
 import { WindParticles } from "../../map/WindParticles";
 import { useWindStore } from "../../stores/windStore";
@@ -13,8 +13,7 @@ import { LayerPanel } from "./LayerPanel";
 import { RoiToolbar } from "./RoiToolbar";
 
 /** Inside MapProvider so its hooks can reach the map instance. */
-function ExplorePanel() {
-  const draw = useTerraDraw();
+function ExplorePanel({ draw }: { draw: DrawApi }) {
   const inspector = useInspector();
   return (
     <aside className="side-panel">
@@ -84,13 +83,24 @@ function WindToggle() {
   );
 }
 
+/** Owns the draw api so LayerEngine can drop the ROI outline below the data
+ *  rasters whenever the user is not actively drawing. */
+function ExploreInner() {
+  const draw = useTerraDraw();
+  return (
+    <>
+      <LayerEngine drawActive={draw.mode !== "static"} />
+      <ExplorePanel draw={draw} />
+    </>
+  );
+}
+
 export function ExplorePage() {
   return (
     <MapProvider south={<ChartPanel />}>
-      <LayerEngine />
+      <ExploreInner />
       <WindOverlay />
       <WindParticles />
-      <ExplorePanel />
     </MapProvider>
   );
 }

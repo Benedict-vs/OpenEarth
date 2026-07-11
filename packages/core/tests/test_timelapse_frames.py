@@ -41,9 +41,11 @@ def test_interval_single_day_label() -> None:
     assert windows[0].label == "2024-01-01"  # single day → bare date
 
 
-def test_interval_multiday_label_uses_en_dash() -> None:
+def test_interval_multiday_label_is_ascii_only() -> None:
+    # ASCII hyphen, not an en dash: the burn-in font has no en-dash glyph.
     windows = frame_windows(date(2024, 1, 1), date(2024, 1, 20), mode="interval", interval_days=16)
-    assert windows[0].label == "2024-01-01 – 2024-01-16"
+    assert windows[0].label == "2024-01-01 - 2024-01-16"
+    assert windows[0].label.isascii()
 
 
 def test_interval_rolling_overlap_when_window_exceeds_interval() -> None:

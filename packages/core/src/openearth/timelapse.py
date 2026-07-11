@@ -66,10 +66,14 @@ class FrameWindow:
 
 
 def _interval_label(start: date, end: date) -> str:
-    """En-dashed range for multi-day windows; the single date when one day."""
+    """Hyphenated range for multi-day windows; the single date when one day.
+
+    ASCII hyphen only: the label is burned in with Pillow's bundled default
+    font, which has no en-dash glyph (it rendered as a tofu box).
+    """
     if start == end:
         return start.isoformat()
-    return f"{start.isoformat()} – {end.isoformat()}"
+    return f"{start.isoformat()} - {end.isoformat()}"
 
 
 def _first_of_next_month(d: date) -> date:

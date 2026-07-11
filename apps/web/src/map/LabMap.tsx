@@ -331,7 +331,7 @@ export function LabMap() {
           className="lab-emit-toggle lab-rgb-toggle"
           title={
             rgbSceneTime
-              ? "True-colour view of the scene under review (context for placing the analysis area)"
+              ? "True-colour view of the scene under review (context for placing the analysis area). Cloud-masked: s2cloudless-flagged pixels render transparent."
               : "Select a scene or detection to preview its true-colour image"
           }
         >

@@ -165,29 +165,39 @@ export function TimelapsePage() {
           </select>
         </label>
         {form.stepMode === "interval" ? (
-          <div className="date-row">
-            <label className="num-row">
-              Every (days)
-              <input
-                type="number"
-                min={1}
-                value={form.intervalDays}
-                onChange={(e) => setForm({ intervalDays: Number(e.target.value) })}
-              />
-            </label>
-            <label className="num-row">
-              Window (days)
-              <input
-                type="number"
-                min={1}
-                placeholder="= interval"
-                value={form.windowDays ?? ""}
-                onChange={(e) =>
-                  setForm({ windowDays: e.target.value ? Number(e.target.value) : null })
-                }
-              />
-            </label>
-          </div>
+          <>
+            <div className="date-row">
+              <label className="num-row" title="How far apart consecutive frames start">
+                Every (days)
+                <input
+                  type="number"
+                  min={1}
+                  value={form.intervalDays}
+                  onChange={(e) => setForm({ intervalDays: Number(e.target.value) })}
+                />
+              </label>
+              <label
+                className="num-row"
+                title="How many days of scenes are averaged into each frame — defaults to the interval; larger values overlap frames and smooth cloud gaps"
+              >
+                Window (days)
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="= interval"
+                  value={form.windowDays ?? ""}
+                  onChange={(e) =>
+                    setForm({ windowDays: e.target.value ? Number(e.target.value) : null })
+                  }
+                />
+              </label>
+            </div>
+            <p className="muted step-note">
+              A frame starts every <b>{form.intervalDays}</b> days; each frame averages{" "}
+              <b>{form.windowDays ?? form.intervalDays}</b> days of scenes. A window wider than
+              the interval overlaps frames, smoothing cloud gaps.
+            </p>
+          </>
         ) : null}
 
         <div className="date-row">

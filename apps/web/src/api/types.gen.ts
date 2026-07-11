@@ -706,7 +706,8 @@ export interface paths {
     delete: operations["delete_render_api_timelapse__render_id__delete"];
     options?: never;
     head?: never;
-    patch?: never;
+    /** Update Render */
+    patch: operations["update_render_api_timelapse__render_id__patch"];
     trace?: never;
   };
   "/api/timelapse/{render_id}/download": {
@@ -1584,6 +1585,14 @@ export interface components {
       title: string;
       /** Updated At */
       updated_at: string;
+    };
+    /**
+     * RenderUpdateIn
+     * @description Editable render metadata — currently just the gallery title.
+     */
+    RenderUpdateIn: {
+      /** Title */
+      title: string;
     };
     /** RoiPresetOut */
     RoiPresetOut: {
@@ -3557,6 +3566,41 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_render_api_timelapse__render_id__patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        render_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RenderUpdateIn"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RenderOut"];
+        };
       };
       /** @description Validation Error */
       422: {

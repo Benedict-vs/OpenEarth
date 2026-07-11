@@ -88,6 +88,10 @@ export function SceneStrip() {
       {scenes && scenes.length === 0 && !isFetching ? (
         <p className="muted">No scenes in this window.</p>
       ) : null}
+      <p className="muted scene-cloud-note">
+        Scenes above 80&thinsp;% cloud are filtered out; ● marks scenes clear enough (≤
+        30&thinsp;%) to serve as an MBMP reference.
+      </p>
     </div>
   );
 }

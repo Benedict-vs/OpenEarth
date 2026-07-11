@@ -528,6 +528,21 @@ code {
   line-height: 1.35;
 }
 
+.date-semantics {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.method-note,
+.scene-cloud-note,
+.screening-note,
+.step-note {
+  margin: 0.25rem 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 /* Theme MapLibre's popup (rendered outside the React tree) to match the app. */
 .maplibregl-popup-content {
   background: var(--panel);
