@@ -3133,6 +3133,13 @@
             ],
             "title": "Title"
           },
+          "tween": {
+            "default": 0,
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Tween",
+            "type": "integer"
+          },
           "vis_max": {
             "anyOf": [
               {

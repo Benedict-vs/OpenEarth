@@ -27,6 +27,11 @@ export function submitTimelapse(body: TimelapseRequest): Promise<TimelapseCreate
   return apiPost<TimelapseCreated>("/api/timelapse", body);
 }
 
+/** Cooperatively stop a running render job (frames rendered so far are kept). */
+export function cancelJob(jobId: string): Promise<unknown> {
+  return apiDelete(`/api/jobs/${jobId}`);
+}
+
 export function useRenameRender() {
   const qc = useQueryClient();
   return useMutation({

@@ -4,9 +4,14 @@ import type { Render } from "../../api/types";
 import { usePlaybackStore } from "../../stores/playbackStore";
 import { useUiStore } from "../../stores/uiStore";
 
+/** A render with playable frames: a full success, or a salvaged partial. */
+function isPlayable(r: Render): boolean {
+  return (r.status === "succeeded" || r.status === "cancelled") && !!r.frame_count;
+}
+
 /** Poster = the middle rendered frame (a representative mid-sequence still). */
 function posterUrl(r: Render): string | null {
-  if (r.status !== "succeeded" || !r.frame_count) return null;
+  if (!isPlayable(r) || !r.frame_count) return null;
   return frameUrl(r.id, Math.floor(r.frame_count / 2));
 }
 
@@ -47,7 +52,7 @@ export function RenderGallery({
           <li
             key={r.id}
             className={activeId === r.id ? "render-card active" : "render-card"}
-            onClick={() => r.status === "succeeded" && onSelect(r)}
+            onClick={() => isPlayable(r) && onSelect(r)}
           >
             <div className="render-poster">
               {poster ? (
@@ -57,19 +62,22 @@ export function RenderGallery({
                   {r.status === "running" ? "rendering…" : r.status}
                 </div>
               )}
-              <span className={`status-chip ${r.status}`}>{r.status}</span>
+              <span className={`status-chip ${r.status}`}>
+                {r.status === "cancelled" && r.frame_count ? "partial" : r.status}
+              </span>
             </div>
             <div className="render-meta">
               <span className="render-title" title={r.title}>
                 {r.title}
               </span>
               <span className="render-sub">
-                {r.format.toUpperCase()}
-                {r.frame_count != null ? ` · ${r.frame_count} frames` : ""}
+                {r.status === "cancelled" && r.frame_count
+                  ? `Partial — ${r.frame_count} frames`
+                  : `${r.format.toUpperCase()}${r.frame_count != null ? ` · ${r.frame_count} frames` : ""}`}
               </span>
             </div>
             <div className="render-actions">
-              {r.status === "succeeded" && r.frame_count ? (
+              {isPlayable(r) ? (
                 <button
                   className="mini"
                   title="Play this render's frames on the Explore map"

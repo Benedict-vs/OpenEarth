@@ -1115,6 +1115,13 @@ button.ghost {
 .run-progress.error .progress-fill {
   background: var(--danger);
 }
+.run-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
 .progress-label {
   color: var(--muted);
 }

@@ -53,6 +53,7 @@ export function buildTimelapseRequest(form: TimelapseForm, roi: RoiIn): Timelaps
       window_days: form.stepMode === "interval" ? form.windowDays : null,
     },
     fps: form.fps,
+    tween: form.tween,
     format: form.format,
     max_dim: maxDim,
     annotations: {

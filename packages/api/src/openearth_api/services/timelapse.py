@@ -88,12 +88,18 @@ async def submit_timelapse(
         raise HTTPException(422, str(exc)) from exc
     if len(windows) < 2:
         raise HTTPException(422, "A timelapse needs at least 2 frames; widen the date range.")
-    if req.format == "gif" and len(windows) > _MAX_GIF_FRAMES:
-        raise HTTPException(
-            422,
-            f"GIF is capped at {_MAX_GIF_FRAMES} frames ({len(windows)} requested); "
-            "use mp4/webm or a coarser step.",
+    # The GIF cap is on the *post-smoothing* frame count — tween inserts
+    # (n-1)*tween cross-fades that all live in RAM at encode time.
+    expanded = len(windows) + (len(windows) - 1) * req.tween
+    if req.format == "gif" and expanded > _MAX_GIF_FRAMES:
+        detail = (
+            f"GIF is capped at {_MAX_GIF_FRAMES} frames ({expanded} after "
+            f"{req.tween}× smoothing); use mp4/webm, a coarser step, or less smoothing."
+            if req.tween
+            else f"GIF is capped at {_MAX_GIF_FRAMES} frames ({expanded} requested); "
+            "use mp4/webm or a coarser step."
         )
+        raise HTTPException(422, detail)
 
     render_id = uuid4().hex
     title = req.title or _default_title(req)
@@ -113,6 +119,9 @@ async def submit_timelapse(
         _insert_running_row(engine, render_id, title, req, params_json, roi_json)
 
         try:
+            # render_frames now *returns* a partial (cancelled=True) manifest when
+            # a stop leaves ≥1 rendered frame — only a stop before any frame (or a
+            # real failure) still raises.
             manifest = render_frames(
                 req.dataset,
                 req.product,
@@ -130,19 +139,27 @@ async def submit_timelapse(
                 ),
                 should_cancel=ctx.cancelled.is_set,
             )
-            movie_path = out_dir / f"movie.{req.format}"
-            encode_movie(manifest.frame_paths, movie_path, fmt=req.format, fps=req.fps)
+            # A partial with a single frame isn't worth a movie; a complete render
+            # always has ≥1 rendered frame and gets one.
+            movie_bytes: int | None = None
+            if manifest.rendered_count >= (2 if manifest.cancelled else 1):
+                movie_path = out_dir / f"movie.{req.format}"
+                encode_movie(
+                    manifest.frame_paths, movie_path, fmt=req.format, fps=req.fps, tween=req.tween
+                )
+                movie_bytes = movie_path.stat().st_size
         except BaseException:
             status = "cancelled" if ctx.cancelled.is_set() else "failed"
             _update_row(engine, render_id, status=status)
             raise
 
+        # A returned cancelled manifest is a "partial" render: keep its frames.
         _update_row(
             engine,
             render_id,
-            status="succeeded",
+            status="cancelled" if manifest.cancelled else "succeeded",
             frame_count=manifest.rendered_count,
-            movie_bytes=movie_path.stat().st_size,
+            movie_bytes=movie_bytes,
         )
         return {"render_id": render_id}
 
@@ -269,7 +286,8 @@ def frame_response(settings: Settings, render_id: str, index: int) -> FileRespon
 def download_response(engine: Engine, settings: Settings, render_id: str) -> FileResponse:
     with Session(engine) as session:
         row = _require_render(session, render_id)
-    if row.status != "succeeded":
+    # A cancelled *partial* with an encoded movie is downloadable too.
+    if row.status not in ("succeeded", "cancelled"):
         raise HTTPException(
             409, f"Render is not finished (status={row.status!r}); watch its events."
         )

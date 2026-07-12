@@ -17,6 +17,8 @@ export interface TimelapseForm {
   intervalDays: number;
   windowDays: number | null;
   fps: number;
+  /** Frame-to-frame smoothing: cross-fades inserted between frames (0 = off). */
+  tween: number;
   format: MovieFormat;
   maxDim: number;
   dateLabel: boolean;
@@ -47,6 +49,7 @@ export function defaultForm(): TimelapseForm {
     intervalDays: 16,
     windowDays: null,
     fps: 6,
+    tween: 0,
     format: "mp4",
     maxDim: 1080,
     dateLabel: true,

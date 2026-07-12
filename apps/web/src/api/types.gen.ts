@@ -1941,6 +1941,11 @@ export interface components {
       step?: components["schemas"]["StepIn"];
       /** Title */
       title?: string | null;
+      /**
+       * Tween
+       * @default 0
+       */
+      tween: number;
       /** Vis Max */
       vis_max?: number | null;
       /** Vis Min */

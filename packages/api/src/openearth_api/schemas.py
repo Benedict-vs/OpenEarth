@@ -683,6 +683,10 @@ class TimelapseRequest(BaseModel):
     fps: int = Field(default=6, ge=1, le=30)
     format: Literal["mp4", "gif", "webm"] = "mp4"
     max_dim: int = Field(default=1080, ge=64, le=1920)
+    # Frame-to-frame smoothing: insert this many cross-faded frames between each
+    # pair at encode time (a display effect, not more data). The GIF frame cap is
+    # enforced *after* expansion at submit time.
+    tween: int = Field(default=0, ge=0, le=4)
     annotations: AnnotationsIn = Field(default_factory=AnnotationsIn)
     vis_min: float | None = None
     vis_max: float | None = None
