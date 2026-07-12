@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # OpenEarth v2
 
-Satellite-based environmental analysis (**Phase 6 complete** — v1 Streamlit app retired):
+Satellite-based environmental analysis (**Phase 7 complete** — science-honesty pass; v1 Streamlit app retired):
 Python core library (`packages/core`) + FastAPI backend (`packages/api`) + React/MapLibre
 frontend (`apps/web`) + an offline ML training package (`packages/ml`), with a physics-honest
 methane detection suite (the Methane Lab), side-by-side Compare, a Timelapse Studio, an
@@ -52,7 +52,8 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
   - `methane/` — the physics suite (theory in `docs/methane_methods.md`). `wind.py` (ERA5;
     `wind_to_deg`/`wind_from_deg` distinct tested conventions; `sample_wind_at` +
     `sample_wind_field`). `constants.py` (cited literature + declared modeling constants),
-    `conversion.py` (loads reporting `data/ch4_lut_v4.npz`; ΔR→ΔΩ→ΔXCH4 — pure, strict mypy;
+    `conversion.py` (loads reporting `data/ch4_lut_v5.npz`, Phase 7 ΔΩ grid −0.5→6.0 so MBSP
+    blowups invert to finite columns; ΔR→ΔΩ→ΔXCH4 — pure, strict mypy;
     `load_mask_lut` = frozen `ch4_lut_mask.npz` used ONLY to build footprints, decoupled from
     the reporting LUT so masks are invariant to LUT recalibration — Phase 3.5 Stage 2),
     `scenes.py` (S2 L1C search + `pick_reference`, which excludes the same-overpass tile),
@@ -60,7 +61,8 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
     `plume.py` (robust-σ threshold + components + outline), `ime.py` (IME + seeded joint MC;
     `quantify(mask_field=…)` thresholds the frozen-LUT ΔΩ, IME uses reporting ΔΩ),
     `detect.py` (7-step cancellable orchestrator), `tropomi.py` (S5P screening),
-    `validation.py` (IMEO/SRON parse + cross-match), `channels.py` (Phase 5 ML input stack:
+    `validation.py` (IMEO/SRON parse + cross-match; Phase 7 unit-safe importer — explicit
+    `rate_unit` + per-alias scaling, no unit guessing, `rates_dropped` for out-of-range), `channels.py` (Phase 5 ML input stack:
     5 physics channels — MBMP/MBSP ΔR + B12/B11 ratio + SWIR — via `build_channels`/`normalize`/
     `pad_to_multiple`/`candidates_from_prob`; pure NumPy, byte-identical for training and serving),
     `ime.emission_over_mask` (single-pass IME over a given mask, no MC — used by the ML scan's Q).
@@ -89,7 +91,7 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
   `create_app()` must stay EE-free AND DB-free at creation time — `scripts/export_openapi.py`
   and web CI rely on it; the DB engine + EE init happen in the lifespan. EE-touching routes
   depend on `deps.ensure_ee`. One diskcache tier (`cache.py`, sha256 canonical-JSON keys +
-  `ALGO_VERSION`); tile URLs are never cached. Tests fake EE by monkeypatching the core fns
+  `ALGO_VERSION` — now **6**, bumped Phase 7 for LUT v5 + median-centered masks); tile URLs are never cached. Tests fake EE by monkeypatching the core fns
   imported by name into `services/*`. **earthaccess never appears under `packages/core`** — it
   is an `api` dependency, **lazy-imported inside `services/emit.py`** so `create_app()` stays
   credential-free; Earthdata auth is env-only (`EARTHDATA_TOKEN` / `~/.netrc`, never committed).
@@ -107,8 +109,12 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
   - **Methane routes** (`routers/methane.py`, `services/methane.py`): sites CRUD (7 seeded in
     the lifespan), scene search, the `methane_analyze` job (SSE progress → `{detection_id}`;
     runner writes the detection row + npz artifact off-loop), detection feed/detail (`source`
-    filter param), overlay PNG (`services/methane_render.py`), `array.npz`, the
-    `methane_screening` job, and the validation importer/cross-match. `POST /tiles` `methane_ref`
+    filter param; Phase 7 read-derived `physics_agreement` tri-state {agree/physics_no_plume/
+    physics_not_run} + `below_noise_floor` context — no migration), overlay PNG
+    (`services/methane_render.py`), `array.npz`, the `methane_screening` job, and the validation
+    importer/cross-match. Noise floor: `services/noise_floor.py` loads frozen
+    `data/noise_floor_v1.json` (per-site + pooled floors from identical `analyze` on plume-free
+    pairs), served as static Lab context (`get_site_floor`). `POST /tiles` `methane_ref`
     unlocks the `CH4_ANOMALY` quicklook (builder products still 422 without it);
     `TilesRequest.auto_range` derives the vis range from `compute_vis_range` into the mint + legend.
     `TilesRequest.ref` (a `DateRangeIn`, distinct from `methane_ref`) drives `needs_ref` compare
@@ -135,8 +141,11 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
     movie download, delete (409 while running). Artifacts at `data_dir/timelapse/{render_id}/`.
 - `packages/ml/` (dist `openearth-ml`) — **offline** U-Net training/eval/export; **torch + smp live
   here only, never in core/api** (`test_no_ml_deps.py` enforces it). `data.py` (npz chip dataset,
-  GroupKFold-by-site), `models.py` (resnet18 U-Net, in_channels=5), `train.py`/`eval.py` (typer CLIs,
-  TOML configs; scene-level F1 vs the `−ΔR_MBMP` baseline → frozen `scripts/data/ml_eval_v1.json`),
+  GroupKFold by **site-cluster** — sites <5 km single-linkage-merged, `assert_no_fold_overlap` guard,
+  reflect-pad train/serve), `labelq.py` (net-negative-ΔΩ label gate), `models.py` (resnet18 U-Net,
+  in_channels=5), `train.py`/`eval.py` (typer CLIs; Phase 7 v2 protocol — inner-val early-stop +
+  threshold selection, both-sides sweeps, scene-level F1 vs the `−ΔR_MBMP` baseline → frozen
+  `scripts/data/ml_eval_v2.json`; `ml_eval_v1.json` kept as protocol-invalid history),
   `export.py` (ONNX opset 18, dynamic HW + torch↔ORT parity test). Imports channel-building from core
   so training and serving share it. **License wall**: CH4Net is CC-BY-NC-ND 4.0 & gated — nothing
   derived (chips/masks/weights/onnx/manifest) is ever committed; it all lives under git-ignored

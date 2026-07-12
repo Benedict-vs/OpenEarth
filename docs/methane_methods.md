@@ -43,6 +43,26 @@ Earth Engine's fill (`-9999`, set with `.unmask`) to NaN. Sentinel-2 band ids ar
 (`B4`, not `B04`); the methane proxies pin L1C TOA (`COPERNICUS/S2_HARMONIZED`) per the
 retrieval literature.
 
+**Sampling model and co-registration.** The shared `GridSpec` is an EPSG:4326 lon/lat grid
+with a **corner-origin affine**: `computePixels` reads `x0`/`y0` as the *top-left corner* of
+pixel (0, 0), and Earth Engine samples each band at the resulting pixel **centres**,
+`(x0 + (col + ½)·xscale, y0 − (row + ½)·yscale)`. This is not assumed — the live contract
+probe `test_grid_affine_samples_at_pixel_centers` pins it to < 10⁻⁵° against
+`ee.Image.pixelLonLat`, so a change in EE's affine semantics fails loudly instead of drifting
+the georeferencing. EE reprojects each source scene onto that grid with its **default
+nearest-neighbour resampling** (verified for the 20 m SWIR bands by
+`test_b11_default_resampling_is_nearest_neighbor`: fetched at 10 m the bands show ≥ 40 %
+adjacent-pixel duplication, at native 20 m almost none). The two passes are therefore aligned
+*by construction*, not by an explicit warp, which makes MBMP registration quality a hierarchy:
+a **same-orbit** reference (adjacent UTM tile, near-identical view geometry) resamples onto
+essentially the same ground pixels and any residual half-pixel offset is common-mode across
+target and reference; a **cross-orbit** reference incurs sub-pixel shifts from the differing
+view angle; a reference from a **different UTM zone** can shift up to half a 20 m pixel per
+band, because the two native grids are not co-registered before reprojection and each band's
+NN choice can land on a different source pixel. The last case is now flagged on the detection
+(`cross_tile_reference`, §7/§8) so a wide MBMP residual traceable to tile mismatch is visible
+rather than folded silently into the retrieval.
+
 ## 2. Column conversion — the CH4 absorption LUT
 
 The fractional signal ΔR is mapped to a methane **column enhancement** ΔΩ (mol/m²) through a
@@ -209,15 +229,45 @@ is a human PATCH only).
   excludes it (`min_days`), but the best different-date reference still varies with surface
   conditions (see the reproduction table). A *continuous* source (e.g. the Hassi Messaoud
   blowout) has no in-period plume-free reference at all, so single-scene MBSP is used there.
-- **Detection floor** — roughly 1–5 t/h for favourable surfaces/wind; weaker plumes fall into
-  the retrieval noise.
+- **Detection floor — now measured, not asserted** *(Phase 7)*. Running the *identical*
+  `analyze` on seeded, presumed-plume-free scene pairs at each seeded site gives an empirical
+  per-site noise floor (median of the detected noise Q). It is site-dependent and higher than
+  the old "1–5 t/h" guess: **~6.6 t/h** at the best arid site (Hassi Messaoud, 5/5 pairs
+  "detected"), **~30–48 t/h** over more heterogeneous terrain (Basra 29.8, Permian 32.4,
+  Galkynysh 42.2, Four Corners 47.8), with a **pooled global floor of 24.6 t/h**. Only
+  Upper Silesia produced nothing on all five pairs; **27 of 35 plume-free pairs (~77 %) yielded
+  a quantifiable component** at default settings — i.e. a "detection" near the floor is as
+  likely to be retrieval noise as signal. Frozen at `packages/api/.../data/noise_floor_v1.json`
+  and surfaced as the feed's floor context (`below_noise_floor`, §9.5). At recurrent emitters
+  the floor also absorbs real residual emission, so it is an **upper bound** on trustworthiness
+  (the conservative direction).
+- **Borrowed IME wind coefficients — an unquantified transfer systematic (F6).** The effective
+  wind `U_eff = α·U₁₀ + β` uses α, β from Varon et al. 2021, which were LES-calibrated against
+  *their* plume mask (p95 threshold + median filter). Ours is a different estimator (`k·σ`
+  threshold + morphological opening + connected-component selection, §3), so the mask geometry
+  the coefficients were tuned to is not the mask we integrate over; the resulting bias is a
+  systematic we **declare but do not quantify**. We deliberately did *not* adopt Varon's p95
+  mask to "match" the coefficients — the decision-box rationale (our mask is decoupled from the
+  reporting LUT and validated against the seeded source) is recorded in the Phase 7 plan; a
+  dedicated mask-calibration study is the proper fix.
+- **Reference contamination at recurrent emitters.** A persistently active source may have *no*
+  in-period plume-free acquisition, so the "reference" itself carries a plume and MBMP
+  over-subtracts (libya-sirte 1.7 vs 14.7 t/h, §8.2). This is now flagged
+  (`possible_reference_contamination`) rather than silently biasing the rate; a
+  composite/temporal-median reference is deferred to the design pass.
 - **ERA5 vs local wind** — reanalysis 10 m wind is coarse (~11 km, hourly); U_eff error
   dominates the budget for slow, well-defined plumes.
-- **LUT physics** — CH4-only Beer–Lambert (no multiple scattering, aerosols, interfering
-  H2O/CO2, or solar-spectrum radiance weighting). The vertical structure is resolved (layered
-  US Std Atmosphere background, 500 m enhancement slab), so the remaining ~25 % anchor offset
-  vs Varon is attributable to the named spectral omissions, not to a guessed effective (T, p).
-  The LUT also bakes in sea-level surface pressure — sites at significant elevation are biased.
+- **LUT physics, and the ~25 % Varon-anchor offset (still a hypothesis).** The forward model is
+  CH4-only Beer–Lambert with resolved vertical structure (layered US Std Atmosphere background,
+  500 m enhancement slab) but no multiple scattering or aerosols. A ~25 % offset against the
+  Varon anchor persists, and its cause is **not settled**: two candidate explanations have now
+  been tested and neither closes it — v2's single-effective-layer curve was refuted (§ LUT
+  history), and v4/v5's addition of interfering H₂O/CO₂ absorbers + TSIS-1 solar-spectrum
+  weighting moved the calibration aggregate by only **~1.6 %**. So "attributable to spectral
+  omissions" is a *hypothesis with two refuted predecessors*, not a conclusion. Practically, the
+  Phase 7 noise floor reframes its weight: a ~25 % column bias is second-order next to a
+  detection floor of tens of t/h at most sites. The LUT also bakes in sea-level surface pressure
+  — sites at significant elevation are biased.
 - **Plume mask is now invariant to reporting-LUT recalibration** *(resolved in Phase 3.5)* — the
   `k·σ` threshold operates on the ΔΩ field of a *frozen* canonical inversion (§3), so a change to
   the reporting LUT (v3→v4) no longer moves the footprint; only the reported ΔΩ *columns* (and
@@ -282,12 +332,12 @@ Baseline (LUT v3, MC seed 0, n = 500; committed at `scripts/data/calibration_bas
 | hassi-messaoud-2020-01-19 | MBMP | 7.0 | 7.5 ± 3.7 | |
 | algeria-ghardaia-2020-08-27 | MBMP | 6.5 | 5.4 ± 2.0 | |
 | neuquen-2022-06-11 | MBMP | 14.9 | 11.8 ± 3.4 | |
-| libya-sirte-2020-01-21 | MBMP | 14.7 | 1.7 ± 0.8 | reference likely plume-contaminated (recurrent) |
+| libya-sirte-2020-01-21 | MBMP | 14.7 | 1.7 ± 0.8 | reference itself emitting: noise-chip run independently retrieved ~22 t/h on the "plume-free" ref (recurrent) — MBMP over-subtracts |
 | campeche-2024-09-13 | MBSP | 25.4 | — | *excluded:* LUT-saturated (offshore water) |
 | ahvaz-2023-12-08 | MBSP | 7.5 | 10.9 ± 10.0 | homogeneous surface; no clean reference |
 | gulf-of-thailand-2023-10-05 | MBMP | 15.3 | 17.1 ± 6.2 | |
 | turkmenistan-caspian-2017-11-26 | MBMP | 12.3 | 11.9 ± 7.1 | 473 t/h under MBSP (76 % saturated) |
-| permian-2023-09-27 | MBMP | 6.9 | 13.2 ± 4.5 | |
+| permian-2023-09-27 | MBMP | 6.9 | 13.2 ± 4.5 | cross-tile reference (per-band ½-px shift, §1) — ~2× over-estimate |
 | maturin-2024-02-20 | MBSP | 25.0 | — | *excluded:* no plume above threshold |
 | marib-2024-11-02 | MBMP | 7.1 | 2.3 ± 1.3 | |
 | gulf-of-suez-2023-09-20 | MBMP | 20.0 | 51.0 ± 17.8 | |
@@ -334,6 +384,47 @@ gulf-of-suez 51 vs 20, kazakhstan 24 vs 10; against marib 2.3 vs 7.1, amudarya 5
 is a genuine open question, not tuned away: candidate mechanisms are mask-size saturation at high
 IME (the k·σ footprint grows super-linearly for a bright plume), U_eff wind-error scaling, and the
 IME's heavy upper tail. Left for a future phase.
+
+**Per-event skill is negligible — the aggregate hides it.** Unbiased-in-aggregate says nothing
+about whether we can *order* two sources. The rank correlation between published and retrieved
+rate is **Spearman ρ = 0.19 (p = 0.5, n = 15)** on v4 — indistinguishable from zero. So the
+honest three-part statement is: the central calibration is essentially unbiased **in
+aggregate**; individual rates are **order-of-magnitude estimates**; and **ranking two sources
+by our Q is unsupported**. The UI and any downstream use must treat a single retrieved rate
+accordingly.
+
+**LUT v5 and the validity-bound exclusion rename (Phase 7).** Phase 7 ships LUT v5: the ΔΩ grid
+extends −0.5 → 6.0 (was → 3.0) so MBSP surface blowups over heterogeneous terrain invert to
+large **finite** columns instead of clamping at the grid edge. The shared subgrid is
+**bit-identical** to v4 where the two overlap (`test_v5_shared_subgrid_identical_to_v4`), so the
+column *mapping* is unchanged — but the extension is not cosmetic for retrieval, because a mask
+that previously had pixels pinned at the 3.0 edge now integrates their true larger columns.
+Because the old "fraction at the clamped grid edge" test can no longer see out-of-validity
+pixels (they are finite now), the documented exclusion is **renamed** `excluded_lut_saturated`
+→ **`excluded_inversion_validity`**: the fraction of the mask with |ΔΩ| ≥ 3.0 mol/m² (the MBSP
+linearity bound, pinned at the old v4 edge so campeche/caspian-class exclusions stay stable). The
+new bound additionally catches two events the edge-test let through — **ahvaz** and
+**gulf-of-thailand** (offshore/heterogeneous MBSP, out-of-validity fraction 0.56 / 0.67) — so v5
+quantifies **13** events against v4's 15.
+
+The v4 → v5 aggregate movement therefore mixes **two** effects — the un-clamping of retained
+events *and* the cleaner exclusion set:
+
+| Aggregate | v4 (n = 15) | v5 (n = 13) | |
+|---|---|---|---|
+| through-origin slope | 1.042 | 1.105 | away from 1 |
+| Theil–Sen slope | 0.190 | 0.124 | away from 1 |
+| median ratio | 0.972 | 0.996 | toward 1 |
+| log-scatter | 0.413 | 0.441 | slightly wider |
+| Spearman ρ | 0.19 (p 0.5) | 0.088 (p 0.78) | rank skill ≈ 0, n.s. |
+
+Un-clamping moves individual retrievals materially — **korpezhe 5.7 → 11.0 t/h, landing on its
+11.2 t/h Varon anchor** (its v4 mask was edge-pinned and under-integrated), caspian +18 %, hassi
++14 % — a genuine per-event correction for surface-affected masks. But in aggregate the estimators
+again split (median toward 1, both slopes away, as in v3 → v4) and every number moves less than the
+s ≈ 0.44 scatter. **v5 is adopted for the correct finite-column physics and the tightened validity
+exclusion, not as a demonstrated aggregate calibration gain.** Both baselines stay committed
+(`calibration_baseline_v4.json`, `calibration_baseline_v5.json`) so the comparison is repo-checkable.
 
 ### LUT history note
 
@@ -449,43 +540,80 @@ verbatim at scan time); invalid pixels resolve to 0 after normalization. The ful
 network is reflect-padded to a multiple of 32 at serve time (`pad_to_multiple`), so a scan chip need
 not match the training tile size.
 
+**One padding convention end-to-end (Phase 7).** Training previously zero-padded chips to the
+fixed `INPUT_HW` while serving reflect-padded — a train/serve skew at the tile borders. `data._fit_to`
+now **reflect-pads** to match `pad_to_multiple` exactly, so the network sees the same border
+statistics whether a chip is padded for a training batch or for a live scan; the earlier deviation
+is resolved rather than documented-around. The serve path is aligned the same way on the *reference*
+axis: the ML scan draws its MBMP reference-candidate pool from the requested window **±150 days at
+cloud ≤ 60 %**, the environment the training exporter used, so scan-time references have the same
+temporal-baseline and cloud distribution the model was trained against (§9.5).
+
 ### 9.4 Cross-validation design and evaluation
 
-**Site-held-out CV.** All 23 sites are Turkmenistan O&G, so a random tile split would leak surface
-texture between train and test. The evaluation therefore uses **`GroupKFold` by site, 5 folds** — no
-site appears in both the train and the held-out set of a fold. Augmentation is **D4 only** (flips +
-90° rotations); no photometric jitter is applied to physical channels. The gate metric is
-**scene-level F1**: a scene is *predicted positive* iff `candidates_from_prob(prob, threshold=0.5,
-min_px=5)` is non-empty, *truth positive* iff the (regridded) CH4Net mask is non-empty — the same
-rule and same `min_px` score the model and the baseline. The **physics baseline** is
-`plume.detect_plume` on `−ΔR_MBMP` at the pipeline-default `k_sigma`, run on the identical chips and
-folds. Pixel IoU on the true positives is reported (not gated).
+The evaluation protocol was rebuilt in **Phase 7 (v2)** to be defensible end-to-end; the v1
+numbers below are retired because their protocol was invalid. What the number means is deliberately
+narrow: the model reproduces **CH4Net's MBMP-guided annotations** better than the physics baseline
+does — *annotation agreement*, not independent plume detection.
 
-Per-fold results (frozen in `scripts/data/ml_eval_v1.json`, `ml_eval_v1`):
+**Protocol (v2, `scripts/data/ml_eval_v2.json`).**
 
-| Fold | Held-out sites | n (pos) | **Model F1** | Model P / R | Baseline F1 | Baseline P / R | Pixel IoU (TP) |
-|------|----------------|---------|-------------|-------------|-------------|----------------|----------------|
-| 0 | T1, T10, T20, T6, T9 | 359 (108) | **0.489** | 0.354 / 0.787 | 0.387 | 0.299 / 0.546 | 0.241 |
-| 1 | T13, T16, T18, T21, T22 | 309 (87) | **0.613** | 0.472 / 0.874 | 0.455 | 0.321 / 0.782 | 0.336 |
-| 2 | T15, T23, T4, T7, T8 | 284 (79) | **0.479** | 0.315 / 1.000 | 0.428 | 0.317 / 0.658 | 0.249 |
-| 3 | T11, T17, T3, T5 | 234 (68) | **0.702** | 0.590 / 0.868 | 0.551 | 0.404 / 0.868 | 0.343 |
-| 4 | T12, T14, T19, T2 | 209 (53) | **0.700** | 0.563 / 0.925 | 0.500 | 0.361 / 0.811 | 0.432 |
-| **Mean** | — | — | **0.597** | 0.459 / 0.891 | **0.464** | 0.341 / 0.733 | — |
+- **Spatial grouping by site-*cluster*.** Several CH4Net "sites" are neighbouring pads in one field,
+  so holding out whole *sites* still leaks ground. Sites within 5 km are single-linkage-merged into
+  clusters *before* folding (measured, not hardcoded: **23 sites → 11 clusters**, 6 merged groups),
+  and a hard guard **aborts** if any cross-fold chip pair overlaps > 10 % ground footprint (`0`
+  violations on this data).
+- **Inner-validation split (no eval-fold peeking).** Within each outer fold's train set, one cluster
+  is held out as inner-val for **both** early stopping **and** prob-threshold selection. The held-out
+  eval fold is touched exactly **once**, by the frozen model at the inner-val-selected threshold — so
+  no operating-point or stopping decision sees the eval data.
+- **Label-quality gate.** Positives whose own MBMP ΔR integrates to a **net-negative ΔΩ** (a label
+  that contradicts the physics it was drawn from) are excluded — **69 / 395 (17.5 %)**. Applied to CV
+  truth and the deployed refit alike.
+- **Both-sides operating curves.** The model is swept over prob threshold and the physics baseline
+  over `k·σ`; the headline compares the model at its inner-val threshold against the baseline at the
+  pipeline default `k = 2`, with the baseline's *eval-oracle* best-`k` reported as an upper bound that
+  favours it. Same scene rule and `min_px = 5` score both; pixel IoU on true positives is reported,
+  not gated.
 
-The model beats the physics baseline on the scene-level F1 gate in every fold (mean **0.597 vs
-0.464**), driven by recall (0.891 vs 0.733) at comparable-or-better precision — it flags more of the
-truly-plumed scenes for the same false-positive budget. Three caveats bound what that means:
+Per-fold results (primary = quality-filtered truth; frozen in `ml_eval_v2.json`):
 
-- **Label noise (the load-bearing caveat).** The CH4Net masks were drawn with MBMP guidance (§9.1),
-  so they inherit MBMP's blind spots. A model that beats an MBMP-derived baseline on MBMP-derived
-  labels is a **better candidate ranker** — it is *not* evidence it sees plumes MBMP cannot. This is
-  why the tier feeds human review rather than replacing physics.
-- **Geography.** All 23 sites are Turkmenistan O&G. Site-held-out CV controls intra-region leakage,
-  not geography; expect degraded performance on other surfaces. The scan UI and this section say so.
-- **Deployed vs. CV model.** The fold models estimate field performance; the **deployed** model is
-  retrained on *all* data after CV with full-trainset stats (standard practice — shipping fold-0
-  would waste 20 % of a small dataset). Its performance estimate is the CV aggregate above, recorded
-  as `cv_scene_f1` in the manifest.
+| Fold | Held-out sites | n prim. (pos) | Inner-val thr | **Model F1** | Model P / R | Baseline k=2 F1 | Pixel IoU (TP) |
+|------|----------------|---------------|---------------|-------------|-------------|-----------------|----------------|
+| 0 | T1, T8, T13–T17 | 411 (101) | 0.15 | **0.631** | 0.538 / 0.762 | 0.476 | 0.351 |
+| 1 | T10, T11, T20–T22 | 323 (85) | 0.95 | **0.703** | 0.725 / 0.682 | 0.428 | 0.232 |
+| 2 | T2, T3, T18, T19 | 218 (47) | 0.95 | **0.528** | 0.375 / 0.894 | 0.371 | 0.278 |
+| 3 | T4–T7, T9 | 201 (45) | 0.95 | **0.397** | 0.297 / 0.600 | 0.352 | 0.211 |
+| 4 | T12, T23 | 173 (48) | 0.95 | **0.593** | 0.628 / 0.563 | 0.455 | 0.269 |
+| **Mean** | — | — | 0.95† | **0.571** | 0.513 / 0.700 | **0.416** | — |
+
+†deployed threshold = median of the folds' inner-val thresholds. Baseline eval-oracle best-`k`
+mean F1 = 0.437 (an upper bound favouring the baseline). The model clears the gate
+(**0.571 ≥ 0.416**) in the mean and in four of five folds; fold 3 (T4–T7, T9) is the weakest at
+0.397 vs 0.352. Four caveats bound what this means:
+
+- **Annotation agreement, not detection (the load-bearing caveat).** CH4Net masks were drawn with
+  MBMP guidance (§9.1), so they inherit MBMP's blind spots. Beating an MBMP-derived baseline on
+  MBMP-derived labels makes the model a **better candidate ranker** — *not* evidence it sees plumes
+  MBMP cannot. The tier feeds human review; it never auto-confirms.
+- **Most labels sit below the noise floor.** Of the 326 kept-positive labels, **298 (91.4 %)** have a
+  nominal Q *below* the Phase 7 global noise floor of 24.6 t/h (§7). The model is largely learning to
+  reproduce annotations at emission rates the physics tier calls indistinguishable from noise — a
+  hard ceiling on what "agreement" can be worth here.
+- **Residual scene sharing.** Clustering removes *ground* leakage, but **256 / 617** target scenes
+  still contribute chips to more than one fold (same acquisition, different pad), a declared,
+  unremoved limitation recorded as `scene_sharing`.
+- **Geography + deployed model.** All 23 sites are Turkmenistan O&G; cluster-held-out CV controls
+  intra-region leakage, not geography (expect degradation elsewhere — the scan UI says so). The
+  **deployed** model is retrained on all quality-filtered data with no early stop; its performance
+  estimate is the CV aggregate above, recorded as `cv_scene_f1` with its `cv_protocol` string in the
+  manifest.
+
+**v1 (superseded).** The original evaluation (`scripts/data/ml_eval_v1.json`, mean model F1 0.597
+vs baseline 0.464) is **protocol-invalid** and retained only for history: it folded by raw *site*
+(neighbouring-pad ground leakage), early-stopped on the eval fold, and scored a single untuned
+`threshold = 0.5` operating point. Its higher headline is an artefact of those three, not a better
+model — hence v2's lower but trustworthy 0.571.
 
 ### 9.5 Serving — the ML scan and the disagreement flag
 
@@ -504,14 +632,25 @@ it enters the *same* feed as physics detections, carrying a `score` (max candida
 a **single-pass Q**: the ΔR→ΔΩ→XCH₄ inversion and IME are run once over the ML footprint
 (`ime.emission_over_mask`, no Monte-Carlo), so `q_kg_h` is magnitude-comparable in the feed while
 `q_sigma_kg_h` is deliberately null — the full MC uncertainty budget stays a physics-tier feature.
-The npz artifact carries `xch4_ppb`/`mask`/`prob`/`rgb`/`grid`, so the existing overlay and
-`array.npz` routes serve ML rows unchanged.
+Because that Q is a bare point estimate, the UI **marks it as such** (a `~` prefix, no ± band) and
+shows the site's **noise-floor context** next to it (§7): a candidate whose single-pass Q is below
+the site floor is annotated `below_noise_floor`, so a sub-floor rate is never read as a confident
+measurement. The npz artifact carries `xch4_ppb`/`mask`/`prob`/`rgb`/`grid`, so the existing overlay
+and `array.npz` routes serve ML rows unchanged.
 
-**Disagreement flag.** Each ML row records `disagreement ∈ {agree, ml_only}`: `agree` if a physics
-detection already exists for the same site + scene, else `ml_only`. The symmetric `physics_only`
-view is a feed-level read, never a mutation of a physics row. In the Lab the flag surfaces as a chip
-on the detection detail, next to the model version and score, under the fixed caption **"ML candidate
-— requires review; not an autonomous detection."**
+**Physics-agreement flag (tri-state, read-derived).** Each ML row exposes
+`physics_agreement ∈ {agree, physics_no_plume, physics_not_run}`, computed at feed/detail read time
+by matching the row's scene against physics detections — **no stored column, no migration** (fix 8 /
+Tier 2 F5), so pre-existing rows read correctly: `agree` if a physics row for the same site + scene
+carries a non-empty plume; `physics_no_plume` if physics ran there but found nothing (the genuine
+*ML-only* signal worth a look); `physics_not_run` if no physics row exists yet — agreement is simply
+**undetermined**, deliberately *not* collapsed into "disagree". The earlier binary `{agree, ml_only}`
+conflated the last two, reading "physics hasn't run" as if the model contradicted physics; the
+tri-state fixes that. The match is row-level (same scene), not geometric footprint overlap — a later
+refinement. The scan still snapshots the state into the result JSON (`disagreement`) at run time for
+history, but the read-time field is the source of truth. In the Lab the flag surfaces as a chip on
+the detection detail next to the model version and score, under the fixed caption **"ML candidate —
+requires review; not an autonomous detection."**
 
 **License / ND consequence (restated because it binds deployment).** The trained weights are a
 CH4Net derivative. CC-BY-NC-ND's **ND** term forbids redistributing them, so — like the chips and
