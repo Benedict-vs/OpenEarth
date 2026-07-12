@@ -59,5 +59,8 @@ data/
 # label-Q rows stay under data/ml/review/, which the data/ rule above keeps ignored).
 !docs/reviews/data/
 !docs/reviews/data/**
+# ...and the packaged noise-floor JSON the API serves at runtime (Phase 7 fix 1).
+!packages/api/src/openearth_api/data/
+!packages/api/src/openearth_api/data/**
 node_modules/
 uv-receipt.json

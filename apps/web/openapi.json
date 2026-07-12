@@ -433,6 +433,11 @@
       "DetectionDetailOut": {
         "description": "Full detail: numbers, params, mask + overlay geometry, validation, EMIT.",
         "properties": {
+          "below_noise_floor": {
+            "default": false,
+            "title": "Below Noise Floor",
+            "type": "boolean"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -465,6 +470,21 @@
             "title": "Flags",
             "type": "array"
           },
+          "floor_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "site",
+                  "global"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Source"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -495,6 +515,17 @@
           "method": {
             "title": "Method",
             "type": "string"
+          },
+          "noise_floor_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise Floor Kg H"
           },
           "notes": {
             "anyOf": [
@@ -707,6 +738,11 @@
       "DetectionOut": {
         "description": "Summary row for the detection feed (headline numbers only).",
         "properties": {
+          "below_noise_floor": {
+            "default": false,
+            "title": "Below Noise Floor",
+            "type": "boolean"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -729,6 +765,21 @@
             "title": "Flags",
             "type": "array"
           },
+          "floor_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "site",
+                  "global"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Source"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -736,6 +787,17 @@
           "method": {
             "title": "Method",
             "type": "string"
+          },
+          "noise_floor_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise Floor Kg H"
           },
           "physics_agreement": {
             "anyOf": [
@@ -1773,6 +1835,67 @@
           "model_loaded"
         ],
         "title": "MlStatusOut",
+        "type": "object"
+      },
+      "NoiseFloorOut": {
+        "description": "Per-site noise-floor context for the Lab panel (static, before a run).",
+        "properties": {
+          "detect_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detect Rate"
+          },
+          "floor_kg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Kg H"
+          },
+          "floor_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "site",
+                  "global"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Source"
+          },
+          "n_pairs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Pairs"
+          }
+        },
+        "required": [
+          "floor_kg_h",
+          "floor_source",
+          "detect_rate",
+          "n_pairs"
+        ],
+        "title": "NoiseFloorOut",
         "type": "object"
       },
       "PolygonIn": {
@@ -5151,6 +5274,48 @@
           }
         },
         "summary": "Patch Site",
+        "tags": [
+          "methane"
+        ]
+      }
+    },
+    "/api/methane/sites/{site_id}/noise-floor": {
+      "get": {
+        "operationId": "get_site_noise_floor_api_methane_sites__site_id__noise_floor_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoiseFloorOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Site Noise Floor",
         "tags": [
           "methane"
         ]

@@ -444,6 +444,13 @@ class DetectionOut(BaseModel):
     # the same site+scene: agree (physics found a plume) / physics_no_plume
     # (physics ran, empty) / physics_not_run. None for physics rows.
     physics_agreement: Literal["agree", "physics_no_plume", "physics_not_run"] | None = None
+    # Empirical noise-floor context (fix 1 + fix 9b), derived at read time from the
+    # packaged noise_floor_v1.json. floor_source: "site" (own site) | "global"
+    # (unknown/custom) | None (floor not frozen). below_noise_floor: q_kg_h ≤ floor —
+    # indistinguishable from this pipeline's retrieval noise. Physics AND ML rows.
+    noise_floor_kg_h: float | None = None
+    floor_source: Literal["site", "global"] | None = None
+    below_noise_floor: bool = False
     flags: list[str]
     created_at: str
     updated_at: str
@@ -527,6 +534,15 @@ class ReferenceEventOut(BaseModel):
     q_kg_h: float | None
     q_sigma_kg_h: float | None
     imported_at: str
+
+
+class NoiseFloorOut(BaseModel):
+    """Per-site noise-floor context for the Lab panel (static, before a run)."""
+
+    floor_kg_h: float | None
+    floor_source: Literal["site", "global"] | None
+    detect_rate: float | None  # share of plume-free pairs that "detected" (site only)
+    n_pairs: int | None
 
 
 class ValidationImportOut(BaseModel):

@@ -37,6 +37,7 @@ from openearth_api.schemas import (
     JobCreated,
     MlScanRequest,
     MlStatusOut,
+    NoiseFloorOut,
     ReferenceEventOut,
     SceneInfoOut,
     ScreeningRequest,
@@ -83,6 +84,11 @@ def patch_site(site_id: int, body: SitePatch, engine: EngineDep) -> SiteOut:
 def delete_site(site_id: int, engine: EngineDep) -> Response:
     svc.delete_site(site_id, engine)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/methane/sites/{site_id}/noise-floor")
+def get_site_noise_floor(site_id: int, engine: EngineDep) -> NoiseFloorOut:
+    return svc.get_site_floor(engine, site_id)
 
 
 @router.get("/methane/sites/{site_id}/scenes", dependencies=[Depends(ensure_ee)])

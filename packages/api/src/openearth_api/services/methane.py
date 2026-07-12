@@ -43,6 +43,7 @@ from openearth_api.schemas import (
     DetectionOut,
     DetectionPatch,
     JobCreated,
+    NoiseFloorOut,
     ReferenceEventOut,
     SceneInfoOut,
     ScreeningRequest,
@@ -53,6 +54,7 @@ from openearth_api.schemas import (
     ValidationOut,
 )
 from openearth_api.services.methane_render import render_overlay_png
+from openearth_api.services.noise_floor import load_floor, resolve_floor
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -499,7 +501,48 @@ def derive_physics_agreement(engine: Engine, site_id: int | None, scene_id: str)
         return _physics_agreement_for_pairs(session, {pair})[pair]
 
 
-def _detection_out(row: Detection, physics_agreement: str | None = None) -> DetectionOut:
+def get_site_floor(engine: Engine, site_id: int) -> NoiseFloorOut:
+    """The noise-floor context for one site — static Lab context before a run (fix 1)."""
+    floor = load_floor()
+    with Session(engine) as session:
+        site = session.get(Site, site_id)
+    name = site.name if site else None
+    entry = (floor.get("sites", {}) if floor else {}).get(name) if name else None
+    if isinstance(entry, dict) and entry.get("floor_kg_h") is not None:
+        return NoiseFloorOut(
+            floor_kg_h=float(entry["floor_kg_h"]),
+            floor_source="site",
+            detect_rate=entry.get("detect_rate"),
+            n_pairs=entry.get("n_pairs"),
+        )
+    global_floor = (floor.get("global", {}) or {}).get("floor_kg_h") if floor else None
+    return NoiseFloorOut(
+        floor_kg_h=float(global_floor) if global_floor is not None else None,
+        floor_source="global" if global_floor is not None else None,
+        detect_rate=None,
+        n_pairs=None,
+    )
+
+
+def _site_names(session: Session, site_ids: set[int]) -> dict[int, str]:
+    """Batched site_id → name map for read-time noise-floor resolution (fix 1)."""
+    if not site_ids:
+        return {}
+    rows = session.exec(select(Site).where(Site.id.in_(site_ids))).all()  # type: ignore[union-attr]
+    return {s.id: s.name for s in rows if s.id is not None}
+
+
+def _floor_name(names: dict[int, str], site_id: int | None) -> str | None:
+    """Site name for a (possibly None/custom) site_id — None → global floor."""
+    return names.get(site_id) if site_id is not None else None
+
+
+def _detection_out(
+    row: Detection,
+    physics_agreement: str | None = None,
+    floor_ctx: tuple[float | None, str | None, bool] = (None, None, False),
+) -> DetectionOut:
+    floor_kg_h, floor_source, below = floor_ctx
     return DetectionOut(
         id=row.id,
         site_id=row.site_id,
@@ -517,6 +560,9 @@ def _detection_out(row: Detection, physics_agreement: str | None = None) -> Dete
         emit_matches=_emit_matches_of(row.emit_json),
         flags=_flags_of(row.result_json),
         physics_agreement=physics_agreement,  # type: ignore[arg-type]
+        noise_floor_kg_h=floor_kg_h,
+        floor_source=floor_source,  # type: ignore[arg-type]
+        below_noise_floor=below,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -544,8 +590,15 @@ def list_detections(
         agreement = _physics_agreement_for_pairs(
             session, {(r.site_id, r.scene_id) for r in rows if r.source == "ml"}
         )
+        # Read-time noise-floor context for every row (physics + ML): one Site lookup.
+        floor = load_floor()
+        names = _site_names(session, {r.site_id for r in rows if r.site_id is not None})
         return [
-            _detection_out(r, agreement.get((r.site_id, r.scene_id)) if r.source == "ml" else None)
+            _detection_out(
+                r,
+                agreement.get((r.site_id, r.scene_id)) if r.source == "ml" else None,
+                resolve_floor(floor, _floor_name(names, r.site_id), r.q_kg_h),
+            )
             for r in rows
         ]
 
@@ -568,8 +621,10 @@ def get_detection_detail(engine: Engine, det_id: str) -> DetectionDetailOut:
             if row.source == "ml"
             else None
         )
+        names = _site_names(session, {row.site_id} if row.site_id is not None else set())
+        floor_ctx = resolve_floor(load_floor(), _floor_name(names, row.site_id), row.q_kg_h)
         return DetectionDetailOut(
-            **_detection_out(row, agreement).model_dump(),
+            **_detection_out(row, agreement, floor_ctx).model_dump(),
             reference_scene_id=row.ref_scene_id,
             ime_kg=row.ime_kg,
             notes=row.notes,
