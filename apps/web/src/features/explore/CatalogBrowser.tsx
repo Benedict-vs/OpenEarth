@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useCatalog } from "../../api/queries";
+import { windowRange } from "../../lib/timeWindow";
 import { useDateStore } from "../../stores/dateStore";
 import type { RefWindow } from "../../stores/layersStore";
 import { useLayersStore } from "../../stores/layersStore";
@@ -18,7 +19,8 @@ function defaultRefWindow(postStart: string): RefWindow {
 export function CatalogBrowser() {
   const { data: catalog, isLoading, error } = useCatalog();
   const addLayer = useLayersStore((state) => state.addLayer);
-  const postStart = useDateStore((state) => state.start);
+  const window = useDateStore((state) => state.window);
+  const postStart = windowRange(window).start;
   const [datasetId, setDatasetId] = useState<string>("s2");
   const [productKey, setProductKey] = useState<string>("");
 

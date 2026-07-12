@@ -340,13 +340,91 @@ input[type="range"] {
   accent-color: var(--accent);
 }
 
-/* ── ROI toolbar + date control ────────────────────────────── */
+/* ── ROI toolbar + time model (window / period) ────────────── */
 
 .roi-toolbar,
-.date-control {
+.window-picker {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.window-center {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.window-presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.window-presets .chip {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.window-presets .chip.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.window-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.window-custom.active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.window-custom input {
+  width: 48px;
+  padding: 2px 4px;
+}
+
+.window-caption {
+  margin: 0;
+  font-size: 11px;
+}
+
+.window-picker.compact {
+  gap: 5px;
+}
+
+.window-picker.compact .window-caption {
+  font-size: 10px;
+}
+
+/* Period control: from/to pair with a leading label. */
+.period-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.period-label {
+  font-size: 12px;
+}
+
+.period-picker.compact {
+  gap: 3px;
+}
+
+.period-picker.compact .date-inputs {
+  gap: 6px;
 }
 
 .roi-buttons {

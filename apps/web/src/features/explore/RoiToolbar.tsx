@@ -3,6 +3,7 @@ import type { Aoi } from "../../api/types";
 import { ApiError } from "../../api/client";
 import { useMapContext } from "../../map/MapContext";
 import type { DrawApi } from "../../map/useTerraDraw";
+import { rangeToWindow } from "../../lib/timeWindow";
 import { useDateStore } from "../../stores/dateStore";
 import { boundsToBBox, roiBounds, useRoiStore } from "../../stores/roiStore";
 
@@ -56,8 +57,11 @@ export function RoiToolbar({ draw }: { draw: DrawApi }) {
     useRoiStore.getState().applyPreset(preset.name, bbox);
     if (preset.date_hint) {
       const [start, end] = preset.date_hint;
-      useDateStore.getState().setMode("range");
-      useDateStore.getState().setRange(start, end);
+      // A site hint is a season, not a composite: it sets the period, and a
+      // window centered in it but capped at ±45 d so the composite stays legible.
+      const w = rangeToWindow(start, end);
+      useDateStore.getState().setPeriod(start, end);
+      useDateStore.getState().setWindow({ center: w.center, halfDays: Math.min(w.halfDays, 45) });
     }
     fitTo(bbox);
   };

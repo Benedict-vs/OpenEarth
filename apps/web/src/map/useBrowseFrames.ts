@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { mintTiles } from "../api/queries";
 import type { TilesRequest } from "../api/types";
 import { evictableKeys, poolIndices } from "../lib/animation";
+import { windowMeanDates } from "../lib/timeWindow";
 import type { Layer } from "../stores/layersStore";
 import { useRoiStore } from "../stores/roiStore";
 
@@ -38,7 +39,7 @@ export function useBrowseFrames(
   layer: Layer | null,
   dates: string[],
   index: number,
-  opts: { enabled: boolean; halfWindowDays: number; opacity: number },
+  opts: { enabled: boolean; halfDays: number; opacity: number },
 ): BrowseFrames {
   const roi = useRoiStore((s) => s.roi);
   const pool = useRef<Map<number, PoolEntry>>(new Map());
@@ -91,22 +92,25 @@ export function useBrowseFrames(
 
   const mint = useCallback(
     async (i: number, currentIndex: number) => {
-      const targetDate = dates[i];
-      if (!map || !layer || targetDate === undefined) return;
+      const frameDate = dates[i];
+      if (!map || !layer || frameDate === undefined) return;
       if (pool.current.has(i) || inFlight.current >= MAX_IN_FLIGHT) return;
       pool.current.set(i, { status: "minting" });
       inFlight.current += 1;
       publishStatus();
 
+      // Each frame is a window centered on its date; compile it to a mean
+      // composite (windowMeanDates) so a wide window never rides the tiles
+      // `half_window_days` cap. `half_window_days` is vestigial for mean.
       const req: TilesRequest = {
         dataset: layer.dataset,
         product: layer.product,
         roi: roi ?? null,
         viz_overrides: layer.vizOverrides ?? null,
         auto_range: layer.autoRange,
-        composite: "date_window",
-        target_date: targetDate,
-        half_window_days: opts.halfWindowDays,
+        composite: "mean",
+        dates: windowMeanDates({ center: frameDate, halfDays: opts.halfDays }),
+        half_window_days: 0,
       };
       try {
         const res = await mintTiles(req);
@@ -138,7 +142,7 @@ export function useBrowseFrames(
         ensurePoolRef.current(currentIndex);
       }
     },
-    [map, layer, roi, dates, opts.halfWindowDays, opts.opacity, publishStatus, swapVisible],
+    [map, layer, roi, dates, opts.halfDays, opts.opacity, publishStatus, swapVisible],
   );
 
   const ensurePoolRef = useRef<(current: number) => void>(() => {});

@@ -11,6 +11,7 @@ import { useAnalysisStore } from "../../stores/analysisStore";
 import { useDateStore } from "../../stores/dateStore";
 import { useLayersStore } from "../../stores/layersStore";
 import { useRoiStore } from "../../stores/roiStore";
+import { PeriodPicker } from "./PeriodPicker";
 import { SeriesChart } from "./SeriesChart";
 import { StatsCards } from "./StatsCards";
 
@@ -32,8 +33,10 @@ export function ChartPanel() {
 
   const layers = useLayersStore((s) => s.layers);
   const roi = useRoiStore((s) => s.roi);
-  const start = useDateStore((s) => s.start);
-  const end = useDateStore((s) => s.end);
+  const period = useDateStore((s) => s.period);
+  const setPeriod = useDateStore((s) => s.setPeriod);
+  const start = period.start;
+  const end = period.end;
   const { data: catalog } = useCatalog();
 
   // Default target = topmost (last) visible ready layer, else topmost layer.
@@ -93,6 +96,7 @@ export function ChartPanel() {
             </option>
           ))}
         </select>
+        <PeriodPicker period={period} onChange={setPeriod} compact />
         <button className="primary" onClick={onRun} disabled={!canRun}>
           Run
         </button>

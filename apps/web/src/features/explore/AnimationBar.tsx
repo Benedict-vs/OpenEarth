@@ -74,9 +74,9 @@ function BrowseControls({
   layer: Layer;
   enabled: boolean;
 }) {
-  const start = useDateStore((s) => s.start);
-  const end = useDateStore((s) => s.end);
-  const halfWindowDays = useDateStore((s) => s.halfWindowDays);
+  const start = useDateStore((s) => s.period.start);
+  const end = useDateStore((s) => s.period.end);
+  const halfDays = useDateStore((s) => s.window.halfDays);
   const [steps, setSteps] = useState(12);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -95,7 +95,7 @@ function BrowseControls({
 
   const { status } = useBrowseFrames(map, ready, layer, dates, safeIndex, {
     enabled,
-    halfWindowDays,
+    halfDays,
     opacity: layer.opacity,
   });
 

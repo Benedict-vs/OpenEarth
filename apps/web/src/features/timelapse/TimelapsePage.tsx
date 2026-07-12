@@ -8,6 +8,7 @@ import { ApiError } from "../../api/client";
 import { buildTimelapseRequest } from "../../lib/timelapse";
 import { useRoiStore } from "../../stores/roiStore";
 import { useTimelapseStore } from "../../stores/timelapseStore";
+import { PeriodPicker } from "../explore/PeriodPicker";
 import { FramePlayer } from "./FramePlayer";
 import { RenderGallery } from "./RenderGallery";
 
@@ -134,24 +135,11 @@ export function TimelapsePage() {
           <p className="muted small">No region — draw an ROI in Explore or pick one.</p>
         ) : null}
 
-        <div className="date-row">
-          <label>
-            Start
-            <input
-              type="date"
-              value={form.start}
-              onChange={(e) => setForm({ start: e.target.value })}
-            />
-          </label>
-          <label>
-            End
-            <input
-              type="date"
-              value={form.end}
-              onChange={(e) => setForm({ end: e.target.value })}
-            />
-          </label>
-        </div>
+        <PeriodPicker
+          period={{ start: form.start, end: form.end }}
+          onChange={(start, end) => setForm({ start, end })}
+          label="Period"
+        />
 
         <label>
           Step
@@ -193,9 +181,9 @@ export function TimelapsePage() {
               </label>
             </div>
             <p className="muted step-note">
-              A frame starts every <b>{form.intervalDays}</b> days; each frame averages{" "}
-              <b>{form.windowDays ?? form.intervalDays}</b> days of scenes. A window wider than the
-              interval overlaps frames, smoothing cloud gaps.
+              Each frame is one window, stepped along the period: a frame starts every{" "}
+              <b>{form.intervalDays}</b> days and averages <b>{form.windowDays ?? form.intervalDays}</b>{" "}
+              days of scenes. A window wider than the interval overlaps frames, smoothing cloud gaps.
             </p>
           </>
         ) : null}
