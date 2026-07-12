@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import threading
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -274,18 +275,27 @@ async def submit_ml_scan(
 
     def runner(ctx: Any) -> dict[str, Any]:
         model = load_model(settings)
-        scenes = list_scenes(bbox, req.start, req.end)
+        targets = list_scenes(bbox, req.start, req.end)
         if req.max_scenes:
-            scenes = scenes[: req.max_scenes]
+            targets = targets[: req.max_scenes]
+        # Reference candidate pool matches the training exporter's ±150-day / cloud-60
+        # environment (fix 11 / Tier 2 F6), NOT the user's scan window — short windows
+        # otherwise gave short-Δt/fewer-candidate references than the model trained on.
+        ref_pool = list_scenes(
+            bbox,
+            req.start - timedelta(days=150),
+            req.end + timedelta(days=150),
+            max_cloud=60.0,
+        )
         det_ids: list[str] = []
-        for i, scene in enumerate(scenes):
+        for i, scene in enumerate(targets):
             if ctx.cancelled.is_set():
                 break
-            det_id = _scan_one_scene(req.site_id, scene, scenes, bbox, model, settings, engine)
+            det_id = _scan_one_scene(req.site_id, scene, ref_pool, bbox, model, settings, engine)
             if det_id is not None:
                 det_ids.append(det_id)
-            label = f"scanned {i + 1}/{len(scenes)}, {len(det_ids)} hit(s)"
-            ctx.progress(i + 1, len(scenes), label)
+            label = f"scanned {i + 1}/{len(targets)}, {len(det_ids)} hit(s)"
+            ctx.progress(i + 1, len(targets), label)
         return {"detection_ids": det_ids}
 
     job_id = await jobs.submit("methane_ml_scan", req.model_dump(mode="json"), runner)

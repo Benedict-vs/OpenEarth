@@ -167,3 +167,32 @@ def test_ml_scan_end_to_end(client: TestClient, scan_ready: None) -> None:
     png = client.get(f"/api/methane/detections/{det_ids[0]}/overlay.png", params={"vmax": 200})
     assert png.status_code == 200
     assert png.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_serve_reference_pool_widens_window(
+    client: TestClient, scan_ready: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reference pool spans ±150 d at cloud 60 (training environment, fix 11);
+    targets still come only from the requested window."""
+    from datetime import date, timedelta
+
+    calls: list[tuple[Any, Any, float]] = []
+
+    def spy_list_scenes(bbox: Any, start: Any, end: Any, *, max_cloud: float = 80.0) -> list:
+        calls.append((start, end, max_cloud))
+        return [_scene("A"), _scene("B")]
+
+    monkeypatch.setattr(svc_ml, "list_scenes", spy_list_scenes)
+    site_id = client.get("/api/methane/sites").json()[0]["id"]
+    resp = client.post(
+        "/api/methane/ml/scan",
+        json={"site_id": site_id, "roi": SCAN_ROI, "start": "2021-07-01", "end": "2021-08-01"},
+    )
+    _wait_succeeded(client, resp.json()["job_id"])
+
+    assert len(calls) == 2  # targets, then reference pool
+    (t_start, t_end, _), (r_start, r_end, r_cloud) = calls
+    assert (t_start, t_end) == (date(2021, 7, 1), date(2021, 8, 1))  # targets = requested range
+    assert r_start == date(2021, 7, 1) - timedelta(days=150)
+    assert r_end == date(2021, 8, 1) + timedelta(days=150)
+    assert r_cloud == 60.0
