@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { CompareView } from "./features/compare/CompareView";
 import { EmbeddingsView } from "./features/embeddings/EmbeddingsView";
 import { ExplorePage } from "./features/explore/ExplorePage";
@@ -6,11 +5,13 @@ import { WorkspaceMenu } from "./features/explore/WorkspaceMenu";
 import { MethanePage } from "./features/methane/MethanePage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { TimelapsePage } from "./features/timelapse/TimelapsePage";
-
-type View = "explore" | "compare" | "methane" | "timelapse" | "embeddings" | "settings";
+import { useUiStore } from "./stores/uiStore";
 
 export function App() {
-  const [view, setView] = useState<View>("explore");
+  // View state lives in uiStore so features (e.g. "Play on map", "Render as
+  // timelapse…") can navigate without prop-drilling a callback.
+  const view = useUiStore((s) => s.view);
+  const setView = useUiStore((s) => s.navigate);
 
   return (
     <div className="app">

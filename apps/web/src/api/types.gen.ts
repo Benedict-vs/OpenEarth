@@ -898,6 +898,12 @@ export interface components {
        * @default 5
        */
       min_area_px: number;
+      /**
+       * Reference Mode
+       * @default single
+       * @enum {string}
+       */
+      reference_mode: "single" | "composite";
       /** Reference Scene Id */
       reference_scene_id?: string | null;
       roi?: components["schemas"]["BBoxIn"] | null;
@@ -1941,6 +1947,11 @@ export interface components {
       step?: components["schemas"]["StepIn"];
       /** Title */
       title?: string | null;
+      /**
+       * Tween
+       * @default 0
+       */
+      tween: number;
       /** Vis Max */
       vis_max?: number | null;
       /** Vis Min */
@@ -2077,30 +2088,31 @@ export interface components {
       /** Wind To Deg */
       wind_to_deg: number;
     };
-    /** WorkspaceDate */
+    /**
+     * WorkspaceDate
+     * @description The Explore view's time state. Phase 8 (``v: 2``) is the window/period
+     *     model: a **window** (``center`` ± ``half_window_days``) and a **period**
+     *     (``period_start``/``period_end``). The v1 fields (``mode``/``start``/``end``/
+     *     ``target_date``) are kept optional so old snapshots still validate and the
+     *     client migrates them on load. The server validates shape, never semantics.
+     */
     WorkspaceDate: {
-      /**
-       * End
-       * Format: date
-       */
-      end: string;
+      /** Center */
+      center?: string | null;
+      /** End */
+      end?: string | null;
       /** Half Window Days */
       half_window_days: number;
-      /**
-       * Mode
-       * @enum {string}
-       */
-      mode: "range" | "single";
-      /**
-       * Start
-       * Format: date
-       */
-      start: string;
-      /**
-       * Target Date
-       * Format: date
-       */
-      target_date: string;
+      /** Mode */
+      mode?: ("range" | "single") | null;
+      /** Period End */
+      period_end?: string | null;
+      /** Period Start */
+      period_start?: string | null;
+      /** Start */
+      start?: string | null;
+      /** Target Date */
+      target_date?: string | null;
     };
     /** WorkspaceIn */
     WorkspaceIn: {
@@ -2141,8 +2153,9 @@ export interface components {
     /**
      * WorkspaceState
      * @description A restorable snapshot of the Explore view. ``v`` is a schema version so
-     *     Phase 3+ can migrate the shape explicitly instead of guessing at load time;
-     *     an unknown version fails validation rather than being silently misread.
+     *     the shape can migrate explicitly instead of being guessed at load time; an
+     *     unknown version fails validation rather than being silently misread. v1
+     *     snapshots still load (the client migrates them to the window/period model).
      */
     WorkspaceState: {
       date: components["schemas"]["WorkspaceDate"];
@@ -2152,9 +2165,9 @@ export interface components {
       roi?: (components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"]) | null;
       /**
        * V
-       * @constant
+       * @enum {integer}
        */
-      v: 1;
+      v: 1 | 2;
       /** Wind */
       wind: boolean;
     };

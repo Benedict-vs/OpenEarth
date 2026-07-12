@@ -153,6 +153,37 @@ retired; 91 % of labels sit below the noise floor). (5) methods honesty rewrite 
 License wall intact — no CH4Net derivative (chips/masks/weights/onnx/manifest) committed. Methods
 §1/§7/§8.2/§9; branch v2/phase7-science-fixes.*
 
+## Phase 8 — Design pass: one time model, honest animation, resilient renders, composite reference (L) ✅
+
+The review items the Phase 7 science round deferred to a design pass. Retire the app's conflated
+date semantics; make timelapse renders interruptible and failure-tolerant; ship an opt-in
+composite MBMP reference with its A/B recorded before any promotion.
+*Exit: no view has two controls for the same time concept or one for two; a mid-render EE failure
+costs one frame, not the render; a running render can be stopped and its partial kept; a
+recurrent-emitter site can be analyzed against a composite reference from the Lab.* ✅
+*As-built: (0) one shared **window** (center ± halfDays, "what a composite shows") + **period**
+({start,end}, "a span you scan across") model — `dateStore` v2, shared `TimeWindowPicker`/
+`PeriodPicker`, workspace state v2 with lossless v1 migration. The window compiles to
+`composite:"mean"` over an exclusive-end range (no tiles-schema change, never rides the
+`half_window_days ≤ 30` cap). (1) per-side Compare windows (width presets ARE the smoothing).
+(2) Explore Preview transport is buffer-aware — play holds on an unready frame instead of lying
+(`advanceFrame`, synchronous status ref, bounded prefetch); finished-render playback relocated to
+the gallery's "Play on map" → a docked `PlaybackBar` (uiStore navigation). (3) timelapse
+resilience: per-frame mint failures degrade to `failed` + a dead-pipeline breaker; cancel keeps
+completed frames as a "partial" (`cancelled` manifest, no enum/migration change) with a movie when
+≥ 2 frames; `tween` cross-fade smoothing at encode time. (4) opt-in median-composite MBMP reference
+(k = 5 same-orbit/spacecraft, 50 % breakdown point, median-AMF + spread flag) — A/B vs baseline v5
+recorded (methods §7.1): it does **not** rescue the persistent-emitter case (libya-sirte 1.72 →
+1.76) so it ships default-off, no baseline v6. ML scan stays single-reference (channel parity).
+Leftover handoffs (deliberately not in scope): **D10** Ehret et al. 2022 regression background
+(the literature's recurrent-monitoring machine — co-registration + long series, methods §7.1);
+**D11** ML-tier fate (`ml_eval_v2.json` now exists, scene-F1 0.571 ≥ 0.416 — the promote/retire
+call is a separate decision); **D12** v5.1 event re-curation (unblocked by the §7.1 A/B —
+composite mode is what a re-curated libya-sirte/korpezhe would test against). Also: revisit the
+Preview transport if usage shows people still expect *smooth* playback there rather than treating
+it as an honest buffer-aware scrubber (the escape hatch is "Render as timelapse…"). Branch
+v2/phase8-design-pass.*
+
 ## Backlog (deliberately out of scope until their phase)
 
 - Multi-*source* fusion products (S1+S2): deforestation change, flood mask (VV + MNDWI change),

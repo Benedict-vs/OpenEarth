@@ -4,6 +4,7 @@ import { type AnalysisArea, defaultAnalysisArea } from "../lib/methane";
 
 export interface RunParams {
   method: "mbmp" | "mbsp";
+  referenceMode: "single" | "composite";
   kSigma: number;
   minAreaPx: number;
   seed: number;
@@ -56,7 +57,13 @@ interface MethaneState {
   setOverlayOpacity(opacity: number): void;
 }
 
-const DEFAULT_PARAMS: RunParams = { method: "mbmp", kSigma: 2, minAreaPx: 5, seed: 0 };
+const DEFAULT_PARAMS: RunParams = {
+  method: "mbmp",
+  referenceMode: "single",
+  kSigma: 2,
+  minAreaPx: 5,
+  seed: 0,
+};
 
 /** Seed the date range from a site's date hint (or a neutral fallback). */
 function datesFromSite(site: Site | null): { start: string; end: string } {

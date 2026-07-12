@@ -24,11 +24,15 @@ Three layers, one workspace:
 
 - **Explore** — stack any registered dataset on the map, drawn or preset ROIs, per-layer opacity,
   legends, and an optional data-adaptive vis range; a pixel inspector, time-series charts with a
-  rolling mean, PNG/GeoTIFF/CSV export, and an ERA5 wind overlay. An **animation** transport plays
-  the active layer over time — either by browsing date-window composites or by overlaying an
-  encoded render's frames.
+  rolling mean, PNG/GeoTIFF/CSV export, and an ERA5 wind overlay. Time is two named things
+  everywhere: a **window** (a center date ± width — what a single composite averages over) and a
+  **period** (a start/end span you chart, preview, or scan across). The **Preview** transport
+  slides the window across the period, minting composites on demand and *holding honestly* on an
+  unready frame rather than playing a lie; for smooth playback you render a **timelapse**, then
+  press "Play on map" in the gallery to overlay its frames back here.
 - **Compare** — two synced maps joined by a swipe slider; *linked* mode compares one layer at two
-  dates (the classic change view), *independent* mode gives each side its own configuration.
+  dates (the classic change view), *independent* mode gives each side its own configuration; each
+  side carries its own window width (the presets are the temporal smoothing).
 - **Methane Lab** — calibrated MBSP/MBMP retrieval on Sentinel-2, robust plume masking, and
   Integrated Mass Enhancement quantification with Monte-Carlo uncertainty, cross-matched against
   IMEO/SRON reference events. The methods, constants, and their citations are written up in
@@ -41,8 +45,12 @@ Three layers, one workspace:
   that requires human review, never an autonomous detector** — physics stays the load-bearing tier.
   Trained on the CC-BY-NC-ND CH4Net dataset, so the weights are never committed and ship out-of-band
   (see [`docs/methane_methods.md`](docs/methane_methods.md) §9).
-- **Timelapse Studio** — step a date range into frames, render each with burned-in date label,
+- **Timelapse Studio** — step a period into frames, render each with a burned-in date label,
   scale bar, and colorbar, and encode an MP4/WebM/GIF with a live gallery and in-app player.
+  Renders are resilient: a per-frame Earth Engine failure costs one frame (not the render), and a
+  running render can be **stopped** — its completed frames are kept as a "Partial — N frames"
+  gallery item (with a movie when ≥ 2 frames). Optional frame-to-frame **smoothing** cross-fades
+  between frames at encode time (a display effect, not more data).
 
 ## Data sources
 

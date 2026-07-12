@@ -252,9 +252,10 @@ is a human PATCH only).
   dedicated mask-calibration study is the proper fix.
 - **Reference contamination at recurrent emitters.** A persistently active source may have *no*
   in-period plume-free acquisition, so the "reference" itself carries a plume and MBMP
-  over-subtracts (libya-sirte 1.7 vs 14.7 t/h, §8.2). This is now flagged
-  (`possible_reference_contamination`) rather than silently biasing the rate; a
-  composite/temporal-median reference is deferred to the design pass.
+  over-subtracts (libya-sirte 1.7 vs 14.7 t/h, §8.2). This is flagged
+  (`possible_reference_contamination`) rather than silently biasing the rate. Phase 8 adds an
+  **opt-in composite reference** as one answer to this — see §7.1, which also records why it did
+  *not* rescue the textbook case.
 - **ERA5 vs local wind** — reanalysis 10 m wind is coarse (~11 km, hourly); U_eff error
   dominates the budget for slow, well-defined plumes.
 - **LUT physics, and the ~25 % Varon-anchor offset (still a hypothesis).** The forward model is
@@ -278,6 +279,68 @@ is a human PATCH only).
   the ΔΩ-domain mask places the plume. This affects the shipping Phase 3 masks as well; it is why
   raw-ΔR masking (which lacks this signal) displaces the mask off-source, and one reason the
   calibration scatter (§8.2) is wide.
+
+### 7.1 Composite reference — opt-in, default-off (Phase 8)
+
+An **opt-in** MBMP reference mode (`reference_mode="composite"`, default `"single"`). Instead of
+one reference chip it fetches up to **k = 5 same-orbit, same-spacecraft** reference chips and
+takes their **per-pixel, per-band median** upstream of an unchanged retrieval. Fewer than 3
+eligible members falls back to single (flagged `composite_reference_unavailable`).
+
+- **Why a median.** Its 50 % breakdown point is the whole idea: an intermittent plume must
+  contaminate the *same pixels in half the members* to survive into the background, whereas the
+  single-reference design fails on one bad pick. Reference noise also drops ≈ √k for the
+  homogeneous case.
+- **Hard constraints, not soft penalties.** `pick_reference_set` requires the same relative orbit
+  **and** spacecraft — the LUT is per-spacecraft and the median is only meaningful over a fixed
+  viewing geometry; averaging across mixed geometries/SRFs would smear physics, not noise. (The
+  single picker uses soft penalties because it must always return *something*; the composite has a
+  single-reference fallback instead.)
+- **Median-AMF approximation.** The reference pass inverts with the **median member AMF** — the
+  members span ±120 d and the solar zenith drifts, so this is a declared approximation. Members'
+  AMF max−min beyond one LUT grid step (`AMF_SPREAD_MAX = 0.25`, the 0.25-wide AMF interpolation
+  grid) flags `composite_amf_spread`. The result records every member's `{scene_id,
+  days_from_target, amf}` and the spread.
+- **This is our own declared design, not the literature's.** Varon et al. 2021 use **one**
+  reference observation per Sentinel-2 MSI for all multi-pass retrievals and explicitly name the
+  persistent-emitter gap without solving it ("It may be challenging to identify a plume-free
+  satellite pass when monitoring persistent methane sources"). The literature's *recurrent-
+  monitoring* machine is **Ehret et al. 2022** (EST 56:10517) — a per-pixel linear projection of
+  the current log-band-ratio onto the previous T−1 = 29 dates with two-step outlier-rejecting
+  regression — which is **not** a median composite and needs co-registration + a long series. That
+  regression background is the documented upgrade path (§7 "Reference contamination"; roadmap D10),
+  not what ships here. The median composite is literature-adjacent, our own.
+
+**A/B evidence (recorded, never a fitting target).** One live run in composite mode vs the frozen
+single-reference `calibration_baseline_v5.json` (same events, MC seed 0, n = 500, LUT v5):
+
+| aggregate | single (v5 baseline) | composite | Δ |
+|---|---|---|---|
+| slope through origin | 1.105 | 1.962 | +0.857 |
+| median ratio | 0.996 | 0.955 | −0.041 |
+| log scatter | 0.441 | 0.425 | −0.016 |
+| Theil–Sen slope | 0.124 | 0.168 | +0.044 |
+| Spearman ρ | 0.088 | 0.070 | −0.018 |
+| n quantified | 13 | 12 | — |
+
+Hypotheses were fixed *before* the run (plan-recorded); outcomes either way:
+
+- **libya-sirte's ratio rises toward 1 → refuted.** 1.72 → **1.76 t/h** (published 14.7), still
+  `possible_reference_contamination`. This is the decisive finding: a *recurrent* emitter's nearby
+  same-orbit scenes are themselves contaminated, so >50 % of the members carry the plume and the
+  median stays contaminated — the 50 % breakdown point buys nothing when the contamination is
+  persistent. The composite helps the *intermittent-contamination* case, not this one.
+- **homogeneous-site scatter drops → weakly supported.** log scatter −0.016 (marginal).
+- **no expectation on Spearman → confirmed flat** (−0.018).
+
+The slope worsens because Korpezhe blows up (10.95 → **162 t/h**): its documented single reference
+is a hand-picked plume-free scene, and dropping it for the auto-selected composite members (which
+share Korpezhe's contamination) is strictly worse. Net: composite mode does **not** universally
+improve calibration and does **not** rescue the persistent-emitter case it was aimed at — which is
+exactly why it ships **opt-in, default-off**, with no promotion to default and **no baseline v6**
+this phase. Promotion + the v5.1 event re-curation (roadmap D12) is one future decision to make
+with this evidence in hand. The ML scan deliberately stays single-reference (channel parity with
+training, §9.4).
 
 ## 8. Reproduction and calibration results
 

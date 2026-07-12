@@ -24,6 +24,7 @@ Notes on method choice (documented in docs/methane_methods.md):
 
 from __future__ import annotations
 
+import argparse
 import sys
 
 from openearth.ee.client import initialize
@@ -49,7 +50,7 @@ def _sigma_th(result: DetectionResult) -> float:
 PASS, MARGINAL, FAIL = "PASS", "⚠ MARGINAL", "FAIL"
 
 
-def korpezhe() -> tuple[float, float, str, str]:
+def korpezhe(reference_mode: str = "single") -> tuple[float, float, str, str]:
     """Korpezhe 2018-06-19 — published 11.2 ± 5.2 t/h (GHGSat-D: 11.6 ± 8.8).
 
     PASS: Q ∈ [5.6, 16.8] t/h (published ±50 %) with σ overlapping. This
@@ -61,7 +62,12 @@ def korpezhe() -> tuple[float, float, str, str]:
     result = analyze(
         bbox,
         "20180619T070619_20180619T071220_T39SYC",
-        reference_scene_id="20180624T070621_20180624T071359_T39SYC",
+        # Composite mode drops the pinned reference and medians its own members;
+        # single mode (the gate) keeps the documented pinned reference.
+        reference_scene_id=(
+            None if reference_mode == "composite" else "20180624T070621_20180624T071359_T39SYC"
+        ),
+        reference_mode=reference_mode,  # type: ignore[arg-type]
         method="mbmp",
         mc=_MC,
     )
@@ -103,11 +109,25 @@ def hassi_messaoud() -> tuple[float, float, str, str]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--reference-mode",
+        choices=["single", "composite"],
+        default="single",
+        help="MBMP reference for Korpezhe: single (the gate) or median composite (evidence)",
+    )
+    args = parser.parse_args()
+
     initialize()
+    print(f"reference-mode: {args.reference_mode}")
     print(f"{'event':<20}{'ours (t/h)':>16}   verdict     notes")
     print("-" * 100)
     any_fail = False
-    for name, fn in (("Korpezhe", korpezhe), ("Hassi Messaoud", hassi_messaoud)):
+    # Hassi Messaoud is MBSP (no reference pass) — reference-mode does not apply.
+    for name, fn in (
+        ("Korpezhe", lambda: korpezhe(args.reference_mode)),
+        ("Hassi Messaoud", hassi_messaoud),
+    ):
         q, sigma, verdict, detail = fn()
         any_fail = any_fail or verdict == FAIL
         ours = f"{q:.2f} ± {sigma:.2f}" if sigma else f"{q:.2f} (mean)"

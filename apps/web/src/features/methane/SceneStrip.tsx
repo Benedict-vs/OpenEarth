@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useSiteScenes } from "../../api/methaneQueries";
 import { analysisAreaToBBox } from "../../lib/methane";
+import { PeriodPicker } from "../explore/PeriodPicker";
 import { useMethaneStore } from "../../stores/methaneStore";
 
 export function SceneStrip() {
@@ -28,24 +29,7 @@ export function SceneStrip() {
 
   return (
     <div className="scene-strip">
-      <div className="date-row">
-        <label>
-          Start
-          <input
-            type="date"
-            value={dates.start}
-            onChange={(e) => setDates(e.target.value, dates.end)}
-          />
-        </label>
-        <label>
-          End
-          <input
-            type="date"
-            value={dates.end}
-            onChange={(e) => setDates(dates.start, e.target.value)}
-          />
-        </label>
-      </div>
+      <PeriodPicker period={dates} onChange={setDates} label="Search period" />
 
       {error ? (
         <p className="error-text">{error instanceof Error ? error.message : "Scene load failed"}</p>

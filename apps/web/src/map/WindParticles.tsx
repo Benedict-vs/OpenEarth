@@ -51,10 +51,8 @@ function particleCountForZoom(zoom: number): number {
 export function WindParticles() {
   const { map, ready } = useMapContext();
   const enabled = useWindStore((s) => s.particlesEnabled);
-  const mode = useDateStore((s) => s.mode);
-  const end = useDateStore((s) => s.end);
-  const targetDate = useDateStore((s) => s.targetDate);
-  const timeIso = `${mode === "single" ? targetDate : end}T12:00:00Z`;
+  const center = useDateStore((s) => s.window.center);
+  const timeIso = `${center}T12:00:00Z`;
 
   const [bounds, setBounds] = useState<Bounds | null>(null);
   const layerRef = useRef<WindParticleLayer | null>(null);

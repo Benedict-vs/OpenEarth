@@ -11,24 +11,26 @@ import { useEffect } from "react";
 import { mintTiles } from "../api/queries";
 import type { TilesRequest } from "../api/types";
 import { isoToMs, remintAtMs } from "../lib/time";
+import { windowMeanDates, type TimeWindow } from "../lib/timeWindow";
 import { useDateStore } from "../stores/dateStore";
 import { useLayersStore, type Layer } from "../stores/layersStore";
 import { useRoiStore } from "../stores/roiStore";
 
-interface DateParams {
-  mode: "range" | "single";
-  start: string;
-  end: string;
-  targetDate: string;
-  halfWindowDays: number;
-}
+// The layer window compiles to a `composite: "mean"` request over the window's
+// exclusive-end dates (windowMeanDates) — never `date_window`, whose
+// `half_window_days` is capped at 30 and would 422 a ±45/custom window.
+// `half_window_days` is vestigial for a mean composite (the server reads it only
+// for `date_window`); the generated type still requires the field, so it is
+// pinned to 0 and the width rides `dates`.
+const MEAN_HALF_WINDOW_DAYS = 0;
 
 export function buildTilesRequest(
   layer: Pick<Layer, "dataset" | "product" | "vizOverrides" | "autoRange" | "ref">,
   roi: TilesRequest["roi"],
-  dates: DateParams,
+  window: TimeWindow,
 ): TilesRequest {
-  // Two-window compare product: post = the shared date range, pre = the layer's ref.
+  const dates = windowMeanDates(window);
+  // Two-window compare product: post = the layer window, pre = the layer's ref.
   if (layer.ref) {
     return {
       dataset: layer.dataset,
@@ -37,21 +39,9 @@ export function buildTilesRequest(
       viz_overrides: layer.vizOverrides ?? null,
       auto_range: layer.autoRange,
       composite: "mean",
-      dates: { start: dates.start, end: dates.end },
+      dates,
       ref: { start: layer.ref.start, end: layer.ref.end },
-      half_window_days: dates.halfWindowDays,
-    };
-  }
-  if (dates.mode === "single") {
-    return {
-      dataset: layer.dataset,
-      product: layer.product,
-      roi: roi ?? null,
-      viz_overrides: layer.vizOverrides ?? null,
-      auto_range: layer.autoRange,
-      composite: "date_window",
-      target_date: dates.targetDate,
-      half_window_days: dates.halfWindowDays,
+      half_window_days: MEAN_HALF_WINDOW_DAYS,
     };
   }
   return {
@@ -61,8 +51,8 @@ export function buildTilesRequest(
     viz_overrides: layer.vizOverrides ?? null,
     auto_range: layer.autoRange,
     composite: "mean",
-    dates: { start: dates.start, end: dates.end },
-    half_window_days: dates.halfWindowDays,
+    dates,
+    half_window_days: MEAN_HALF_WINDOW_DAYS,
   };
 }
 
@@ -71,14 +61,7 @@ export function buildTilesRequest(
 function currentParamsKey(layerId: string): string | null {
   const layer = useLayersStore.getState().layers.find((l) => l.id === layerId);
   if (!layer) return null;
-  const { mode, start, end, targetDate, halfWindowDays } = useDateStore.getState();
-  const body = buildTilesRequest(layer, useRoiStore.getState().roi, {
-    mode,
-    start,
-    end,
-    targetDate,
-    halfWindowDays,
-  });
+  const body = buildTilesRequest(layer, useRoiStore.getState().roi, useDateStore.getState().window);
   return JSON.stringify(body);
 }
 
@@ -127,11 +110,7 @@ export async function mintLayerNow(layerId: string, options?: { force?: boolean 
 
 export function useMintLayer(layer: Layer): void {
   const roi = useRoiStore((state) => state.roi);
-  const mode = useDateStore((state) => state.mode);
-  const start = useDateStore((state) => state.start);
-  const end = useDateStore((state) => state.end);
-  const targetDate = useDateStore((state) => state.targetDate);
-  const halfWindowDays = useDateStore((state) => state.halfWindowDays);
+  const window = useDateStore((state) => state.window);
 
   const paramsKey = JSON.stringify(
     buildTilesRequest(
@@ -143,7 +122,7 @@ export function useMintLayer(layer: Layer): void {
         ref: layer.ref,
       },
       roi,
-      { mode, start, end, targetDate, halfWindowDays },
+      window,
     ),
   );
 

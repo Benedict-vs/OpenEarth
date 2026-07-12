@@ -131,7 +131,7 @@ async function sampleAt(
   }
   popup.setDOMContent(hintNode("Sampling…"));
 
-  const { mode, start, end, targetDate, halfWindowDays } = useDateStore.getState();
+  const { window, period } = useDateStore.getState();
   const roi = useRoiStore.getState().roi;
   const tiles = buildTilesRequest(
     {
@@ -142,7 +142,7 @@ async function sampleAt(
       ref: layer.ref,
     },
     roi,
-    { mode, start, end, targetDate, halfWindowDays },
+    window,
   );
   // Reuse the layer's composite params; a point value ignores viz, and the
   // server ignores the extra field — no separate request builder needed.
@@ -157,7 +157,8 @@ async function sampleAt(
       resultNode(layer, result, lngLat, () => {
         popup.remove();
         if (popupRef.current === popup) popupRef.current = null;
-        startMiniSeries(layer, lngLat, scaleM, { start, end });
+        // "Series here" charts over the period (the span you scan), not the window.
+        startMiniSeries(layer, lngLat, scaleM, period);
       }),
     );
   } catch (error) {

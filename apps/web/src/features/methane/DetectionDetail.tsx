@@ -1,11 +1,18 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
+  submitAnalyze,
   useDetectionDetail,
   useEmitMatch,
   usePatchDetection,
   useValidateDetection,
 } from "../../api/methaneQueries";
-import type { DetectionDetail as DetectionDetailT, MethaneHistogram } from "../../api/types";
+import { subscribeJob } from "../../api/sse";
+import type {
+  AnalyzeRequest,
+  DetectionDetail as DetectionDetailT,
+  MethaneHistogram,
+} from "../../api/types";
 import {
   FLAG_HINTS,
   ML_Q_CAPTION,
@@ -88,6 +95,8 @@ export function DetectionDetail() {
           <PhysicsDiagnostics detail={detail} />
         </>
       )}
+
+      {!isMl ? <ReferenceBlock detail={detail} /> : null}
 
       <div className="review-row">
         <button
@@ -184,6 +193,133 @@ function PhysicsDiagnostics({ detail }: { detail: DetectionDetailT }) {
             ) : null}
           </tbody>
         </table>
+      ) : null}
+    </div>
+  );
+}
+
+interface ReferenceMemberView {
+  scene_id: string;
+  days_from_target: number;
+  amf: number;
+}
+
+/**
+ * The MBMP reference block: single scene id, or the composite's medianed members
+ * (date, Δt, AMF). When the reference itself is contaminated, a single-mode run
+ * offers "Retry with composite reference"; a composite that is *still*
+ * contaminated escalates the hint to "treat this source as continuously emitting".
+ */
+function ReferenceBlock({ detail }: { detail: DetectionDetailT }) {
+  const qc = useQueryClient();
+  const selectDetection = useMethaneStore((s) => s.selectDetection);
+  const setJob = useMethaneStore((s) => s.setJob);
+  const [retrying, setRetrying] = useState(false);
+
+  if (detail.method !== "mbmp" || !detail.reference_scene_id) return null;
+
+  const result = (detail.result ?? {}) as Record<string, unknown>;
+  const refMode = result.reference_mode === "composite" ? "composite" : "single";
+  const members = (result.reference_members ?? []) as ReferenceMemberView[];
+  const contaminated = detail.flags.includes("possible_reference_contamination");
+
+  const retryComposite = async () => {
+    const p = (detail.params ?? {}) as Record<string, unknown>;
+    setRetrying(true);
+    const body: AnalyzeRequest = {
+      site_id: (p.site_id as number | null) ?? null,
+      roi: (p.roi as AnalyzeRequest["roi"]) ?? null,
+      target_scene_id: detail.scene_id,
+      method: "mbmp",
+      reference_mode: "composite", // escalate single → composite (drop the pinned ref)
+      k_sigma: (p.k_sigma as number) ?? 2,
+      min_area_px: (p.min_area_px as number) ?? 5,
+      seed: (p.seed as number) ?? 0,
+    };
+    try {
+      const { job_id } = await submitAnalyze(body);
+      setJob({
+        jobId: job_id,
+        step: 0,
+        total: 7,
+        message: "Retry (composite)…",
+        status: "running",
+      });
+      subscribeJob(job_id, {
+        onProgress: (d) =>
+          setJob({
+            jobId: job_id,
+            step: d.done,
+            total: d.total,
+            message: d.message,
+            status: "running",
+          }),
+        onDone: (d) => {
+          setJob({ jobId: job_id, step: 7, total: 7, message: "Done", status: "done" });
+          const detId = (d.result as { detection_id?: string }).detection_id;
+          if (detId) selectDetection(detId);
+          void qc.invalidateQueries({ queryKey: ["methane", "detections"] });
+          setRetrying(false);
+        },
+        onError: (d) => {
+          setJob({
+            jobId: job_id,
+            step: 0,
+            total: 7,
+            message: d.detail,
+            status: "error",
+            detail: d.detail,
+          });
+          setRetrying(false);
+        },
+      });
+    } catch {
+      setRetrying(false);
+    }
+  };
+
+  return (
+    <div className="reference-block">
+      <h4>Reference</h4>
+      {refMode === "composite" ? (
+        <>
+          <p className="muted small">Composite — median of {members.length} same-orbit scenes.</p>
+          <table className="numbers-table diag-table">
+            <tbody>
+              {members.map((m) => (
+                <tr key={m.scene_id}>
+                  <th title={m.scene_id}>{m.scene_id.slice(0, 8)}</th>
+                  <td>
+                    Δt {m.days_from_target >= 0 ? "+" : ""}
+                    {Math.round(m.days_from_target)} d · AMF {m.amf.toFixed(3)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <p className="muted small">Single scene: {detail.reference_scene_id}</p>
+      )}
+      {contaminated ? (
+        <div className="contamination-hint">
+          {refMode === "composite" ? (
+            <p className="muted small">
+              Even a {members.length}-scene composite reference shows an enhancement — treat this
+              source as continuously emitting; MBSP is the honest mode here.
+            </p>
+          ) : (
+            <>
+              <p className="muted small">
+                The reference itself shows an enhancement near the source — a recurrent emitter may
+                have no plume-free single reference.
+              </p>
+              <button className="mini" disabled={retrying} onClick={retryComposite}>
+                {retrying ? "Retrying…" : "Retry with composite reference"}
+              </button>
+            </>
+          )}
+        </div>
       ) : null}
     </div>
   );

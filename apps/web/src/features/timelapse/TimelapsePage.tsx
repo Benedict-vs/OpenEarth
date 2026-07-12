@@ -2,12 +2,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useAois, useCatalog, usePresets } from "../../api/queries";
 import { subscribeJob } from "../../api/sse";
-import { submitTimelapse, useRenderDetail } from "../../api/timelapseQueries";
+import { cancelJob, submitTimelapse, useRenderDetail } from "../../api/timelapseQueries";
 import type { Render, RoiIn } from "../../api/types";
 import { ApiError } from "../../api/client";
 import { buildTimelapseRequest } from "../../lib/timelapse";
 import { useRoiStore } from "../../stores/roiStore";
 import { useTimelapseStore } from "../../stores/timelapseStore";
+import { PeriodPicker } from "../explore/PeriodPicker";
 import { FramePlayer } from "./FramePlayer";
 import { RenderGallery } from "./RenderGallery";
 
@@ -134,24 +135,11 @@ export function TimelapsePage() {
           <p className="muted small">No region — draw an ROI in Explore or pick one.</p>
         ) : null}
 
-        <div className="date-row">
-          <label>
-            Start
-            <input
-              type="date"
-              value={form.start}
-              onChange={(e) => setForm({ start: e.target.value })}
-            />
-          </label>
-          <label>
-            End
-            <input
-              type="date"
-              value={form.end}
-              onChange={(e) => setForm({ end: e.target.value })}
-            />
-          </label>
-        </div>
+        <PeriodPicker
+          period={{ start: form.start, end: form.end }}
+          onChange={(start, end) => setForm({ start, end })}
+          label="Period"
+        />
 
         <label>
           Step
@@ -193,7 +181,8 @@ export function TimelapsePage() {
               </label>
             </div>
             <p className="muted step-note">
-              A frame starts every <b>{form.intervalDays}</b> days; each frame averages{" "}
+              Each frame is one window, stepped along the period: a frame starts every{" "}
+              <b>{form.intervalDays}</b> days and averages{" "}
               <b>{form.windowDays ?? form.intervalDays}</b> days of scenes. A window wider than the
               interval overlaps frames, smoothing cloud gaps.
             </p>
@@ -235,6 +224,18 @@ export function TimelapsePage() {
             onChange={(e) => setForm({ fps: Number(e.target.value) })}
           />
         </label>
+
+        <label>
+          Smoothing
+          <select value={form.tween} onChange={(e) => setForm({ tween: Number(e.target.value) })}>
+            <option value={0}>Off</option>
+            <option value={1}>2×</option>
+            <option value={3}>4×</option>
+          </select>
+        </label>
+        <p className="muted step-note">
+          Blends between frames at encode time — a display effect, not more data.
+        </p>
 
         <fieldset className="annotation-toggles">
           <legend>Annotations</legend>
@@ -296,7 +297,7 @@ export function TimelapsePage() {
           {activeRenderId && activeDetail.data?.frame_count ? (
             <FramePlayer renderId={activeRenderId} frameCount={activeDetail.data.frame_count} />
           ) : run ? (
-            <LiveStrip run={run} />
+            <LiveStrip run={run} onCancel={() => void cancelJob(run.jobId)} />
           ) : (
             <p className="muted">Configure a timelapse and press Render, or open one below.</p>
           )}
@@ -315,7 +316,8 @@ export function TimelapsePage() {
 }
 
 /** Live preview strip: rendered-frame thumbs fill in as SSE frame events land. */
-function LiveStrip({ run }: { run: RunState }) {
+function LiveStrip({ run, onCancel }: { run: RunState; onCancel: () => void }) {
+  const [cancelling, setCancelling] = useState(false);
   return (
     <div className="live-strip">
       <div className={`run-progress ${run.status}`}>
@@ -325,11 +327,26 @@ function LiveStrip({ run }: { run: RunState }) {
             style={{ width: `${run.total ? (run.done / run.total) * 100 : 0}%` }}
           />
         </div>
-        <span className="progress-label">
-          {run.status === "error"
-            ? `Error: ${run.detail}`
-            : `${run.done}/${run.total} · ${run.message ?? ""}`}
-        </span>
+        <div className="run-progress-row">
+          <span className="progress-label">
+            {run.status === "error"
+              ? `Error: ${run.detail}`
+              : `${run.done}/${run.total} · ${run.message ?? ""}`}
+          </span>
+          {run.status === "running" ? (
+            <button
+              className="mini"
+              disabled={cancelling}
+              title="Stop render — completed frames are kept"
+              onClick={() => {
+                setCancelling(true);
+                onCancel();
+              }}
+            >
+              {cancelling ? "Stopping…" : "Stop render"}
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="frame-thumbs">
         {run.renderedFrames.map((i) => (

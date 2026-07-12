@@ -293,3 +293,148 @@ def test_mbsp_skips_reference_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.reference is None
     assert steps[1] == (2, 7, "skipped")
     assert [s[0] for s in steps] == [1, 2, 3, 4, 5, 6, 7]
+
+
+# ── Phase 8: composite reference (opt-in) ──
+
+
+def _member(scene_id: str, day: int, *, sun_zenith: float = 40.0) -> S2Scene:
+    """A same-orbit, same-spacecraft reference-set candidate."""
+    return S2Scene(
+        scene_id,
+        datetime(2018, 6, day, 7, 46, tzinfo=UTC),
+        5.0,
+        50,
+        "Sentinel-2A",
+        sun_zenith,
+        5.0,
+    )
+
+
+def _install_composite_fakes(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    target_delta: np.ndarray,
+    members: list[S2Scene],
+    member_delta: np.ndarray | None = None,
+) -> dict[str, int]:
+    target = _target_scene()
+    counts = {"fetch_chip": 0}
+
+    def fake_list_scenes(*_a: object, **_k: object) -> list[S2Scene]:
+        return [target, *members]
+
+    def fake_fetch_chip(scene: S2Scene, bbox: BBox, **_k: object) -> RetrievalChip:
+        counts["fetch_chip"] += 1
+        if scene.scene_id == target.scene_id:
+            return _chip_from_delta_omega(scene, target_delta)
+        delta = member_delta if member_delta is not None else np.zeros(_SHAPE)
+        return _chip_from_delta_omega(scene, delta)
+
+    def fake_wind(_roi: object, when: datetime, **_k: object) -> WindSample:
+        return WindSample.from_uv(when, 4.0, 0.0, ERA5_LAND_HOURLY_ID)
+
+    monkeypatch.setattr(detect_mod, "list_scenes", fake_list_scenes)
+    monkeypatch.setattr(detect_mod, "fetch_chip", fake_fetch_chip)
+    monkeypatch.setattr(detect_mod, "sample_wind_at", fake_wind)
+    return counts
+
+
+def test_composite_reference_medians_members(monkeypatch: pytest.MonkeyPatch) -> None:
+    members = [_member(f"20180{d:02d}09T074619_x", d) for d in (6, 4, 2)] + [
+        _member("20180531T074619_x", 1),
+        _member("20180528T074619_x", 1),
+    ]
+    counts = _install_composite_fakes(
+        monkeypatch, target_delta=_truth_delta_omega(), members=members
+    )
+    result = analyze(
+        _BBOX,
+        "20180619T074619_x",
+        method="mbmp",
+        reference_mode="composite",
+        mc=McParams(n=60, seed=1),
+    )
+    assert result.reference_mode == "composite"
+    assert len(result.reference_members) == detect_mod.COMPOSITE_SIZE  # 5 medianed
+    assert counts["fetch_chip"] == 1 + detect_mod.COMPOSITE_SIZE  # target + k members
+    assert "composite_reference_unavailable" not in result.flags
+    # The composite reference is the nearest member (display anchor).
+    assert result.reference is not None
+    assert result.reference.scene_id == result.reference_members[0].scene_id
+
+
+def test_composite_falls_back_to_single_when_too_few(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Only 2 eligible members (< COMPOSITE_MIN) → graceful single fallback.
+    members = [_member("20180609T074619_x", 9), _member("20180604T074619_x", 4)]
+    counts = _install_composite_fakes(
+        monkeypatch, target_delta=_truth_delta_omega(), members=members
+    )
+    result = analyze(
+        _BBOX,
+        "20180619T074619_x",
+        method="mbmp",
+        reference_mode="composite",
+        mc=McParams(n=50, seed=1),
+    )
+    assert "composite_reference_unavailable" in result.flags
+    assert result.reference_mode == "single"
+    assert result.reference_members == []
+    assert counts["fetch_chip"] == 2  # target + one single reference
+
+
+def test_composite_amf_spread_flagged(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Members whose solar zenith spans a wide range → AMF max−min > AMF_SPREAD_MAX.
+    members = [
+        _member("20180609T074619_x", 9, sun_zenith=30.0),
+        _member("20180604T074619_x", 4, sun_zenith=40.0),
+        _member("20180530T074619_x", 1, sun_zenith=55.0),
+    ]
+    _install_composite_fakes(monkeypatch, target_delta=_truth_delta_omega(), members=members)
+    result = analyze(
+        _BBOX,
+        "20180619T074619_x",
+        method="mbmp",
+        reference_mode="composite",
+        mc=McParams(n=50, seed=1),
+    )
+    assert "composite_amf_spread" in result.flags
+    assert result.composite_amf_spread > detect_mod.AMF_SPREAD_MAX
+
+
+def test_explicit_reference_scene_id_ignores_composite(monkeypatch: pytest.MonkeyPatch) -> None:
+    members = [_member(f"2018060{d}T074619_x", d) for d in (9, 4, 2)]
+    _install_composite_fakes(monkeypatch, target_delta=_truth_delta_omega(), members=members)
+    result = analyze(
+        _BBOX,
+        "20180619T074619_x",
+        method="mbmp",
+        reference_scene_id="20180609T074619_x",  # explicit ⇒ single, composite ignored
+        reference_mode="composite",
+        mc=McParams(n=50, seed=1),
+    )
+    assert result.reference_mode == "single"
+    assert result.reference_members == []
+    assert result.reference is not None
+    assert result.reference.scene_id == "20180609T074619_x"
+
+
+def test_median_composite_chip_nan_behaviour() -> None:
+    from openearth.methane.detect import _median_composite_chip
+
+    grid = _grid()
+
+    def chip(val: float, nan_at: tuple[int, int] | None = None) -> RetrievalChip:
+        bands = {b: np.full(_SHAPE, val, dtype=np.float32) for b in CHIP_BANDS}
+        if nan_at is not None:
+            for b in CHIP_BANDS:
+                bands[b][nan_at] = np.nan
+        return RetrievalChip(scene=_member("m", 9), grid=grid, bands=bands)
+
+    # Three members; one pixel NaN in a single member medians over the other two.
+    composite = _median_composite_chip([chip(1.0, nan_at=(0, 0)), chip(2.0), chip(3.0)])
+    assert composite.bands["B11"][0, 0] == pytest.approx(2.5)  # median(2, 3)
+    assert composite.bands["B11"][5, 5] == pytest.approx(2.0)  # median(1, 2, 3)
+    # A pixel NaN in every member stays NaN.
+    all_nan = _median_composite_chip([chip(1.0, (1, 1)), chip(2.0, (1, 1)), chip(3.0, (1, 1))])
+    assert np.isnan(all_nan.bands["B11"][1, 1])

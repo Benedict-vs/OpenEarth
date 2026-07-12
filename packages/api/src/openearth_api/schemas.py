@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from openearth.geometry import BBox, PolygonROI
 
@@ -327,19 +327,33 @@ class WorkspaceLayer(BaseModel):
 
 
 class WorkspaceDate(BaseModel):
-    mode: Literal["range", "single"]
-    start: date
-    end: date
-    target_date: date
-    half_window_days: int = Field(ge=0, le=30)
+    """The Explore view's time state. Phase 8 (``v: 2``) is the window/period
+    model: a **window** (``center`` ± ``half_window_days``) and a **period**
+    (``period_start``/``period_end``). The v1 fields (``mode``/``start``/``end``/
+    ``target_date``) are kept optional so old snapshots still validate and the
+    client migrates them on load. The server validates shape, never semantics."""
+
+    # v2 — window + period
+    center: date | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    # ``half_window_days`` spans both versions (v1 date-window half-width, v2
+    # window half-width). Widened to the window custom bound (0–183 d).
+    half_window_days: int = Field(ge=0, le=183)
+    # v1 — kept optional for migration
+    mode: Literal["range", "single"] | None = None
+    start: date | None = None
+    end: date | None = None
+    target_date: date | None = None
 
 
 class WorkspaceState(BaseModel):
     """A restorable snapshot of the Explore view. ``v`` is a schema version so
-    Phase 3+ can migrate the shape explicitly instead of guessing at load time;
-    an unknown version fails validation rather than being silently misread."""
+    the shape can migrate explicitly instead of being guessed at load time; an
+    unknown version fails validation rather than being silently misread. v1
+    snapshots still load (the client migrates them to the window/period model)."""
 
-    v: Literal[1]
+    v: Literal[1, 2]
     layers: list[WorkspaceLayer]
     roi: RoiIn | None = None
     date: WorkspaceDate
@@ -415,11 +429,24 @@ class AnalyzeRequest(BaseModel):
     roi: BBoxIn | None = None
     target_scene_id: str = Field(min_length=1)
     reference_scene_id: str | None = None
+    # Opt-in composite reference (MBMP only): a median over up to 5 same-orbit
+    # scenes, robust against an intermittent plume contaminating the background.
+    reference_mode: Literal["single", "composite"] = "single"
     method: Literal["mbmp", "mbsp"] = "mbmp"
     k_sigma: float = Field(default=2.0, ge=0.5, le=5.0)
     min_area_px: int = Field(default=5, ge=1, le=100000)
     source_lonlat: tuple[float, float] | None = None
     seed: int = 0
+
+    @model_validator(mode="after")
+    def _composite_excludes_explicit_reference(self) -> AnalyzeRequest:
+        # An explicit reference scene IS single mode — the two are contradictory.
+        if self.reference_mode == "composite" and self.reference_scene_id is not None:
+            raise ValueError(
+                "reference_mode='composite' cannot be combined with an explicit "
+                "reference_scene_id (pick one: a chosen scene is single-reference mode)."
+            )
+        return self
 
 
 class DetectionOut(BaseModel):
@@ -669,6 +696,10 @@ class TimelapseRequest(BaseModel):
     fps: int = Field(default=6, ge=1, le=30)
     format: Literal["mp4", "gif", "webm"] = "mp4"
     max_dim: int = Field(default=1080, ge=64, le=1920)
+    # Frame-to-frame smoothing: insert this many cross-faded frames between each
+    # pair at encode time (a display effect, not more data). The GIF frame cap is
+    # enforced *after* expansion at submit time.
+    tween: int = Field(default=0, ge=0, le=4)
     annotations: AnnotationsIn = Field(default_factory=AnnotationsIn)
     vis_min: float | None = None
     vis_max: float | None = None

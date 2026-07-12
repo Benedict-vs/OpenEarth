@@ -154,3 +154,35 @@ def pick_reference(
     if not eligible:
         return None
     return min(eligible, key=score)
+
+
+def pick_reference_set(
+    target: S2Scene,
+    candidates: list[S2Scene],
+    k: int,
+    *,
+    max_cloud: float = 30.0,
+    max_days: int = 120,
+    min_days: float = 1.0,
+) -> list[S2Scene]:
+    """Choose up to *k* reference scenes for a **median composite** (Phase 8),
+    nearest in time first. Pure and unit-tested.
+
+    Unlike :func:`pick_reference`, the relative orbit **and** spacecraft are HARD
+    constraints, not soft penalties: the LUT is per-spacecraft and the median is
+    only meaningful over a fixed viewing geometry — averaging across mixed
+    geometries/SRFs would smear physics, not noise. Same cloud / ``|Δt|`` bounds
+    as the single picker; ``min_days`` still excludes the same overpass. Returns
+    ``[]`` when nothing qualifies (the caller falls back to single reference).
+    """
+    eligible = [
+        c
+        for c in candidates
+        if c.scene_id != target.scene_id
+        and c.spacecraft == target.spacecraft
+        and c.relative_orbit == target.relative_orbit
+        and c.cloud_pct <= max_cloud
+        and min_days <= abs((c.time - target.time).total_seconds()) / 86400.0 <= max_days
+    ]
+    eligible.sort(key=lambda c: abs((c.time - target.time).total_seconds()))
+    return eligible[:k]

@@ -47,6 +47,11 @@ MAX_FRAMES = 400  # request 422s above this before any EE work
 MAX_DIM_VIDEO = 1920  # longest edge, mp4/webm
 MAX_DIM_GIF = 720  # Pillow holds every GIF frame in RAM
 FRAME_FETCH_WORKERS = 4  # ThreadPoolExecutor width (EE semaphore still gates round-trips)
+# Dead-pipeline breaker: if the first this-many *completed* windows yield no
+# rendered frame yet at least one failed, Earth Engine is failing consistently —
+# abort instead of burning the remaining mints (empty windows alone never trip
+# it; a run of winter gaps is legitimate).
+EARLY_ABORT_PROBE = 8
 
 StepMode = Literal["interval", "monthly", "quarterly"]
 
@@ -424,6 +429,9 @@ class FrameManifest:
     height: int
     vis: tuple[float, float]
     results: list[FrameResult] = field(default_factory=list)
+    # True when the render was stopped mid-way but had ≥1 rendered frame to keep
+    # (a "partial" render); False for a normal complete render.
+    cancelled: bool = False
 
     @property
     def frame_paths(self) -> list[Path]:
@@ -463,6 +471,7 @@ class FrameManifest:
             "width": self.width,
             "height": self.height,
             "vis": [self.vis[0], self.vis[1]],
+            "cancelled": self.cancelled,
             "frames": frames,
         }
 
@@ -568,8 +577,14 @@ def render_frames(
     live. ``on_progress(done, total)`` fires per completed window (generic bar);
     ``on_frame(dense_index_or_None, status, total)`` fires per completed window
     with its assigned movie index (``None`` when skipped) for live previews.
-    Raises :class:`JobError` only if *nothing* rendered, or ``"cancelled"`` when
-    *should_cancel* trips between frames.
+
+    Resilience: a window whose mint/fetch fails is recorded ``failed`` (not
+    raised) so one bad frame can't kill the render; the dead-pipeline breaker
+    aborts only when EE is failing *consistently* (see :data:`EARLY_ABORT_PROBE`).
+    On cancel, frames rendered so far are **kept**: the manifest is written with
+    ``cancelled=True`` and returned (a partial render). Raises :class:`JobError`
+    only when *nothing* rendered — ``"cancelled"`` if the stop came before any
+    frame, else the all-empty/failed message.
     """
     if not windows:
         raise JobError("Timelapse render needs at least one window.")
@@ -596,10 +611,13 @@ def render_frames(
         try:
             image = build_mean_composite(product, roi, window.start, window.end, source=dataset)
             url = thumb_url(image, spec, roi, vis_min=vmin, vis_max=vmax, dimensions=dims_arg)
-        except Exception as exc:  # empty → skip; anything else re-raises
+        except Exception as exc:  # empty → skip; any other mint failure → recorded, not raised
             if _is_empty_error(exc):
                 return FrameResult(window, "empty", None)
-            raise
+            # ee_call already retried; a window that still fails is data, not a
+            # crash — one bad frame must not kill the whole render (the breaker
+            # below catches a *consistently* failing pipeline).
+            return FrameResult(window, "failed", None)
         try:
             data = fetch(url)
         except Exception:  # fetch failures are recorded, not raised
@@ -625,14 +643,16 @@ def render_frames(
     results: list[FrameResult] = []
     total = len(windows)
     dense = 0
+    failed = 0
+    cancelled = False
     with ThreadPoolExecutor(max_workers=FRAME_FETCH_WORKERS) as pool:
         futures = [pool.submit(_work, w) for w in windows]
         for i, fut in enumerate(futures):
             if should_cancel is not None and should_cancel():
                 for pending in futures[i:]:
                     pending.cancel()
-                _cleanup_staging(out_dir)
-                raise JobError("cancelled")
+                cancelled = True
+                break  # salvage what rendered so far (after the pool drains)
             r = fut.result()
             index: int | None = None
             if r.status == "rendered" and r.path is not None:
@@ -643,15 +663,40 @@ def render_frames(
                 dense += 1
             else:
                 results.append(FrameResult(r.window, r.status, None))
+                if r.status == "failed":
+                    failed += 1
             if on_frame is not None:
                 on_frame(index, r.status, total)
             if on_progress is not None:
                 on_progress(i + 1, total)
+            # Dead-pipeline breaker: after the first EARLY_ABORT_PROBE completed
+            # windows, if nothing rendered but something failed, EE is broken —
+            # cancel the rest and abort before the render burns more quota.
+            if len(results) == EARLY_ABORT_PROBE and dense == 0 and failed >= 1:
+                for pending in futures[i + 1 :]:
+                    pending.cancel()
+                _cleanup_staging(out_dir)
+                raise JobError(
+                    f"Earth Engine failing consistently — aborted after {EARLY_ABORT_PROBE} "
+                    "windows with no usable frame."
+                )
+
+    # The pool has drained (running mints finished writing their staging files);
+    # sweep any stragglers before finalising.
+    _cleanup_staging(out_dir)
 
     if dense == 0:
-        raise JobError("Timelapse produced no usable frames (all windows empty or failed).")
+        # Cancel before any frame rendered → nothing to salvage; else the whole
+        # render was empty/failed.
+        raise JobError(
+            "cancelled"
+            if cancelled
+            else "Timelapse produced no usable frames (all windows empty or failed)."
+        )
 
-    manifest = FrameManifest(dataset, product, width, height, (vmin, vmax), results)
+    manifest = FrameManifest(
+        dataset, product, width, height, (vmin, vmax), results, cancelled=cancelled
+    )
     _write_manifest(out_dir / "manifest.json", manifest)
     return manifest
 
@@ -663,12 +708,50 @@ def _write_manifest(dest: Path, manifest: FrameManifest) -> None:
     os.replace(tmp, dest)
 
 
+# One output frame in the encode plan: ``Image.blend(open(a), open(b), alpha)``
+# — ``alpha == 0`` (or ``a is b``) is the original frame ``a`` verbatim.
+BlendStep = tuple[Path, Path, float]
+
+
+def expand_frames(frame_paths: list[Path], tween: int) -> list[BlendStep]:
+    """The encode plan for *tween* linear cross-fades between each consecutive pair.
+
+    Between frame ``k`` and ``k+1`` it inserts *tween* blends at α = j/(tween+1),
+    so the output length is ``len(frame_paths) + (len(frame_paths) - 1) * tween``.
+    A display effect only — no new data. Pure (no image I/O), so the plan itself
+    is unit-tested; the codec just executes it.
+    """
+    if tween <= 0 or len(frame_paths) < 2:
+        return [(p, p, 0.0) for p in frame_paths]
+    plan: list[BlendStep] = []
+    for k in range(len(frame_paths) - 1):
+        a, b = frame_paths[k], frame_paths[k + 1]
+        plan.append((a, a, 0.0))  # original frame k
+        for j in range(1, tween + 1):
+            plan.append((a, b, j / (tween + 1)))
+    plan.append((frame_paths[-1], frame_paths[-1], 0.0))  # final original frame
+    return plan
+
+
+def _plan_frame(step: BlendStep) -> Image.Image:
+    """Realise one plan step into an RGB image (opening 1–2 frames, blending)."""
+    a, b, alpha = step
+    with Image.open(a) as ia:
+        base: Image.Image = ia.convert("RGB")
+    if alpha == 0.0 or a == b:
+        return base
+    with Image.open(b) as ib:
+        other = ib.convert("RGB")
+    return Image.blend(base, other, alpha)
+
+
 def encode_movie(
     frame_paths: list[Path],
     out_path: Path,
     *,
     fmt: MovieFormat,
     fps: int,
+    tween: int = 0,
 ) -> None:
     """Encode *frame_paths* into a movie at *out_path* (atomic temp + replace).
 
@@ -676,26 +759,34 @@ def encode_movie(
     already share one exact size; video sizes must be even (guaranteed by
     :func:`render_frames`). A cancelled/crashed encode never leaves a truncated
     gallery item — the movie lands via ``os.replace``.
+
+    *tween* inserts that many cross-faded frames between each consecutive pair
+    (see :func:`expand_frames`); the encoder fps is scaled by ``tween + 1`` so
+    wall-clock pacing is unchanged. The caller enforces any post-expansion frame
+    cap (e.g. the GIF limit) — core encodes exactly the plan it is given.
     """
     if not frame_paths:
         raise JobError("Cannot encode a movie with no frames.")
+
+    plan = expand_frames(frame_paths, tween)
+    fps_out = fps * (tween + 1)
 
     # Keep the real extension on the temp file — ffmpeg picks the muxer from it.
     tmp = out_path.parent / f"{out_path.stem}.tmp{out_path.suffix}"
     try:
         if fmt == "gif":
-            _encode_gif(frame_paths, tmp, fps)
+            _encode_gif(plan, tmp, fps_out)
         else:
-            _encode_video(frame_paths, tmp, fmt=fmt, fps=fps)
+            _encode_video(plan, tmp, fmt=fmt, fps=fps_out)
     except Exception:
         tmp.unlink(missing_ok=True)
         raise
     os.replace(tmp, out_path)
 
 
-def _encode_gif(frame_paths: list[Path], dest: Path, fps: int) -> None:
+def _encode_gif(plan: list[BlendStep], dest: Path, fps: int) -> None:
     # Pillow holds every frame in memory to write a GIF — MAX_DIM_GIF bounds it.
-    frames = [Image.open(p).convert("RGB") for p in frame_paths]
+    frames = [_plan_frame(step) for step in plan]
     first, *rest = frames
     first.save(
         dest,
@@ -708,11 +799,10 @@ def _encode_gif(frame_paths: list[Path], dest: Path, fps: int) -> None:
     )
 
 
-def _encode_video(frame_paths: list[Path], dest: Path, *, fmt: MovieFormat, fps: int) -> None:
+def _encode_video(plan: list[BlendStep], dest: Path, *, fmt: MovieFormat, fps: int) -> None:
     import imageio_ffmpeg
 
-    with Image.open(frame_paths[0]) as first:
-        size = first.size  # (W, H) — all frames share it
+    size = _plan_frame(plan[0]).size  # (W, H) — all frames share it
 
     codec = "libx264" if fmt == "mp4" else "libvpx-vp9"
     try:
@@ -727,20 +817,21 @@ def _encode_video(frame_paths: list[Path], dest: Path, *, fmt: MovieFormat, fps:
             macro_block_size=1,
         )
         writer.send(None)  # prime the generator
-        for path in frame_paths:
-            with Image.open(path) as frame:
-                writer.send(frame.convert("RGB").tobytes())
+        for step in plan:
+            writer.send(_plan_frame(step).tobytes())
         writer.close()
     except Exception as exc:  # surface ffmpeg's own stderr
         raise JobError(f"Movie encoding failed ({codec}): {exc}") from exc
 
 
 __all__ = [
+    "EARLY_ABORT_PROBE",
     "FRAME_FETCH_WORKERS",
     "MAX_DIM_GIF",
     "MAX_DIM_VIDEO",
     "MAX_FRAMES",
     "AnnotationOptions",
+    "BlendStep",
     "FetchFn",
     "FrameManifest",
     "FrameResult",
@@ -750,6 +841,7 @@ __all__ = [
     "StepMode",
     "annotate_frame",
     "encode_movie",
+    "expand_frames",
     "frame_windows",
     "render_colorbar",
     "render_frames",

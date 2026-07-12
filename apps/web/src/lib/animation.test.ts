@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { RoiIn } from "../api/types";
-import { dateAxis, evictableKeys, imageSourceCorners, poolIndices, roiEnvelope } from "./animation";
+import {
+  advanceFrame,
+  dateAxis,
+  evictableKeys,
+  type FrameStatus,
+  imageSourceCorners,
+  poolIndices,
+  roiEnvelope,
+} from "./animation";
 
 describe("imageSourceCorners", () => {
   it("emits top-left, top-right, bottom-right, bottom-left", () => {
@@ -51,5 +59,46 @@ describe("poolIndices / evictableKeys", () => {
   it("evicts loaded keys outside the pool", () => {
     const keep = poolIndices(5, 10, 2);
     expect(evictableKeys([0, 3, 5, 8], keep).sort((a, b) => a - b)).toEqual([0, 8]);
+  });
+});
+
+describe("advanceFrame (buffer-aware transport step)", () => {
+  const s = (m: Record<number, FrameStatus>): Record<number, FrameStatus> => m;
+
+  it("holds on a single (or empty) frame", () => {
+    expect(advanceFrame({}, 0, 1)).toBe(0);
+    expect(advanceFrame({}, 0, 0)).toBe(0);
+  });
+
+  it("advances when the next frame is ready", () => {
+    expect(advanceFrame(s({ 0: "ready", 1: "ready" }), 0, 3)).toBe(1);
+  });
+
+  it("holds on the current frame when the next is still minting", () => {
+    expect(advanceFrame(s({ 0: "ready", 1: "minting" }), 0, 3)).toBe(0);
+  });
+
+  it("holds when the next frame has not been requested yet (undefined)", () => {
+    expect(advanceFrame(s({ 0: "ready" }), 0, 3)).toBe(0);
+  });
+
+  it("skips a permanently-failed frame to reach the next ready one", () => {
+    expect(advanceFrame(s({ 0: "ready", 1: "error", 2: "ready" }), 0, 3)).toBe(2);
+  });
+
+  it("holds after skipping an error when the one beyond is still loading", () => {
+    expect(advanceFrame(s({ 0: "ready", 1: "error", 2: "minting" }), 0, 3)).toBe(0);
+  });
+
+  it("wraps to a ready frame 0 from the last index", () => {
+    expect(advanceFrame(s({ 0: "ready", 1: "ready", 2: "ready" }), 2, 3)).toBe(0);
+  });
+
+  it("holds at the end when frame 0 is not ready (no premature wrap)", () => {
+    expect(advanceFrame(s({ 0: "minting", 1: "ready", 2: "ready" }), 2, 3)).toBe(2);
+  });
+
+  it("never deadlocks on an all-error pool — it holds", () => {
+    expect(advanceFrame(s({ 0: "error", 1: "error", 2: "error" }), 1, 3)).toBe(1);
   });
 });

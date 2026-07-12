@@ -110,7 +110,7 @@ def _fake_render(out_dir: Path, vis: tuple[float, float]) -> SimpleNamespace:
             }
         )
     )
-    return SimpleNamespace(frame_paths=paths, rendered_count=2, width=8, height=6)
+    return SimpleNamespace(frame_paths=paths, rendered_count=2, width=8, height=6, cancelled=False)
 
 
 @pytest.fixture
@@ -126,7 +126,7 @@ def timelapse_ready(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
                 kw["on_progress"](i + 1, 2)
         return manifest
 
-    def fake_encode_movie(frame_paths, out_path, *, fmt, fps):
+    def fake_encode_movie(frame_paths, out_path, *, fmt, fps, tween=0):
         out_path.write_bytes(b"\x00\x00\x00\x18ftypmp42FAKE")
 
     monkeypatch.setattr(svc, "render_frames", fake_render_frames)
@@ -284,3 +284,41 @@ def test_gif_frame_cap_422(client: TestClient, timelapse_ready: None) -> None:
         step={"mode": "interval", "interval_days": 1, "window_days": 1},
     )
     assert out["status"] == 422
+
+
+def test_gif_cap_is_post_tween(client: TestClient, timelapse_ready: None) -> None:
+    """A GIF that fits without smoothing but exceeds the cap after 4× tween 422s."""
+    # ~120 monthly-ish frames — under 200 raw, but 120 + 119*3 = 477 after tween.
+    dates = {"start": "2014-01-01", "end": "2024-01-01"}
+    step = {"mode": "interval", "interval_days": 31, "window_days": 31}
+    assert _submit(client, format="gif", dates=dates, step=step)["status"] == 200
+    over = _submit(client, format="gif", dates=dates, step=step, tween=3)
+    assert over["status"] == 422
+    assert "smoothing" in over["json"]["detail"]
+
+
+def test_cancelled_partial_writes_partial_row(
+    client: TestClient, timelapse_ready: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A salvaged partial (render_frames returns cancelled=True) → the job
+    succeeds but the render row is 'cancelled' with the kept frames + movie."""
+
+    def partial_render(dataset, product, roi, windows, *, out_dir, vis_min, vis_max, **kw):
+        manifest = _fake_render(out_dir, (vis_min or 0.0, vis_max or 1.0))
+        manifest.cancelled = True  # stopped mid-way with 2 frames salvaged
+        return manifest
+
+    monkeypatch.setattr(svc, "render_frames", partial_render)
+
+    out = _submit(client)
+    assert out["status"] == 200, out
+    job_id, render_id = out["json"]["job_id"], out["json"]["render_id"]
+    _wait_status(client, job_id, "succeeded")  # runner returns normally on salvage
+
+    row = client.get("/api/timelapse").json()[0]
+    assert row["status"] == "cancelled"  # the partial state
+    assert row["frame_count"] == 2
+    assert row["movie_bytes"] > 0  # ≥2 frames → movie encoded
+    # A cancelled partial with a movie is still downloadable, and deletable.
+    assert client.get(f"/api/timelapse/{render_id}/download").status_code == 200
+    assert client.delete(f"/api/timelapse/{render_id}").status_code == 204

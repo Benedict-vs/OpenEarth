@@ -160,15 +160,24 @@ def _inversion_validity_fraction(result: DetectionResult) -> float:
     return float(np.mean(np.abs(in_mask) >= MBSP_VALIDITY_DELTA_OMEGA))
 
 
-def run_event(event: dict[str, object]) -> dict[str, object]:
+def run_event(event: dict[str, object], *, reference_mode: str = "single") -> dict[str, object]:
     """Run one event through ``analyze``; return a per-event result row.
 
     Excludes (with a reason) on ``no_plume``, an out-of-validity mask, a non-finite Q,
     or any exception — never raises, so one bad scene can't sink the whole regression.
+
+    In ``composite`` mode the event's pinned reference is ignored (an explicit scene
+    is single-reference mode) and the composite picker chooses its own members.
     """
     bbox = BBox(*event["bbox"])  # type: ignore[misc]
     src = event.get("source_lonlat")
     source_lonlat = tuple(src) if src else None  # type: ignore[arg-type]
+    # Composite mode picks its own members; single mode honours the pinned ref.
+    ref_id = (
+        None
+        if reference_mode == "composite"
+        else (str(event["reference_scene_id"]) if event.get("reference_scene_id") else None)
+    )
     row: dict[str, object] = {
         "id": event["id"],
         "region": event["region"],
@@ -177,6 +186,7 @@ def run_event(event: dict[str, object]) -> dict[str, object]:
         "published_sigma_t_h": event["published_sigma_t_h"],
         "target_scene_id": event["target_scene_id"],
         "reference_scene_id": event.get("reference_scene_id"),
+        "reference_mode": reference_mode,
         "q_ours_t_h": None,
         "sigma_ours_t_h": None,
         "invalid_fraction": None,
@@ -188,9 +198,8 @@ def run_event(event: dict[str, object]) -> dict[str, object]:
         result = analyze(
             bbox,
             str(event["target_scene_id"]),
-            reference_scene_id=(
-                str(event["reference_scene_id"]) if event.get("reference_scene_id") else None
-            ),
+            reference_scene_id=ref_id,
+            reference_mode=reference_mode,  # type: ignore[arg-type]
             method=str(event["method"]),
             source_lonlat=source_lonlat,  # type: ignore[arg-type]
             mc=_MC,
@@ -199,6 +208,9 @@ def run_event(event: dict[str, object]) -> dict[str, object]:
         row["exclusion_reason"] = f"analyze failed: {exc}"
         return row
     row["flags"] = list(result.flags)
+    # Record what the composite actually used (members + AMF spread) for the A/B.
+    row["reference_members"] = [m.scene_id for m in result.reference_members]
+    row["composite_amf_spread"] = round(result.composite_amf_spread, 4)
     q = result.emission.q_kg_h / 1000.0
     if "no_plume" in result.flags or not np.isfinite(q):
         row["exclusion_reason"] = "no_plume" if "no_plume" in result.flags else "non_finite_q"
@@ -214,11 +226,11 @@ def run_event(event: dict[str, object]) -> dict[str, object]:
     return row
 
 
-def run_harness() -> dict[str, object]:
+def run_harness(reference_mode: str = "single") -> dict[str, object]:
     initialize()
     lut = load_lut()
     events = _load_events()
-    rows = [run_event(e) for e in events]
+    rows = [run_event(e, reference_mode=reference_mode) for e in events]
     quantified = [r for r in rows if not r["excluded"]]
     agg = aggregates(
         [float(r["q_ours_t_h"]) for r in quantified],  # type: ignore[arg-type]
@@ -227,6 +239,7 @@ def run_harness() -> dict[str, object]:
     return {
         "schema": 1,
         "lut_version": lut.version,
+        "reference_mode": reference_mode,
         "mc_seed": _MC.seed,
         "mc_n": _MC.n,
         "git_hash": _git_hash(),
@@ -238,7 +251,8 @@ def run_harness() -> dict[str, object]:
 
 def _print_table(baseline: dict[str, object]) -> None:
     print(
-        f"LUT v{baseline['lut_version']}  seed={baseline['mc_seed']}  n={baseline['mc_n']}  "
+        f"LUT v{baseline['lut_version']}  ref={baseline.get('reference_mode', 'single')}  "
+        f"seed={baseline['mc_seed']}  n={baseline['mc_n']}  "
         f"git={baseline['git_hash']}"
     )
     print(f"{'id':<30}{'method':<7}{'pub':>7}{'ours':>9}{'σ':>8}   note")
@@ -278,9 +292,20 @@ def main() -> int:
     group.add_argument(
         "--compare", action="store_true", help="diff a fresh run against the committed baseline"
     )
+    parser.add_argument(
+        "--reference-mode",
+        choices=["single", "composite"],
+        default="single",
+        help="MBMP reference: single (default) or median composite (opt-in evidence)",
+    )
     args = parser.parse_args()
 
-    baseline = run_harness()
+    if args.freeze and args.reference_mode == "composite":
+        # Anchor rule: the composite is opt-in evidence, never a frozen default.
+        print("refusing to freeze a composite-mode baseline (no baseline v6 this phase).")
+        return 1
+
+    baseline = run_harness(args.reference_mode)
     _print_table(baseline)
     a = baseline["aggregates"]
 

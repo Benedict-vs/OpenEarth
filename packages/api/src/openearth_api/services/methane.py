@@ -330,6 +330,20 @@ def _result_payload(result: DetectionResult, xch4_max: float | None) -> dict[str
             "reference_scene_id": result.reference.scene_id if result.reference else None,
             "spacecraft": result.target.spacecraft,
             "amf": result.target.amf,
+            # Composite-reference provenance (Phase 8). reference_mode is
+            # "single"/"composite"; members carries per-scene {scene_id,
+            # days_from_target, amf}; the AMF spread flags a coarse median-AMF.
+            "reference_mode": result.reference_mode,
+            "reference_scene_ids": [m.scene_id for m in result.reference_members],
+            "reference_members": [
+                {
+                    "scene_id": m.scene_id,
+                    "days_from_target": m.days_from_target,
+                    "amf": m.amf,
+                }
+                for m in result.reference_members
+            ],
+            "composite_amf_spread": result.composite_amf_spread,
             "overlay_bounds": _overlay_bounds(result.grid),
             "lut_version": load_lut().version,
         }
@@ -407,6 +421,7 @@ async def submit_analyze(
             bbox,
             req.target_scene_id,
             reference_scene_id=req.reference_scene_id,
+            reference_mode=req.reference_mode,
             method=req.method,
             k_sigma=req.k_sigma,
             min_area_px=req.min_area_px,

@@ -62,4 +62,9 @@ describe("buildTimelapseRequest", () => {
     const mp4 = { ...defaultForm(), format: "mp4" as const, maxDim: 1080 };
     expect(buildTimelapseRequest(mp4, roi).max_dim).toBe(1080);
   });
+
+  it("carries the smoothing (tween) factor", () => {
+    expect(buildTimelapseRequest({ ...defaultForm(), tween: 3 }, roi).tween).toBe(3);
+    expect(buildTimelapseRequest(defaultForm(), roi).tween).toBe(0);
+  });
 });

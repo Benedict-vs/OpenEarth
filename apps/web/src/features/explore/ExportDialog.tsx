@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { exportPngBlob, submitGeotiffExport, useCatalog } from "../../api/queries";
 import { subscribeJob } from "../../api/sse";
 import type { ExportGeotiffRequest, ThumbnailRequest } from "../../api/types";
+import { formatWindowCaption } from "../../lib/timeWindow";
 import { buildTilesRequest } from "../../map/useMintLayer";
 import { useAnalysisStore } from "../../stores/analysisStore";
 import { useDateStore } from "../../stores/dateStore";
@@ -47,10 +48,7 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
 }
 
 function compositeSummary(): string {
-  const { mode, start, end, targetDate, halfWindowDays } = useDateStore.getState();
-  return mode === "single"
-    ? `Date window: ${targetDate} ± ${halfWindowDays} d`
-    : `Mean composite: ${start} → ${end}`;
+  return formatWindowCaption(useDateStore.getState().window);
 }
 
 export function ExportDialog({ layer, onClose }: { layer: Layer; onClose: () => void }) {
@@ -82,11 +80,6 @@ export function ExportDialog({ layer, onClose }: { layer: Layer; onClose: () => 
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const dateParams = () => {
-    const { mode, start, end, targetDate, halfWindowDays } = useDateStore.getState();
-    return { mode, start, end, targetDate, halfWindowDays };
-  };
-
   const submitGeotiff = () => {
     if (!roi) return;
     const tiles = buildTilesRequest(
@@ -98,7 +91,7 @@ export function ExportDialog({ layer, onClose }: { layer: Layer; onClose: () => 
         ref: layer.ref,
       },
       roi,
-      dateParams(),
+      useDateStore.getState().window,
     );
     const parsedScale = Number.parseInt(scaleM, 10);
     // Spread carries the (server-ignored) viz field; roi is re-narrowed non-null.
@@ -139,7 +132,7 @@ export function ExportDialog({ layer, onClose }: { layer: Layer; onClose: () => 
         ref: layer.ref,
       },
       roi,
-      dateParams(),
+      useDateStore.getState().window,
     );
     const body: ThumbnailRequest = { ...tiles, width: 2048 };
     exportPngBlob(body)

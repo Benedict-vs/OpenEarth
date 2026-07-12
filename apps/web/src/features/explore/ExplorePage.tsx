@@ -3,14 +3,16 @@ import { useInspector } from "../../map/useInspector";
 import { useTerraDraw, type DrawApi } from "../../map/useTerraDraw";
 import { WindOverlay } from "../../map/WindOverlay";
 import { WindParticles } from "../../map/WindParticles";
+import { useDateStore } from "../../stores/dateStore";
 import { useWindStore } from "../../stores/windStore";
 import { AnimationBar } from "./AnimationBar";
 import { CatalogBrowser } from "./CatalogBrowser";
 import { ChartPanel } from "./ChartPanel";
-import { DateControl } from "./DateControl";
 import { LayerEngine } from "./LayerEngine";
 import { LayerPanel } from "./LayerPanel";
+import { PlaybackBar } from "../timelapse/PlaybackBar";
 import { RoiToolbar } from "./RoiToolbar";
+import { TimeWindowPicker } from "./TimeWindowPicker";
 
 /** Inside MapProvider so its hooks can reach the map instance. */
 function ExplorePanel({ draw }: { draw: DrawApi }) {
@@ -22,8 +24,8 @@ function ExplorePanel({ draw }: { draw: DrawApi }) {
         <RoiToolbar draw={draw} />
       </div>
       <div className="panel-section">
-        <h3>Dates</h3>
-        <DateControl />
+        <h3>Window</h3>
+        <WindowControl />
       </div>
       <div className="panel-section">
         <h3>Catalog</h3>
@@ -53,6 +55,13 @@ function ExplorePanel({ draw }: { draw: DrawApi }) {
       </div>
     </aside>
   );
+}
+
+/** The Explore sidebar's window control, wired to the shared dateStore. */
+function WindowControl() {
+  const window = useDateStore((s) => s.window);
+  const setWindow = useDateStore((s) => s.setWindow);
+  return <TimeWindowPicker window={window} onChange={setWindow} />;
 }
 
 function WindToggle() {
@@ -101,6 +110,7 @@ export function ExplorePage() {
       <ExploreInner />
       <WindOverlay />
       <WindParticles />
+      <PlaybackBar />
     </MapProvider>
   );
 }

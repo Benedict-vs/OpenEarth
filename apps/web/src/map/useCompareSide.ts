@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { mintTiles } from "../api/queries";
 import type { Legend, TilesRequest } from "../api/types";
 import { isoToMs, remintAtMs } from "../lib/time";
+import { windowMeanDates } from "../lib/timeWindow";
 import { useCompareStore } from "../stores/compareStore";
 import type { Layer, LayerMint, LayerStatus } from "../stores/layersStore";
 import { useRoiStore } from "../stores/roiStore";
@@ -36,9 +37,12 @@ export function useCompareSide(side: "left" | "right"): CompareSideState {
         roi: roi ?? null,
         viz_overrides: cfg.viz ?? null,
         auto_range: false,
-        composite: "date_window",
-        target_date: cfg.date,
-        half_window_days: 3,
+        // The side's window (center ± halfDays) compiles to a mean composite —
+        // the same wire path as the Explore layer, so a ±45 side never rides
+        // the tiles half_window_days cap. half_window_days is vestigial here.
+        composite: "mean",
+        dates: windowMeanDates({ center: cfg.date, halfDays: cfg.halfDays }),
+        half_window_days: 0,
       } satisfies TilesRequest),
     [cfg, roi],
   );
