@@ -37,6 +37,7 @@ from openearth_api.schemas import (
     JobCreated,
     MlScanRequest,
     MlStatusOut,
+    NoiseFloorOut,
     ReferenceEventOut,
     SceneInfoOut,
     ScreeningRequest,
@@ -83,6 +84,11 @@ def patch_site(site_id: int, body: SitePatch, engine: EngineDep) -> SiteOut:
 def delete_site(site_id: int, engine: EngineDep) -> Response:
     svc.delete_site(site_id, engine)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/methane/sites/{site_id}/noise-floor")
+def get_site_noise_floor(site_id: int, engine: EngineDep) -> NoiseFloorOut:
+    return svc.get_site_floor(engine, site_id)
 
 
 @router.get("/methane/sites/{site_id}/scenes", dependencies=[Depends(ensure_ee)])
@@ -232,9 +238,13 @@ async def import_validation(
     file: Annotated[UploadFile, File()],
     source: Annotated[str, Form()],
     fmt: Annotated[Literal["csv", "geojson"], Form()],
+    # Applies to unit-agnostic rate columns only; unit-declared columns
+    # (`*_t_h`, `ch4_fluxrate`/`*_kg_h`) always self-describe. Default "auto"
+    # drops agnostic rates rather than guess their unit.
+    unit: Annotated[Literal["auto", "t_h", "kg_h"], Form()] = "auto",
 ) -> ValidationImportOut:
     data = await file.read()
-    return svc.import_events(engine, data, source, fmt)
+    return svc.import_events(engine, data, source, fmt, unit)
 
 
 @router.get("/methane/validation/events")

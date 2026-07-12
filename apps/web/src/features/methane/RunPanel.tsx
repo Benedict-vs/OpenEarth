@@ -1,13 +1,20 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { submitAnalyze, submitMlScan, useMlStatus } from "../../api/methaneQueries";
+import {
+  submitAnalyze,
+  submitMlScan,
+  useMlStatus,
+  useSiteNoiseFloor,
+} from "../../api/methaneQueries";
 import { subscribeJob } from "../../api/sse";
 import type { AnalyzeRequest } from "../../api/types";
 import {
   MAX_ANALYSIS_KM,
   MIN_ANALYSIS_KM,
+  NOISE_FLOOR_TOOLTIP,
   analysisAreaPx,
   analysisAreaToBBox,
+  formatFloorTh,
 } from "../../lib/methane";
 import { useMethaneStore } from "../../stores/methaneStore";
 
@@ -27,6 +34,7 @@ export function RunPanel() {
   const setJob = useMethaneStore((s) => s.setJob);
   const selectDetection = useMethaneStore((s) => s.selectDetection);
   const area = useMethaneStore((s) => s.analysisArea);
+  const floor = useSiteNoiseFloor(site?.id ?? null);
 
   const running = job?.status === "running";
 
@@ -86,6 +94,15 @@ export function RunPanel() {
           ))}
         </div>
         <p className="muted method-note">{METHOD_TIPS[params.method]}</p>
+        {floor.data?.floor_kg_h != null ? (
+          <p className="muted floor-context" title={NOISE_FLOOR_TOOLTIP}>
+            Site noise floor: {formatFloorTh(floor.data.floor_kg_h)} ({floor.data.floor_source}
+            {floor.data.detect_rate != null && floor.data.n_pairs != null
+              ? ` · ${Math.round(floor.data.detect_rate * 100)}% of ${floor.data.n_pairs} plume-free pairs "detected"`
+              : ""}
+            )
+          </p>
+        ) : null}
         <label
           className="slider-row"
           title="Detection threshold in robust standard deviations of the ΔXCH4 field — higher k is stricter: fewer false positives, but weaker plumes are missed"
@@ -274,6 +291,9 @@ function MlScanAction() {
         <span>Candidate scan</span>
       </div>
       <p className="ml-scan-caption">ML candidate ranker — proposes scenes for review.</p>
+      <p className="muted ml-scan-geo">
+        Trained on Turkmenistan O&amp;G scenes only — expect degraded performance elsewhere.
+      </p>
       <p className="muted ml-scan-window">
         Scans the current window: {dates.start} → {dates.end}
       </p>

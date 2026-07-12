@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import threading
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -20,7 +21,7 @@ from uuid import uuid4
 import numpy as np
 from fastapi import HTTPException
 from numpy.typing import NDArray
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from openearth.methane.channels import (
     ChannelStats,
@@ -43,7 +44,12 @@ from openearth.methane.wind import sample_wind_at
 from openearth.settings import Settings
 from openearth_api.models import Detection, utcnow_iso
 from openearth_api.schemas import JobCreated, MlScanRequest, MlStatusOut
-from openearth_api.services.methane import _detections_dir, _overlay_bounds, _resolve_bbox
+from openearth_api.services.methane import (
+    _detections_dir,
+    _overlay_bounds,
+    _resolve_bbox,
+    derive_physics_agreement,
+)
 
 # Nominal 10 m wind σ (m/s): recorded on the row but unused by the single-pass
 # point estimate (only the MC budget, a physics-tier feature, consumes it).
@@ -117,19 +123,6 @@ def _grid_json(grid: Any) -> str:
     )
 
 
-def _disagreement(engine: Any, site_id: int, scene_id: str) -> str:
-    """`agree` if a physics detection exists for this site+scene, else `ml_only`."""
-    with Session(engine) as session:
-        existing = session.exec(
-            select(Detection).where(
-                Detection.source == "physics",
-                Detection.site_id == site_id,
-                Detection.scene_id == scene_id,
-            )
-        ).first()
-    return "agree" if existing is not None else "ml_only"
-
-
 def _persist_ml_detection(
     engine: Any,
     settings: Settings,
@@ -172,6 +165,8 @@ def _persist_ml_detection(
         "score": round(float(score), 4),
         "model_version": model_version,
         "n_candidates": n_candidates,
+        # Scan-time snapshot of physics agreement (historical). Display uses the
+        # read-time-derived DetectionOut.physics_agreement, so old rows stay correct.
         "disagreement": disagreement,
         "flags": [],
         "review": "ML candidate — requires review; not an autonomous detection.",
@@ -260,7 +255,7 @@ def _scan_one_scene(
         score=max(c.max_prob for c in cands),
         n_candidates=len(cands),
         model_version=manifest["model_version"],
-        disagreement=_disagreement(engine, site_id, scene.scene_id),
+        disagreement=derive_physics_agreement(engine, site_id, scene.scene_id),
     )
 
 
@@ -280,18 +275,27 @@ async def submit_ml_scan(
 
     def runner(ctx: Any) -> dict[str, Any]:
         model = load_model(settings)
-        scenes = list_scenes(bbox, req.start, req.end)
+        targets = list_scenes(bbox, req.start, req.end)
         if req.max_scenes:
-            scenes = scenes[: req.max_scenes]
+            targets = targets[: req.max_scenes]
+        # Reference candidate pool matches the training exporter's ±150-day / cloud-60
+        # environment (fix 11 / Tier 2 F6), NOT the user's scan window — short windows
+        # otherwise gave short-Δt/fewer-candidate references than the model trained on.
+        ref_pool = list_scenes(
+            bbox,
+            req.start - timedelta(days=150),
+            req.end + timedelta(days=150),
+            max_cloud=60.0,
+        )
         det_ids: list[str] = []
-        for i, scene in enumerate(scenes):
+        for i, scene in enumerate(targets):
             if ctx.cancelled.is_set():
                 break
-            det_id = _scan_one_scene(req.site_id, scene, scenes, bbox, model, settings, engine)
+            det_id = _scan_one_scene(req.site_id, scene, ref_pool, bbox, model, settings, engine)
             if det_id is not None:
                 det_ids.append(det_id)
-            label = f"scanned {i + 1}/{len(scenes)}, {len(det_ids)} hit(s)"
-            ctx.progress(i + 1, len(scenes), label)
+            label = f"scanned {i + 1}/{len(targets)}, {len(det_ids)} hit(s)"
+            ctx.progress(i + 1, len(targets), label)
         return {"detection_ids": det_ids}
 
     job_id = await jobs.submit("methane_ml_scan", req.model_dump(mode="json"), runner)

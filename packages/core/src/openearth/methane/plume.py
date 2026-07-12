@@ -115,7 +115,13 @@ def detect_plume(
     if not np.isfinite(sigma) or sigma == 0.0:
         return empty
 
-    thresh = np.isfinite(field) & (field >= k_sigma * sigma)
+    # Threshold about the field median, not zero (fix 4a / Tier 1 F5): σ is
+    # MAD-about-the-median, so a non-zero background median (Jensen skew of the
+    # convex inverse LUT, bright-side truncation, surface artefacts) would
+    # otherwise silently shift the effective k. Now the centre and the scale agree.
+    finite = field[np.isfinite(field)]
+    median = float(np.median(finite))
+    thresh = np.isfinite(field) & (field >= median + k_sigma * sigma)
     if opening:
         thresh = ndimage.binary_opening(thresh, structure=_CONNECTIVITY_8, iterations=1)
     if not thresh.any():

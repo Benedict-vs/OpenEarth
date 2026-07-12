@@ -66,6 +66,30 @@ def test_recovers_gaussian_plume_area_within_25pct() -> None:
     assert result.area_m2 == pytest.approx(result.n_pixels * pixel_area_m2(grid))
 
 
+def test_median_centered_threshold_is_offset_invariant() -> None:
+    """A uniform background offset must not change the mask (fix 4a / Tier 1 F5).
+
+    median + k·σ is shift-equivariant, so the boolean mask is bit-identical; the
+    old ``field ≥ k·σ`` (measured from zero) engulfed the whole field once the
+    offset cleared k·σ.
+    """
+    rng = np.random.default_rng(7)
+    shape = (60, 60)
+    base_field = _gauss(shape, 30, 30, 5.0, amp=0.4) + rng.normal(0.0, 0.02, shape)
+    grid = _grid(shape)
+
+    base = detect_plume(base_field, grid, k_sigma=2.0)
+    offset = detect_plume(base_field + 0.3, grid, k_sigma=2.0)
+    assert base.n_pixels > 0
+    assert np.array_equal(base.mask, offset.mask)  # exactly invariant
+
+    # The old zero-threshold behaviour would over-detect: +0.3 ≫ k·σ (σ ≈ 0.02),
+    # so thresholding from zero flags essentially the whole field.
+    shifted = base_field + 0.3
+    over = int(np.count_nonzero(shifted >= 2.0 * robust_sigma(shifted)))
+    assert over > 5 * base.n_pixels
+
+
 def test_salt_noise_only_yields_empty_mask() -> None:
     rng = np.random.default_rng(2)
     shape = (64, 64)

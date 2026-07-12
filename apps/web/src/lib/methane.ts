@@ -74,13 +74,23 @@ export function kghToTh(value: number | null | undefined): number | null {
   return value == null ? null : value / 1000;
 }
 
-/** Format an emission rate ± σ as "Q ± σ t/h" (or "—" when absent). */
-export function formatEmission(qKgh: number | null, sigmaKgh: number | null): string {
+/** Caption for the ML single-pass Q — it carries strictly less information than
+ * the physics Q ± σ next to it, so it must not read as a comparable number. */
+export const ML_Q_CAPTION =
+  "single-pass point estimate over the ML footprint — no uncertainty budget";
+
+/** Format an emission rate ± σ as "Q ± σ t/h" (or "—" when absent).
+ * ``approx`` marks a point estimate (ML single-pass Q) with a leading "~". */
+export function formatEmission(
+  qKgh: number | null,
+  sigmaKgh: number | null,
+  opts?: { approx?: boolean },
+): string {
   const q = kghToTh(qKgh);
   if (q == null) return "—";
   const s = kghToTh(sigmaKgh);
   const body = s == null ? q.toFixed(1) : `${q.toFixed(1)} ± ${s.toFixed(1)}`;
-  return `${body} t/h`;
+  return `${opts?.approx ? "~" : ""}${body} t/h`;
 }
 
 export interface VerdictBadge {
@@ -159,7 +169,10 @@ export function detectionNumbers(detail: DetectionDetail): NumberRow[] {
 export function mlDetectionNumbers(detail: DetectionDetail): NumberRow[] {
   const r = (detail.result ?? {}) as Record<string, unknown>;
   return [
-    { label: "Q (single-pass)", value: formatEmission(detail.q_kg_h, detail.q_sigma_kg_h) },
+    {
+      label: "Q (single-pass)",
+      value: formatEmission(detail.q_kg_h, detail.q_sigma_kg_h, { approx: true }),
+    },
     { label: "IME", value: fmt(detail.ime_kg, 1, "kg") },
     { label: "U10", value: fmt(detail.u10_ms, 1, "m/s") },
     { label: "Wind from", value: fmt(detail.wind_from_deg, 0, "°") },
@@ -168,13 +181,48 @@ export function mlDetectionNumbers(detail: DetectionDetail): NumberRow[] {
   ];
 }
 
-/** Map a physics/ML disagreement flag to a display label + CSS modifier class. */
-export function disagreementBadge(flag: string | null | undefined): VerdictBadge | null {
-  switch (flag) {
+/** Tooltip for the empirical-noise-floor context (fix 1 + fix 9b). */
+export const NOISE_FLOOR_TOOLTIP =
+  "at or below the median Q this pipeline retrieves from plume-free scene pairs at this site — indistinguishable from retrieval noise";
+
+/** Format a floor Q (kg/h) as "6.3 t/h", or "—". */
+export function formatFloorTh(kgh: number | null | undefined): string {
+  const t = kghToTh(kgh);
+  return t == null ? "—" : `${t.toFixed(1)} t/h`;
+}
+
+/** Human-readable hints for the detector's QC flags (Phase 7 diagnostics). */
+export const FLAG_HINTS: Record<string, string> = {
+  cross_tile_reference:
+    "reference from a different UTM tile — registration/BRDF structure inflates noise; prefer a same-tile reference",
+  possible_reference_contamination:
+    "the reference scene itself shows an enhancement near the source — a recurrent emitter may have no plume-free reference; consider MBSP or pin a different date",
+  unstable_mask:
+    "the plume mask swings by ≥4× across the k-sweep (or a k empties it) — the rate is mask-noise-dominated, order-of-magnitude only",
+  lut_hi_clipped_mask:
+    "much of the masked plume hit the top of the inversion range — the reported column and rate are biased low",
+  different_orbit_reference:
+    "reference from a different orbit — larger view-angle/BRDF difference than a same-orbit pair",
+  nan_in_mask: "some masked pixels have no retrieval (NaN); they contribute zero to the IME",
+  wind_fallback_used: "ERA5-Land had no cell here; global ERA5 10 m wind was used",
+};
+
+/** Format a 0–1 fraction as a integer percent, or "—". */
+export function pctFraction(value: number | null | undefined): string {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value * 100)}%` : "—";
+}
+
+/** Map the read-derived ML↔physics agreement state (fix 8) to a badge.
+ * ``agree`` means a physics run found an actual plume on the same scene — not
+ * merely that a physics row exists (a no-plume run writes a row too). */
+export function disagreementBadge(state: string | null | undefined): VerdictBadge | null {
+  switch (state) {
     case "agree":
-      return { label: "Physics agrees", className: "disagreement agree" };
-    case "ml_only":
-      return { label: "ML-only (no physics detection)", className: "disagreement ml-only" };
+      return { label: "Physics agrees (plume found)", className: "disagreement agree" };
+    case "physics_no_plume":
+      return { label: "Physics found no plume", className: "disagreement no-plume" };
+    case "physics_not_run":
+      return { label: "Physics not run", className: "disagreement not-run" };
     default:
       return null;
   }

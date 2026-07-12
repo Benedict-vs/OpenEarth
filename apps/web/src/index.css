@@ -1282,9 +1282,66 @@ button.ghost {
   background: #12331c;
   color: #3fb950;
 }
-.disagreement.ml-only {
+/* Physics ran on the same scene but found no plume — ML and physics disagree. */
+.disagreement.no-plume {
   background: #3a2a12;
   color: #f0a336;
+}
+/* No physics run exists for the scene — neutral, not a disagreement. */
+.disagreement.not-run {
+  background: #23262d;
+  color: var(--muted);
+}
+.ml-q-note {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* Phase 7 inversion/mask diagnostics (fixes 2, 3, 4) */
+.diagnostics {
+  margin-top: 8px;
+}
+.flag-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.flag-hint {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #3a2a12;
+  color: #f0a336;
+  cursor: help;
+}
+.diag-table td,
+.diag-table th {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Noise-floor context (fix 1 + fix 9b) */
+.floor-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #3a2a12;
+  color: #f0a336;
+  cursor: help;
+}
+.floor-note {
+  font-size: 12px;
+  margin: 6px 0;
+  cursor: help;
+}
+.floor-note.below {
+  color: #f0a336;
+}
+.floor-context {
+  font-size: 11px;
+  margin-top: 4px;
+  cursor: help;
 }
 
 /* Validation panel */

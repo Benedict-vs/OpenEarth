@@ -186,6 +186,7 @@ def _canned_result(with_plume: bool = True) -> Any:
         wind=WindSample.from_uv(scene.time, 4.0, 0.0, "test"),
         calibration={"c_target": 1.02, "c_ref": float("nan"), "n_excluded_target": 3.0},
         flags=[] if with_plume else ["no_plume"],
+        clip_fractions={"target_lo": 0.0, "target_hi": 0.0, "ref_lo": 0.0, "ref_hi": 0.0},
     )
 
 
@@ -356,7 +357,9 @@ def test_validation_import_and_cross_match(client: TestClient, analyze_ready: No
         data={"source": "imeo", "fmt": "csv"},
     )
     assert imp.status_code == 200
-    assert imp.json() == {"imported": 2, "skipped": 0}
+    # `rate` is unit-agnostic + default unit="auto" → rates dropped (never guessed),
+    # but the events still import and cross-match on space + time.
+    assert imp.json() == {"imported": 2, "skipped": 0, "rates_dropped": 2}
 
     events = client.get("/api/methane/validation/events").json()
     assert len(events) == 2
@@ -391,4 +394,86 @@ def test_validation_import_counts_skipped(client: TestClient) -> None:
         files={"file": ("e.csv", csv, "text/csv")},
         data={"source": "manual", "fmt": "csv"},
     )
-    assert imp.json() == {"imported": 1, "skipped": 1}
+    assert imp.json() == {"imported": 1, "skipped": 1, "rates_dropped": 1}
+
+
+def test_validation_import_unit_field_and_imeo_kg_h(client: TestClient) -> None:
+    """The `unit` form field scales agnostic columns; IMEO kg/h passes through."""
+    # Unit-declared IMEO kg/h column → stored verbatim, nothing dropped.
+    imeo = client.post(
+        "/api/methane/validation/import",
+        files={
+            "file": (
+                "imeo.csv",
+                b"lat,lon,tile_date,ch4_fluxrate\n38.5,53.9,2019-11-20,1620.4\n",
+                "text/csv",
+            )
+        },
+        data={"source": "imeo", "fmt": "csv"},
+    )
+    assert imeo.json() == {"imported": 1, "skipped": 0, "rates_dropped": 0}
+    stored = client.get("/api/methane/validation/events").json()
+    assert stored[-1]["q_kg_h"] == pytest.approx(1620.4)
+
+    # Unit-agnostic `rate` with an explicit unit=t_h → scaled, nothing dropped.
+    th = client.post(
+        "/api/methane/validation/import",
+        files={"file": ("r.csv", b"lat,lon,date,rate\n10,10,2020-01-01,5.0\n", "text/csv")},
+        data={"source": "x", "fmt": "csv", "unit": "t_h"},
+    )
+    assert th.json() == {"imported": 1, "skipped": 0, "rates_dropped": 0}
+
+    # A > 500 t/h rate is a unit error → dropped by the guard.
+    guard = client.post(
+        "/api/methane/validation/import",
+        files={
+            "file": ("g.csv", b"lat,lon,date,source_rate_t_h\n10,10,2020-01-01,999\n", "text/csv")
+        },
+        data={"source": "x", "fmt": "csv"},
+    )
+    assert guard.json() == {"imported": 1, "skipped": 0, "rates_dropped": 1}
+
+
+# ── fix 8: read-time ML↔physics agreement derivation ──
+
+
+def _seed_physics(engine: Any, scene_id: str, *, n_pixels: int, no_plume: bool) -> None:
+    import json
+
+    from sqlmodel import Session
+
+    from openearth_api.models import Detection, utcnow_iso
+
+    now = utcnow_iso()
+    result = {"flags": ["no_plume"] if no_plume else [], "plume": {"n_pixels": n_pixels}}
+    row = Detection(
+        id=f"phys_{scene_id}",
+        site_id=1,
+        source="physics",
+        status="candidate",
+        method="mbsp",
+        scene_id=scene_id,
+        scene_time_utc="2020-01-01T00:00:00+00:00",
+        params_json="{}",
+        result_json=json.dumps(result),
+        array_path="x.npz",
+        created_at=now,
+        updated_at=now,
+    )
+    with Session(engine) as session:
+        session.add(row)
+        session.commit()
+
+
+def test_physics_agreement_three_states(tmp_path: Path) -> None:
+    """agree / physics_no_plume / physics_not_run — the fix 8 tri-state (Tier 2 F5)."""
+    engine = create_db_engine(tmp_path / "agree.db")
+    migrate(engine)
+    _seed_physics(engine, "SCENE_PLUME", n_pixels=42, no_plume=False)  # real plume
+    _seed_physics(engine, "SCENE_EMPTY", n_pixels=0, no_plume=True)  # ran, nothing
+
+    assert svc.derive_physics_agreement(engine, 1, "SCENE_PLUME") == "agree"
+    assert svc.derive_physics_agreement(engine, 1, "SCENE_EMPTY") == "physics_no_plume"
+    assert svc.derive_physics_agreement(engine, 1, "SCENE_ABSENT") == "physics_not_run"
+    # A physics row for a different site+scene must not count as agreement.
+    assert svc.derive_physics_agreement(engine, 2, "SCENE_PLUME") == "physics_not_run"

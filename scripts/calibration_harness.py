@@ -34,10 +34,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
+from scipy.stats import spearmanr
 
 from openearth.ee.client import initialize
 from openearth.geometry import BBox
-from openearth.methane.conversion import CH4Lut, load_lut
+from openearth.methane.conversion import load_lut
 from openearth.methane.detect import DetectionResult, analyze
 from openearth.methane.ime import McParams
 
@@ -46,11 +47,17 @@ _EVENTS_PATH = _REPO_ROOT / "scripts" / "data" / "calibration_events.json"
 
 _MC = McParams(n=500, seed=0)
 _MIN_QUANTIFIED = 10
-# A retrieval whose plume mask is dominated by LUT-saturated pixels is outside the
-# forward model's validity (MBSP surface structure over heterogeneous terrain inverts
-# to the ΔΩ grid edge). It is a *documented exclusion*, published-value-blind — never a
-# silent drop and never a crash. See docs/methane_methods.md §8 (MBSP applicability).
-_LUT_SAT_FRACTION_MAX = 0.20
+# A retrieval whose plume mask is dominated by out-of-validity pixels is outside the
+# forward model's range — MBSP surface structure over heterogeneous terrain inverts to
+# huge columns. A *documented exclusion*, published-value-blind, never a silent drop or
+# crash. See docs/methane_methods.md §8 (MBSP applicability).
+#
+# Decoupled from the LUT grid edge on purpose (fix 3 / Tier 1 F3): the v5 grid extends to
+# 6.0, so "fraction at the grid edge" no longer catches MBSP surface blowups (they now
+# invert to large *finite* columns). The bound stays at the old v4 edge so
+# campeche/caspian-class exclusions are stable across the grid extension.
+MBSP_VALIDITY_DELTA_OMEGA = 3.0  # mol/m²
+_INVALID_FRACTION_MAX = 0.20
 
 
 # ── Aggregate diagnostics (pure — offline unit-tested in test_calibration_events.py) ──
@@ -101,15 +108,28 @@ def theil_sen_slope(q_ours: np.ndarray, q_pub: np.ndarray) -> float:
     return float(np.median(slopes))
 
 
+def spearman(q_ours: np.ndarray, q_pub: np.ndarray) -> tuple[float, float]:
+    """Spearman rank correlation ρ and its p-value — the per-event *skill* metric the
+    review made a first-class diagnostic (ρ = 0.19, p = 0.5, n = 15 on v4). Reported,
+    never gated on; NaN for n < 3 (ρ undefined)."""
+    if len(q_ours) < 3:
+        return float("nan"), float("nan")
+    result = spearmanr(q_ours, q_pub)
+    return float(result.statistic), float(result.pvalue)
+
+
 def aggregates(q_ours: list[float], q_pub: list[float]) -> dict[str, float]:
     a = np.asarray(q_ours, dtype=np.float64)
     p = np.asarray(q_pub, dtype=np.float64)
+    rho, pval = spearman(a, p)
     return {
         "n_quantified": len(a),
         "slope_through_origin": slope_through_origin(a, p),
         "median_ratio": median_ratio(a, p),
         "log_scatter": log_scatter(a, p),
         "theil_sen_slope": theil_sen_slope(a, p),
+        "spearman_rho": rho,
+        "spearman_p": pval,
     }
 
 
@@ -130,19 +150,20 @@ def _git_hash() -> str:
         return "unknown"
 
 
-def _lut_saturated_fraction(result: DetectionResult, lut: CH4Lut) -> float:
-    """Fraction of masked pixels whose inverted ΔΩ landed on a LUT grid edge (saturated)."""
+def _inversion_validity_fraction(result: DetectionResult) -> float:
+    """Fraction of masked pixels whose reported ΔΩ is beyond the forward model's
+    validity range (|ΔΩ| ≥ ``MBSP_VALIDITY_DELTA_OMEGA``) — decoupled from the LUT
+    grid edge (fix 3) so the guard survives the v5 grid extension."""
     in_mask = result.delta_omega[result.plume.mask]
     if in_mask.size == 0:
         return 0.0
-    lo, hi = float(lut.delta_omega[0]), float(lut.delta_omega[-1])
-    return float(np.mean((in_mask <= lo) | (in_mask >= hi)))
+    return float(np.mean(np.abs(in_mask) >= MBSP_VALIDITY_DELTA_OMEGA))
 
 
-def run_event(event: dict[str, object], lut: CH4Lut) -> dict[str, object]:
+def run_event(event: dict[str, object]) -> dict[str, object]:
     """Run one event through ``analyze``; return a per-event result row.
 
-    Excludes (with a reason) on ``no_plume``, a LUT-saturated mask, a non-finite Q,
+    Excludes (with a reason) on ``no_plume``, an out-of-validity mask, a non-finite Q,
     or any exception — never raises, so one bad scene can't sink the whole regression.
     """
     bbox = BBox(*event["bbox"])  # type: ignore[misc]
@@ -158,7 +179,7 @@ def run_event(event: dict[str, object], lut: CH4Lut) -> dict[str, object]:
         "reference_scene_id": event.get("reference_scene_id"),
         "q_ours_t_h": None,
         "sigma_ours_t_h": None,
-        "sat_fraction": None,
+        "invalid_fraction": None,
         "flags": [],
         "excluded": True,
         "exclusion_reason": None,
@@ -182,10 +203,10 @@ def run_event(event: dict[str, object], lut: CH4Lut) -> dict[str, object]:
     if "no_plume" in result.flags or not np.isfinite(q):
         row["exclusion_reason"] = "no_plume" if "no_plume" in result.flags else "non_finite_q"
         return row
-    sat = _lut_saturated_fraction(result, lut)
-    row["sat_fraction"] = round(sat, 4)
-    if sat > _LUT_SAT_FRACTION_MAX:
-        row["exclusion_reason"] = f"excluded_lut_saturated (sat={sat:.2f})"
+    frac = _inversion_validity_fraction(result)
+    row["invalid_fraction"] = round(frac, 4)
+    if frac > _INVALID_FRACTION_MAX:
+        row["exclusion_reason"] = f"excluded_inversion_validity (frac={frac:.2f})"
         return row
     row["q_ours_t_h"] = round(float(q), 4)
     row["sigma_ours_t_h"] = round(float(result.emission.q_sigma_kg_h / 1000.0), 4)
@@ -197,7 +218,7 @@ def run_harness() -> dict[str, object]:
     initialize()
     lut = load_lut()
     events = _load_events()
-    rows = [run_event(e, lut) for e in events]
+    rows = [run_event(e) for e in events]
     quantified = [r for r in rows if not r["excluded"]]
     agg = aggregates(
         [float(r["q_ours_t_h"]) for r in quantified],  # type: ignore[arg-type]
@@ -239,7 +260,8 @@ def _print_table(baseline: dict[str, object]) -> None:
     print(
         f"n_quantified={a['n_quantified']}  slope={a['slope_through_origin']:.3f}  "
         f"median_ratio={a['median_ratio']:.3f}  log_scatter={a['log_scatter']:.3f}  "
-        f"theil_sen={a['theil_sen_slope']:.3f}"
+        f"theil_sen={a['theil_sen_slope']:.3f}  "
+        f"spearman_rho={a['spearman_rho']:.3f} (p={a['spearman_p']:.3f})"
     )
 
 
@@ -280,7 +302,13 @@ def main() -> int:
         ca = committed["aggregates"]
         prov = f"git {committed['git_hash']}, LUT v{committed['lut_version']}"
         print(f"\ncompare vs {path.name} ({prov}):")
-        for key in ("slope_through_origin", "median_ratio", "log_scatter", "theil_sen_slope"):
+        for key in (
+            "slope_through_origin",
+            "median_ratio",
+            "log_scatter",
+            "theil_sen_slope",
+            "spearman_rho",
+        ):
             print(
                 f"  {key:<22} baseline={ca[key]:.4f}  now={a[key]:.4f}  Δ={a[key] - ca[key]:+.4f}"
             )  # type: ignore[index]

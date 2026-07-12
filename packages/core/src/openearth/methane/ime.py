@@ -10,7 +10,7 @@ retrieval noise (off-plume bootstrap), and the mass-balance model error.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -83,6 +83,10 @@ class EmissionEstimate:
     # feeds the MC bootstrap. Distinct from the mask threshold σ (which is in ΔR units when
     # masking in ΔR space); see ``PlumeMask.sigma``. NaN when there is no plume.
     sigma_noise_delta_omega: float = float("nan")
+    # Mask pixel count at each k in the MC k-grid (fix 4c / Tier 1 F2), keyed by k as
+    # a string. Surfaces the mask's k-sensitivity — F2's order-of-magnitude mask noise
+    # made visible (the flag lives in the detector). Empty when there is no plume.
+    mask_npx_by_k: dict[str, int] = field(default_factory=dict)
 
 
 def _nan_estimate(
@@ -195,6 +199,7 @@ def quantify(
         wind_from_deg=wind.wind_from_deg,
         n_mc=mc.n,
         sigma_noise_delta_omega=sigma_noise,
+        mask_npx_by_k={f"{k:g}": int(n) for k, n in zip(mc.k_grid, npix_k, strict=True)},
     )
     return estimate, display
 

@@ -53,5 +53,8 @@ def test_evaluate_end_to_end_with_untrained_model(chips_dir: Path) -> None:
     res = evaluate(model, stats, refs, "cpu")
     assert res["n"] == len(refs)
     assert set(res["model"]) >= {"f1", "precision", "recall", "tp", "fp", "fn"}
-    # the physics baseline should fire on the synthetic positives (strong −ΔR_MBMP)
-    assert res["baseline"]["recall"] == 1.0
+    # the physics baseline (at k=2) should fire on the synthetic positives (strong −ΔR_MBMP)
+    assert res["baseline_k2"]["recall"] == 1.0
+    # both-sides sweeps present (fix 6)
+    assert len(res["model_threshold_sweep"]) == 19  # 0.05…0.95 step 0.05
+    assert len(res["baseline_k_sweep"]) == 13  # 1.0…4.0 step 0.25

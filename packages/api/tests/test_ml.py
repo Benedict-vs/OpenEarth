@@ -142,18 +142,21 @@ def test_ml_scan_end_to_end(client: TestClient, scan_ready: None) -> None:
     det_ids = job["result"]["detection_ids"]
     assert len(det_ids) == 2  # both fake scenes produce a candidate
 
-    # feed: ml-sourced rows with a score column
+    # feed: ml-sourced rows with a score column + read-derived physics agreement
     feed = client.get("/api/methane/detections", params={"source": "ml"}).json()
     assert len(feed) == 2
     assert feed[0]["source"] == "ml"
     assert feed[0]["score"] is not None
     assert feed[0]["score"] > 0.5
+    assert feed[0]["physics_agreement"] == "physics_not_run"  # no physics row yet
 
     # detail: parsed result carries model_version, disagreement, review caption
     detail = client.get(f"/api/methane/detections/{det_ids[0]}").json()
     result = detail["result"]
     assert result["model_version"] == "plume_unet_v1"
-    assert result["disagreement"] == "ml_only"  # no physics row for this site+scene
+    # scan-time snapshot (historical) + the read-time-derived typed field agree here
+    assert result["disagreement"] == "physics_not_run"  # no physics row for this site+scene
+    assert detail["physics_agreement"] == "physics_not_run"
     assert result["review"].startswith("ML candidate")
     assert result["n_candidates"] >= 1
     # grid corners must be present so the detail overlay places on the map
@@ -164,3 +167,32 @@ def test_ml_scan_end_to_end(client: TestClient, scan_ready: None) -> None:
     png = client.get(f"/api/methane/detections/{det_ids[0]}/overlay.png", params={"vmax": 200})
     assert png.status_code == 200
     assert png.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_serve_reference_pool_widens_window(
+    client: TestClient, scan_ready: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reference pool spans ±150 d at cloud 60 (training environment, fix 11);
+    targets still come only from the requested window."""
+    from datetime import date, timedelta
+
+    calls: list[tuple[Any, Any, float]] = []
+
+    def spy_list_scenes(bbox: Any, start: Any, end: Any, *, max_cloud: float = 80.0) -> list:
+        calls.append((start, end, max_cloud))
+        return [_scene("A"), _scene("B")]
+
+    monkeypatch.setattr(svc_ml, "list_scenes", spy_list_scenes)
+    site_id = client.get("/api/methane/sites").json()[0]["id"]
+    resp = client.post(
+        "/api/methane/ml/scan",
+        json={"site_id": site_id, "roi": SCAN_ROI, "start": "2021-07-01", "end": "2021-08-01"},
+    )
+    _wait_succeeded(client, resp.json()["job_id"])
+
+    assert len(calls) == 2  # targets, then reference pool
+    (t_start, t_end, _), (r_start, r_end, r_cloud) = calls
+    assert (t_start, t_end) == (date(2021, 7, 1), date(2021, 8, 1))  # targets = requested range
+    assert r_start == date(2021, 7, 1) - timedelta(days=150)
+    assert r_end == date(2021, 8, 1) + timedelta(days=150)
+    assert r_cloud == 60.0

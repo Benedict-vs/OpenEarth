@@ -1,0 +1,569 @@
+{
+  "version": 1,
+  "provenance": {
+    "git_hash": "a309b6b",
+    "lut_version": "5",
+    "run_utc": "2026-07-12T10:12:14.410933+00:00",
+    "window": [
+      "2022-01-01",
+      "2024-01-01"
+    ],
+    "n_targets_per_site": 5,
+    "max_cloud_pct": 30.0
+  },
+  "detect_params": {
+    "k_sigma": 2.0,
+    "min_area_px": 5,
+    "mc_seed": 0,
+    "mc_n": 500
+  },
+  "method_note": "The identical `analyze` (MBMP, k·σ=2, min_area 5, seeded MC) run on seeded-random presumed-plume-free scene pairs over a 10 km analysis area per seeded site. floor_kg_h = median of the DETECTED noise Qs.",
+  "honesty_note": "At recurrent emitters the floor includes real residual emission, so it is an UPPER BOUND on trustworthiness (the conservative direction for a floor). detect_rate reports how many plume-free pairs 'detected' anything — a site at 5/5 reads as exactly that.",
+  "sites": {
+    "Korpezhe, Turkmenistan": {
+      "n_pairs": 5,
+      "detect_rate": 1.0,
+      "q_noise_kg_h": [
+        5946.79,
+        10226.19,
+        10715.88,
+        25395.78,
+        47574.67
+      ],
+      "floor_kg_h": 10715.88,
+      "pairs": [
+        {
+          "target_scene_id": "20220718T070629_20220718T071741_T39SYC",
+          "reference_scene_id": "20220713T070631_20220713T070706_T39SYC",
+          "no_plume": false,
+          "q_kg_h": 25395.78,
+          "q_sigma_kg_h": 10410.14,
+          "n_px": 297,
+          "u10_ms": 2.343,
+          "flags": [
+            "possible_reference_contamination"
+          ]
+        },
+        {
+          "target_scene_id": "20220817T070629_20220817T071835_T40SBH",
+          "reference_scene_id": "20220812T070631_20220812T071617_T39SYC",
+          "no_plume": false,
+          "q_kg_h": 47574.67,
+          "q_sigma_kg_h": 9843.16,
+          "n_px": 32,
+          "u10_ms": 9.125,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination",
+            "lut_hi_clipped_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20221215T071309_20221215T071310_T40SBH",
+          "reference_scene_id": "20221210T071311_20221210T071305_T39SYC",
+          "no_plume": false,
+          "q_kg_h": 10715.88,
+          "q_sigma_kg_h": 4885.79,
+          "n_px": 15,
+          "u10_ms": 1.802,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination",
+            "lut_hi_clipped_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20230419T070621_20230419T071538_T39SYC",
+          "reference_scene_id": "20230414T070619_20230414T071819_T39SYC",
+          "no_plume": false,
+          "q_kg_h": 5946.79,
+          "q_sigma_kg_h": 2588.89,
+          "n_px": 69,
+          "u10_ms": 2.489,
+          "flags": [
+            "possible_reference_contamination"
+          ]
+        },
+        {
+          "target_scene_id": "20230901T070629_20230901T071421_T40SBH",
+          "reference_scene_id": "20230827T070631_20230827T071049_T39SYC",
+          "no_plume": false,
+          "q_kg_h": 10226.19,
+          "q_sigma_kg_h": 4549.11,
+          "n_px": 9,
+          "u10_ms": 1.931,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination",
+            "lut_hi_clipped_mask"
+          ]
+        }
+      ]
+    },
+    "Galkynysh, Turkmenistan": {
+      "n_pairs": 5,
+      "detect_rate": 0.4,
+      "q_noise_kg_h": [
+        8530.96,
+        75836.75
+      ],
+      "floor_kg_h": 42183.85,
+      "pairs": [
+        {
+          "target_scene_id": "20220808T063629_20220808T063901_T41SMB",
+          "reference_scene_id": "20220803T063641_20220803T064613_T41SMB",
+          "no_plume": true,
+          "q_kg_h": null,
+          "q_sigma_kg_h": null,
+          "n_px": 0,
+          "u10_ms": 4.711,
+          "flags": [
+            "no_plume"
+          ]
+        },
+        {
+          "target_scene_id": "20220828T063629_20220828T063727_T41SMB",
+          "reference_scene_id": "20220823T063641_20220823T063710_T41SMB",
+          "no_plume": true,
+          "q_kg_h": null,
+          "q_sigma_kg_h": null,
+          "n_px": 0,
+          "u10_ms": 2.161,
+          "flags": [
+            "no_plume"
+          ]
+        },
+        {
+          "target_scene_id": "20221216T064259_20221216T064259_T41SMB",
+          "reference_scene_id": "20221211T064251_20221211T064254_T41SMB",
+          "no_plume": false,
+          "q_kg_h": 8530.96,
+          "q_sigma_kg_h": 7412.59,
+          "n_px": 14,
+          "u10_ms": 0.787,
+          "flags": [
+            "unstable_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20230530T063631_20230530T063646_T41SMB",
+          "reference_scene_id": "20230525T063629_20230525T063821_T41SMB",
+          "no_plume": true,
+          "q_kg_h": null,
+          "q_sigma_kg_h": null,
+          "n_px": 0,
+          "u10_ms": 3.586,
+          "flags": [
+            "no_plume"
+          ]
+        },
+        {
+          "target_scene_id": "20230902T063629_20230902T064346_T41SMB",
+          "reference_scene_id": "20230912T063629_20230912T063924_T41SMB",
+          "no_plume": false,
+          "q_kg_h": 75836.75,
+          "q_sigma_kg_h": 33757.66,
+          "n_px": 191,
+          "u10_ms": 1.969,
+          "flags": [
+            "lut_hi_clipped_mask"
+          ]
+        }
+      ]
+    },
+    "Permian Basin (USA)": {
+      "n_pairs": 5,
+      "detect_rate": 1.0,
+      "q_noise_kg_h": [
+        8947.77,
+        24583.13,
+        32360.25,
+        33411.32,
+        61736.57
+      ],
+      "floor_kg_h": 32360.25,
+      "pairs": [
+        {
+          "target_scene_id": "20220719T172911_20220719T174245_T13SFR",
+          "reference_scene_id": "20220724T172909_20220724T173903_T13SFR",
+          "no_plume": false,
+          "q_kg_h": 32360.25,
+          "q_sigma_kg_h": 17408.68,
+          "n_px": 66,
+          "u10_ms": 2.88,
+          "flags": [
+            "possible_reference_contamination",
+            "unstable_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20220803T172909_20220803T173804_T13SFR",
+          "reference_scene_id": "20220729T172911_20220729T174442_T13SFR",
+          "no_plume": false,
+          "q_kg_h": 24583.13,
+          "q_sigma_kg_h": 11027.6,
+          "n_px": 30,
+          "u10_ms": 2.325,
+          "flags": [
+            "possible_reference_contamination",
+            "lut_hi_clipped_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20230110T173709_20230110T173757_T13SFR",
+          "reference_scene_id": "20230120T173639_20230120T173711_T13SFR",
+          "no_plume": false,
+          "q_kg_h": 8947.77,
+          "q_sigma_kg_h": 3366.71,
+          "n_px": 12,
+          "u10_ms": 5.699,
+          "flags": [
+            "possible_reference_contamination"
+          ]
+        },
+        {
+          "target_scene_id": "20230420T172859_20230420T174500_T13SFR",
+          "reference_scene_id": "20230425T172901_20230425T173533_T13SFR",
+          "no_plume": false,
+          "q_kg_h": 61736.57,
+          "q_sigma_kg_h": 29904.97,
+          "n_px": 1050,
+          "u10_ms": 1.601,
+          "flags": [
+            "possible_reference_contamination"
+          ]
+        },
+        {
+          "target_scene_id": "20230818T172859_20230818T174317_T13SFR",
+          "reference_scene_id": "20230828T172859_20230828T173914_T13SFR",
+          "no_plume": false,
+          "q_kg_h": 33411.32,
+          "q_sigma_kg_h": 12493.25,
+          "n_px": 281,
+          "u10_ms": 6.075,
+          "flags": [
+            "possible_reference_contamination",
+            "unstable_mask"
+          ]
+        }
+      ]
+    },
+    "Hassi Messaoud, Algeria": {
+      "n_pairs": 5,
+      "detect_rate": 1.0,
+      "q_noise_kg_h": [
+        6115.32,
+        6489.55,
+        6602.3,
+        7161.17,
+        35364.48
+      ],
+      "floor_kg_h": 6602.3,
+      "pairs": [
+        {
+          "target_scene_id": "20220712T100559_20220712T101909_T31RGQ",
+          "reference_scene_id": "20220722T100559_20220722T101518_T32SKA",
+          "no_plume": false,
+          "q_kg_h": 35364.48,
+          "q_sigma_kg_h": 7852.82,
+          "n_px": 334,
+          "u10_ms": 7.887,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination"
+          ]
+        },
+        {
+          "target_scene_id": "20220804T101559_20220804T102126_T31RGQ",
+          "reference_scene_id": "20220814T101559_20220814T102248_T32SKA",
+          "no_plume": false,
+          "q_kg_h": 6115.32,
+          "q_sigma_kg_h": 1819.43,
+          "n_px": 16,
+          "u10_ms": 4.83,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination"
+          ]
+        },
+        {
+          "target_scene_id": "20230108T101319_20230108T102121_T32RKV",
+          "reference_scene_id": "20230118T101239_20230118T102049_T32SKA",
+          "no_plume": false,
+          "q_kg_h": 6602.3,
+          "q_sigma_kg_h": 2589.88,
+          "n_px": 80,
+          "u10_ms": 3.651,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination",
+            "unstable_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20230418T100559_20230418T101457_T32RKV",
+          "reference_scene_id": "20230423T100551_20230423T101552_T32SKA",
+          "no_plume": false,
+          "q_kg_h": 7161.17,
+          "q_sigma_kg_h": 2358.15,
+          "n_px": 9,
+          "u10_ms": 4.657,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination"
+          ]
+        },
+        {
+          "target_scene_id": "20230913T101631_20230913T102258_T32RKV",
+          "reference_scene_id": "20230923T101731_20230923T102440_T32SKA",
+          "no_plume": false,
+          "q_kg_h": 6489.55,
+          "q_sigma_kg_h": 2242.05,
+          "n_px": 18,
+          "u10_ms": 3.933,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination"
+          ]
+        }
+      ]
+    },
+    "Basra oil fields, Iraq": {
+      "n_pairs": 5,
+      "detect_rate": 1.0,
+      "q_noise_kg_h": [
+        5786.27,
+        12126.86,
+        29840.49,
+        59227.74,
+        64325.9
+      ],
+      "floor_kg_h": 29840.49,
+      "pairs": [
+        {
+          "target_scene_id": "20220719T072631_20220719T073159_T38RQU",
+          "reference_scene_id": "20220724T072619_20220724T073152_T38RQU",
+          "no_plume": false,
+          "q_kg_h": 12126.86,
+          "q_sigma_kg_h": 5266.78,
+          "n_px": 40,
+          "u10_ms": 6.994,
+          "flags": [
+            "possible_reference_contamination",
+            "unstable_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20220813T072619_20220813T073150_T38RQU",
+          "reference_scene_id": "20220808T072631_20220808T073159_T38RQU",
+          "no_plume": false,
+          "q_kg_h": 64325.9,
+          "q_sigma_kg_h": 15083.57,
+          "n_px": 228,
+          "u10_ms": 7.559,
+          "flags": [
+            "possible_reference_contamination"
+          ]
+        },
+        {
+          "target_scene_id": "20221226T073321_20221226T073321_T38RQU",
+          "reference_scene_id": "20221216T073321_20221216T073321_T38RQU",
+          "no_plume": false,
+          "q_kg_h": 29840.49,
+          "q_sigma_kg_h": 21827.45,
+          "n_px": 209,
+          "u10_ms": 1.896,
+          "flags": [
+            "possible_reference_contamination",
+            "unstable_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20230420T072619_20230420T073149_T38RQU",
+          "reference_scene_id": "20230425T072611_20230425T073146_T38RQU",
+          "no_plume": false,
+          "q_kg_h": 5786.27,
+          "q_sigma_kg_h": 3220.55,
+          "n_px": 62,
+          "u10_ms": 1.707,
+          "flags": [
+            "possible_reference_contamination",
+            "unstable_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20230902T072621_20230902T073908_T38RQU",
+          "reference_scene_id": "20230823T072621_20230823T073913_T38RQU",
+          "no_plume": false,
+          "q_kg_h": 59227.74,
+          "q_sigma_kg_h": 17463.12,
+          "n_px": 1483,
+          "u10_ms": 4.793,
+          "flags": [
+            "possible_reference_contamination"
+          ]
+        }
+      ]
+    },
+    "Four Corners (USA)": {
+      "n_pairs": 5,
+      "detect_rate": 1.0,
+      "q_noise_kg_h": [
+        15206.18,
+        20347.37,
+        47774.39,
+        54246.86,
+        91172.13
+      ],
+      "floor_kg_h": 47774.39,
+      "pairs": [
+        {
+          "target_scene_id": "20220802T175919_20220802T180700_T12SXF",
+          "reference_scene_id": "20220812T175919_20220812T180609_T12SXG",
+          "no_plume": false,
+          "q_kg_h": 54246.86,
+          "q_sigma_kg_h": 19864.71,
+          "n_px": 37,
+          "u10_ms": 3.982,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination",
+            "lut_hi_clipped_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20220822T175909_20220822T180505_T12SXF",
+          "reference_scene_id": "20220901T175909_20220901T181244_T12SXG",
+          "no_plume": false,
+          "q_kg_h": 15206.18,
+          "q_sigma_kg_h": 7731.5,
+          "n_px": 39,
+          "u10_ms": 1.324,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination",
+            "lut_hi_clipped_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20230104T180741_20230104T180737_T12SXG",
+          "reference_scene_id": "20221225T180751_20221225T180747_T12SXF",
+          "no_plume": false,
+          "q_kg_h": 47774.39,
+          "q_sigma_kg_h": 39354.2,
+          "n_px": 342,
+          "u10_ms": 0.901,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination",
+            "lut_hi_clipped_mask",
+            "unstable_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20230514T175911_20230514T181156_T12SXF",
+          "reference_scene_id": "20230524T175911_20230524T180739_T12SXG",
+          "no_plume": false,
+          "q_kg_h": 91172.13,
+          "q_sigma_kg_h": 24617.66,
+          "n_px": 119,
+          "u10_ms": 6.54,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination",
+            "lut_hi_clipped_mask"
+          ]
+        },
+        {
+          "target_scene_id": "20230916T175919_20230916T180837_T12SXF",
+          "reference_scene_id": "20230921T180041_20230921T181229_T12SXG",
+          "no_plume": false,
+          "q_kg_h": 20347.37,
+          "q_sigma_kg_h": 9382.09,
+          "n_px": 9,
+          "u10_ms": 1.824,
+          "flags": [
+            "cross_tile_reference",
+            "possible_reference_contamination",
+            "lut_hi_clipped_mask"
+          ]
+        }
+      ]
+    },
+    "Upper Silesia, Poland": {
+      "n_pairs": 5,
+      "detect_rate": 0.0,
+      "q_noise_kg_h": [],
+      "floor_kg_h": null,
+      "pairs": [
+        {
+          "target_scene_id": "20220703T094039_20220703T094036_T34UCA",
+          "reference_scene_id": "20220623T094039_20220623T094035_T33UYR",
+          "no_plume": true,
+          "q_kg_h": null,
+          "q_sigma_kg_h": null,
+          "n_px": 0,
+          "u10_ms": 1.43,
+          "flags": [
+            "cross_tile_reference",
+            "no_plume"
+          ]
+        },
+        {
+          "target_scene_id": "20220721T095041_20220721T095041_T34UCA",
+          "reference_scene_id": "20220805T094549_20220805T094815_T34UCA",
+          "no_plume": true,
+          "q_kg_h": null,
+          "q_sigma_kg_h": null,
+          "n_px": 0,
+          "u10_ms": 3.15,
+          "flags": [
+            "no_plume"
+          ]
+        },
+        {
+          "target_scene_id": "20221108T095221_20221108T095402_T34UCA",
+          "reference_scene_id": "20221113T095149_20221113T095148_T34UCA",
+          "no_plume": true,
+          "q_kg_h": null,
+          "q_sigma_kg_h": null,
+          "n_px": 0,
+          "u10_ms": 3.126,
+          "flags": [
+            "possible_reference_contamination",
+            "no_plume"
+          ]
+        },
+        {
+          "target_scene_id": "20230112T095249_20230112T095252_T33UYR",
+          "reference_scene_id": "20230107T095401_20230107T095402_T33UYR",
+          "no_plume": true,
+          "q_kg_h": null,
+          "q_sigma_kg_h": null,
+          "n_px": 0,
+          "u10_ms": 5.056,
+          "flags": [
+            "possible_reference_contamination",
+            "no_plume"
+          ]
+        },
+        {
+          "target_scene_id": "20230822T094041_20230822T094037_T34UCA",
+          "reference_scene_id": "20230906T093549_20230906T093550_T34UCA",
+          "no_plume": true,
+          "q_kg_h": null,
+          "q_sigma_kg_h": null,
+          "n_px": 0,
+          "u10_ms": 1.281,
+          "flags": [
+            "no_plume"
+          ]
+        }
+      ]
+    }
+  },
+  "global": {
+    "floor_kg_h": 24583.13,
+    "n_detected": 27
+  }
+}

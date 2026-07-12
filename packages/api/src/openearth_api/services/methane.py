@@ -43,6 +43,7 @@ from openearth_api.schemas import (
     DetectionOut,
     DetectionPatch,
     JobCreated,
+    NoiseFloorOut,
     ReferenceEventOut,
     SceneInfoOut,
     ScreeningRequest,
@@ -53,6 +54,7 @@ from openearth_api.schemas import (
     ValidationOut,
 )
 from openearth_api.services.methane_render import render_overlay_png
+from openearth_api.services.noise_floor import load_floor, resolve_floor
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -319,6 +321,11 @@ def _result_payload(result: DetectionResult, xch4_max: float | None) -> dict[str
                 "k_sigma": result.plume.k_sigma,
                 "sigma": result.plume.sigma,
             },
+            # Phase 7 diagnostics (fixes 3, 4c): per-pass in-mask reporting-LUT edge
+            # fractions and the mask pixel count at each MC k. Untyped result content —
+            # the Lab renders them; no schema change.
+            "clip_fractions": result.clip_fractions,
+            "mask_npx_by_k": em.mask_npx_by_k,
             "target_scene_id": result.target.scene_id,
             "reference_scene_id": result.reference.scene_id if result.reference else None,
             "spacecraft": result.target.spacecraft,
@@ -438,7 +445,104 @@ def _emit_matches_of(emit_json: str | None) -> int | None:
     return len(matches) if isinstance(matches, list) else 0
 
 
-def _detection_out(row: Detection) -> DetectionOut:
+def _physics_has_nonempty_plume(result_json: str) -> bool:
+    """A physics detection that actually found a plume (fix 8).
+
+    ``persist_detection`` writes a row unconditionally — a no-plume run still
+    lands (flags ``["no_plume"]``, empty mask). So "physics agrees" must mean a
+    physics row with an actual footprint, not merely a row's existence.
+    """
+    parsed = json.loads(result_json)
+    flags = parsed.get("flags", [])
+    if isinstance(flags, list) and "no_plume" in flags:
+        return False
+    plume = parsed.get("plume") or {}
+    n_px = plume.get("n_pixels", 0)
+    return isinstance(n_px, int | float) and n_px > 0
+
+
+def _physics_agreement_for_pairs(
+    session: Session, pairs: set[tuple[int | None, str]]
+) -> dict[tuple[int | None, str], str]:
+    """Read-time ML↔physics agreement per (site, scene) pair, one batched query.
+
+    ``agree`` — a physics row for the same site+scene has a non-empty plume;
+    ``physics_no_plume`` — physics ran but found nothing; ``physics_not_run`` —
+    no physics row exists. Derived live so existing ML rows read correctly with
+    no data migration (fix 8 / Tier 2 F5). Agreement is row-level (same scene),
+    not geometric — comparing plume footprints for overlap is a later refinement.
+    """
+    if not pairs:
+        return {}
+    scene_ids = {scene for _, scene in pairs}
+    rows = session.exec(
+        select(Detection).where(
+            Detection.source == "physics",
+            Detection.scene_id.in_(scene_ids),  # type: ignore[attr-defined]
+        )
+    ).all()
+    has_plume: dict[tuple[int | None, str], bool] = {}
+    for r in rows:
+        key = (r.site_id, r.scene_id)
+        has_plume[key] = has_plume.get(key, False) or _physics_has_nonempty_plume(r.result_json)
+    result: dict[tuple[int | None, str], str] = {}
+    for pair in pairs:
+        if pair not in has_plume:
+            result[pair] = "physics_not_run"
+        else:
+            result[pair] = "agree" if has_plume[pair] else "physics_no_plume"
+    return result
+
+
+def derive_physics_agreement(engine: Engine, site_id: int | None, scene_id: str) -> str:
+    """Single-pair physics-agreement state (the scan-time historical snapshot)."""
+    with Session(engine) as session:
+        pair = (site_id, scene_id)
+        return _physics_agreement_for_pairs(session, {pair})[pair]
+
+
+def get_site_floor(engine: Engine, site_id: int) -> NoiseFloorOut:
+    """The noise-floor context for one site — static Lab context before a run (fix 1)."""
+    floor = load_floor()
+    with Session(engine) as session:
+        site = session.get(Site, site_id)
+    name = site.name if site else None
+    entry = (floor.get("sites", {}) if floor else {}).get(name) if name else None
+    if isinstance(entry, dict) and entry.get("floor_kg_h") is not None:
+        return NoiseFloorOut(
+            floor_kg_h=float(entry["floor_kg_h"]),
+            floor_source="site",
+            detect_rate=entry.get("detect_rate"),
+            n_pairs=entry.get("n_pairs"),
+        )
+    global_floor = (floor.get("global", {}) or {}).get("floor_kg_h") if floor else None
+    return NoiseFloorOut(
+        floor_kg_h=float(global_floor) if global_floor is not None else None,
+        floor_source="global" if global_floor is not None else None,
+        detect_rate=None,
+        n_pairs=None,
+    )
+
+
+def _site_names(session: Session, site_ids: set[int]) -> dict[int, str]:
+    """Batched site_id → name map for read-time noise-floor resolution (fix 1)."""
+    if not site_ids:
+        return {}
+    rows = session.exec(select(Site).where(Site.id.in_(site_ids))).all()  # type: ignore[union-attr]
+    return {s.id: s.name for s in rows if s.id is not None}
+
+
+def _floor_name(names: dict[int, str], site_id: int | None) -> str | None:
+    """Site name for a (possibly None/custom) site_id — None → global floor."""
+    return names.get(site_id) if site_id is not None else None
+
+
+def _detection_out(
+    row: Detection,
+    physics_agreement: str | None = None,
+    floor_ctx: tuple[float | None, str | None, bool] = (None, None, False),
+) -> DetectionOut:
+    floor_kg_h, floor_source, below = floor_ctx
     return DetectionOut(
         id=row.id,
         site_id=row.site_id,
@@ -455,6 +559,10 @@ def _detection_out(row: Detection) -> DetectionOut:
         score=_score_of(row.result_json),
         emit_matches=_emit_matches_of(row.emit_json),
         flags=_flags_of(row.result_json),
+        physics_agreement=physics_agreement,  # type: ignore[arg-type]
+        noise_floor_kg_h=floor_kg_h,
+        floor_source=floor_source,  # type: ignore[arg-type]
+        below_noise_floor=below,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -477,7 +585,22 @@ def list_detections(
         if source is not None:
             query = query.where(Detection.source == source)
         query = query.order_by(Detection.created_at.desc()).limit(limit).offset(offset)  # type: ignore[attr-defined]
-        return [_detection_out(r) for r in session.exec(query).all()]
+        rows = session.exec(query).all()
+        # One grouped query derives physics agreement for the page's ML rows.
+        agreement = _physics_agreement_for_pairs(
+            session, {(r.site_id, r.scene_id) for r in rows if r.source == "ml"}
+        )
+        # Read-time noise-floor context for every row (physics + ML): one Site lookup.
+        floor = load_floor()
+        names = _site_names(session, {r.site_id for r in rows if r.site_id is not None})
+        return [
+            _detection_out(
+                r,
+                agreement.get((r.site_id, r.scene_id)) if r.source == "ml" else None,
+                resolve_floor(floor, _floor_name(names, r.site_id), r.q_kg_h),
+            )
+            for r in rows
+        ]
 
 
 def _require_detection(session: Session, det_id: str) -> Detection:
@@ -491,8 +614,17 @@ def get_detection_detail(engine: Engine, det_id: str) -> DetectionDetailOut:
     with Session(engine) as session:
         row = _require_detection(session, det_id)
         result = json.loads(row.result_json)
+        agreement = (
+            _physics_agreement_for_pairs(session, {(row.site_id, row.scene_id)}).get(
+                (row.site_id, row.scene_id)
+            )
+            if row.source == "ml"
+            else None
+        )
+        names = _site_names(session, {row.site_id} if row.site_id is not None else set())
+        floor_ctx = resolve_floor(load_floor(), _floor_name(names, row.site_id), row.q_kg_h)
         return DetectionDetailOut(
-            **_detection_out(row).model_dump(),
+            **_detection_out(row, agreement, floor_ctx).model_dump(),
             reference_scene_id=row.ref_scene_id,
             ime_kg=row.ime_kg,
             notes=row.notes,
@@ -610,10 +742,14 @@ def _count_records(data: bytes, fmt: str) -> int:
     return sum(1 for f in features if (f.get("geometry") or {}).get("type") == "Point")
 
 
-def import_events(engine: Engine, data: bytes, source: str, fmt: str) -> ValidationImportOut:
+def import_events(
+    engine: Engine, data: bytes, source: str, fmt: str, unit: str = "auto"
+) -> ValidationImportOut:
     if fmt not in ("csv", "geojson"):
         raise HTTPException(422, "fmt must be 'csv' or 'geojson'.")
-    events = parse_events(data, fmt=fmt, source=source)  # type: ignore[arg-type]
+    if unit not in ("auto", "t_h", "kg_h"):
+        raise HTTPException(422, "unit must be 'auto', 't_h', or 'kg_h'.")
+    events = parse_events(data, fmt=fmt, source=source, unit=unit)  # type: ignore[arg-type]
     total = _count_records(data, fmt)
     now = utcnow_iso()
     with Session(engine) as session:
@@ -631,7 +767,13 @@ def import_events(engine: Engine, data: bytes, source: str, fmt: str) -> Validat
                 )
             )
         session.commit()
-    return ValidationImportOut(imported=len(events), skipped=max(0, total - len(events)))
+    # A rate was present in the source but not stored (ambiguous unit or guard).
+    rates_dropped = sum(1 for e in events if "rate_dropped" in e.raw)
+    return ValidationImportOut(
+        imported=len(events),
+        skipped=max(0, total - len(events)),
+        rates_dropped=rates_dropped,
+    )
 
 
 def list_events(engine: Engine) -> list[ReferenceEventOut]:

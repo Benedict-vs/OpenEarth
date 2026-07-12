@@ -1,0 +1,203 @@
+[
+  {
+    "id": "hassi-messaoud-2020-01-19",
+    "noise_target": "20200109T101401_20200109T101402_T31SGR",
+    "noise_reference": "20200114T101259_20200114T101254_T32SKA",
+    "flags": [
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 4.003216429017649,
+    "sigma_t_h": 2.297395664287943,
+    "n_pixels": 14,
+    "u10_ms": 1.2942678092970517
+  },
+  {
+    "id": "algeria-ghardaia-2020-08-27",
+    "noise_target": "20200822T103031_20200822T103915_T31SES",
+    "noise_reference": "20200812T103031_20200812T103752_T31SES",
+    "flags": [
+      "clipped_inversion",
+      "no_plume"
+    ],
+    "no_plume": true,
+    "q_noise_t_h": null,
+    "sigma_t_h": null,
+    "n_pixels": 0,
+    "u10_ms": 4.595267775753738
+  },
+  {
+    "id": "neuquen-2022-06-11",
+    "noise_target": "20220601T141739_20220601T142651_T19HFV",
+    "noise_reference": "20220517T141741_20220517T142746_T19HFV",
+    "flags": [
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 5.190681598258657,
+    "sigma_t_h": 1.958219473680038,
+    "n_pixels": 12,
+    "u10_ms": 3.1621337755206222
+  },
+  {
+    "id": "libya-sirte-2020-01-21",
+    "noise_target": "20200131T091231_20200131T091321_T34RET",
+    "noise_reference": "20200121T091301_20200121T091306_T34RDS",
+    "flags": [
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 22.270120622932733,
+    "sigma_t_h": 9.453214800303629,
+    "n_pixels": 87,
+    "u10_ms": 2.3498264927013635
+  },
+  {
+    "id": "campeche-2024-09-13",
+    "noise_target": null,
+    "skipped": "not mbmp / no pinned reference"
+  },
+  {
+    "id": "ahvaz-2023-12-08",
+    "noise_target": null,
+    "skipped": "not mbmp / no pinned reference"
+  },
+  {
+    "id": "gulf-of-thailand-2023-10-05",
+    "noise_target": "20231104T032919_20231104T034047_T48NTP",
+    "noise_reference": "20231010T032641_20231010T034420_T48NTP",
+    "flags": [
+      "wind_fallback_used",
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 34.17238569757894,
+    "sigma_t_h": 15.66064003613712,
+    "n_pixels": 48,
+    "u10_ms": 3.7589983273413905
+  },
+  {
+    "id": "turkmenistan-caspian-2017-11-26",
+    "noise_target": "20171116T071301_20171116T071407_T39SYD",
+    "noise_reference": "20171126T071221_20171126T071720_T40SBJ",
+    "flags": [
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 3.7213835341328805,
+    "sigma_t_h": 2.0971483518373133,
+    "n_pixels": 12,
+    "u10_ms": 0.7334391936240158
+  },
+  {
+    "id": "permian-2023-09-27",
+    "noise_target": "20231007T173119_20231007T174227_T14SKB",
+    "noise_reference": "20230927T173009_20230927T173854_T14SKA",
+    "flags": [
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 54.82612666298027,
+    "sigma_t_h": 19.368103611980523,
+    "n_pixels": 761,
+    "u10_ms": 3.3931109957596046
+  },
+  {
+    "id": "maturin-2024-02-20",
+    "noise_target": null,
+    "skipped": "not mbmp / no pinned reference"
+  },
+  {
+    "id": "marib-2024-11-02",
+    "noise_target": "20241107T072009_20241107T073402_T38PNC",
+    "noise_reference": "20241028T071919_20241028T073232_T38PNC",
+    "flags": [
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 7.388140528112519,
+    "sigma_t_h": 6.412477458106189,
+    "n_pixels": 28,
+    "u10_ms": 1.8548722842052707
+  },
+  {
+    "id": "gulf-of-suez-2023-09-20",
+    "noise_target": "20230930T082741_20230930T083258_T36RVT",
+    "noise_reference": "20230925T082659_20230925T083047_T36RVT",
+    "flags": [
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 10.131073355004395,
+    "sigma_t_h": 3.525816218315809,
+    "n_pixels": 32,
+    "u10_ms": 3.671447809968751
+  },
+  {
+    "id": "rub-al-khali-2023-12-09",
+    "noise_target": "20231219T065301_20231219T065304_T40QCL",
+    "noise_reference": "20231214T065259_20231214T070123_T40QCL",
+    "flags": [
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 4.115603624851556,
+    "sigma_t_h": 2.2044359847112114,
+    "n_pixels": 62,
+    "u10_ms": 2.62079160683527
+  },
+  {
+    "id": "kazakhstan-almaty-2019-09-18",
+    "noise_target": "20190913T054641_20190913T054900_T43TEJ",
+    "noise_reference": "20190829T054639_20190829T054724_T43TEJ",
+    "flags": [
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 28.972292402801575,
+    "sigma_t_h": 11.090180050971208,
+    "n_pixels": 95,
+    "u10_ms": 2.880123994844315
+  },
+  {
+    "id": "amudarya-2024-05-29",
+    "noise_target": "20240524T063621_20240524T064405_T41SMC",
+    "noise_reference": "20240519T063629_20240519T064104_T41SMC",
+    "flags": [
+      "clipped_inversion",
+      "no_plume"
+    ],
+    "no_plume": true,
+    "q_noise_t_h": null,
+    "sigma_t_h": null,
+    "n_pixels": 0,
+    "u10_ms": 6.453878073691353
+  },
+  {
+    "id": "turkmenistan-south-2018-10-02",
+    "noise_target": "20180927T070639_20180927T071837_T39SYB",
+    "noise_reference": "20181007T070749_20181007T070927_T39SYB",
+    "flags": [
+      "clipped_inversion"
+    ],
+    "no_plume": false,
+    "q_noise_t_h": 19.68457071750206,
+    "sigma_t_h": 6.902106922058203,
+    "n_pixels": 9,
+    "u10_ms": 3.5803560606325857
+  },
+  {
+    "id": "korpezhe-2018-06-19",
+    "noise_target": "20180624T070621_20180624T071359_T39SYC",
+    "noise_reference": "20180629T070619_20180629T071300_T40SBH",
+    "flags": [
+      "clipped_inversion",
+      "no_plume"
+    ],
+    "no_plume": true,
+    "q_noise_t_h": null,
+    "sigma_t_h": null,
+    "n_pixels": 0,
+    "u10_ms": 4.218981202076743
+  }
+]

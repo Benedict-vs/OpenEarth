@@ -78,29 +78,27 @@ def test_u_eff() -> None:
 
 
 def test_quantify_deterministic_matches_closed_form(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Force every noise term to zero for an exact closed-form comparison:
-    #  - model error σ = 0,
-    #  - σ_u10 = 0 (no wind jitter),
-    #  - single threshold k = k_sigma (no mask jitter),
-    #  - a finite plume block on a NaN background so there is NO off-plume
-    #    population — the retrieval-noise bootstrap is skipped entirely.
+    # With every noise term off (model σ = 0, σ_u10 = 0, single k) the MC median Q must
+    # equal the closed-form Q over the display mask. Median-centring (fix 4a) means a
+    # uniform block is the plume only against a zero-*median* background, so we use a tiny
+    # ±b checkerboard background (median 0, σ > 0) whose off-plume bootstrap contribution
+    # is ~b·√n_px — utterly negligible next to the unit-valued plume.
     monkeypatch.setattr(ime_mod, "IME_MODEL_SIGMA_FRAC", 0.0)
     shape = (60, 60)
     grid = _grid(shape)
-    field = np.full(shape, np.nan)
-    # A ~uniform block well above threshold, with a tiny ripple so σ > 0 but every
-    # finite pixel still clears k·σ (⇒ the whole block is the plume, no off-plume).
-    block = 1.0 + 0.01 * _gauss_field((20, 20), amp=1.0, sigma=5.0)
-    field[20:40, 20:40] = block
+    b = 1e-9
+    rows, cols = np.indices(shape)
+    field = np.where((rows + cols) % 2 == 0, b, -b).astype(float)  # median 0, σ = 1.4826·b
+    field[20:40, 20:40] = 1.0  # a solid 400-px plume, no internal spread
     wind = _wind(4.0)
 
     est, mask = quantify(
         field, grid, wind, sigma_u10=0.0, k_sigma=2.0, mc=McParams(n=1, k_grid=(2.0,))
     )
     pm = detect_plume(field, grid, k_sigma=2.0)
-    assert pm.n_pixels == 400  # the whole finite block, no off-plume pixels
+    assert pm.n_pixels == 400  # the whole solid block clears median + k·σ
     q0 = u_eff_ms(4.0) / plume_length_m(pm.mask, grid) * ime_kg(field, pm.mask, grid) * 3600.0
-    assert est.q_kg_h == pytest.approx(q0, rel=1e-9)
+    assert est.q_kg_h == pytest.approx(q0, rel=1e-6)
     assert mask.n_pixels == pm.n_pixels
 
 

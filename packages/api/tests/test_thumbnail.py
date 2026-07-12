@@ -24,6 +24,12 @@ def seams(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     calls: dict[str, Any] = {"fetches": 0, "expires": []}
 
     monkeypatch.setattr(tiles_service, "build_mean_composite", lambda *a, **kw: "fake-image")
+    # needs_ref (compare) and methane-anomaly builder paths — seamed so the
+    # reference-window cache-key tests below don't touch EE.
+    monkeypatch.setattr(tiles_service, "get_compare_image", lambda *a, **kw: "fake-compare")
+    monkeypatch.setattr(
+        tiles_service, "build_methane_anomaly_composite", lambda *a, **kw: "fake-anomaly"
+    )
     monkeypatch.setattr(thumb_service, "thumb_url", lambda *a, **kw: "https://ee.example/thumb.png")
 
     def fake_fetch(url: str) -> bytes:
@@ -79,3 +85,57 @@ def test_open_ended_range_gets_short_ttl(client: TestClient, seams: dict[str, An
     tomorrow = (datetime.now(tz=UTC) + timedelta(days=1)).date().isoformat()
     client.post("/api/thumbnail", json=_payload({"start": "2024-06-01", "end": tomorrow}))
     assert seams["expires"] == [OPEN_ENDED_TTL_SECONDS]
+
+
+def test_different_ref_window_misses_cache(client: TestClient, seams: dict[str, Any]) -> None:
+    """Two compare thumbnails differing only in the reference window must not
+    collide (fix 12 — the Tier 3 P4 wrong-image bug)."""
+    base = {
+        "dataset": "s2",
+        "product": "DNBR",
+        "roi": HEIDELBERG,
+        "dates": {"start": "2024-07-01", "end": "2024-08-01"},
+    }
+    client.post(
+        "/api/thumbnail", json={**base, "ref": {"start": "2024-05-01", "end": "2024-06-01"}}
+    )
+    client.post(
+        "/api/thumbnail", json={**base, "ref": {"start": "2024-04-01", "end": "2024-05-01"}}
+    )
+    assert seams["fetches"] == 2
+
+
+def test_different_methane_ref_misses_cache(client: TestClient, seams: dict[str, Any]) -> None:
+    """CH4_ANOMALY quicklooks differing only in ``methane_ref`` must not collide."""
+    base = {
+        "dataset": "s2",
+        "product": "CH4_ANOMALY",
+        "roi": HEIDELBERG,
+        "composite": "date_window",
+        "target_date": "2024-06-15",
+    }
+    client.post(
+        "/api/thumbnail", json={**base, "methane_ref": {"start": "2024-05-01", "end": "2024-06-01"}}
+    )
+    client.post(
+        "/api/thumbnail", json={**base, "methane_ref": {"start": "2024-04-01", "end": "2024-05-01"}}
+    )
+    assert seams["fetches"] == 2
+
+
+def test_thumbnail_key_covers_all_fields() -> None:
+    """Every ThumbnailRequest field is classified keyed-or-irrelevant (fix 12).
+
+    Fails when a new request field is added until it is placed in exactly one of
+    the two sets — so a render-affecting field can never again be silently
+    omitted from the cache key.
+    """
+    from openearth_api.schemas import ThumbnailRequest
+    from openearth_api.services.thumbnails import _DECLARED_IRRELEVANT, _KEYED_FIELDS
+
+    all_fields = set(ThumbnailRequest.model_fields)
+    classified = _KEYED_FIELDS | _DECLARED_IRRELEVANT
+    assert all_fields == classified, (
+        f"unclassified fields: {all_fields - classified}; stale entries: {classified - all_fields}"
+    )
+    assert not (_KEYED_FIELDS & _DECLARED_IRRELEVANT), "a field is both keyed and irrelevant"

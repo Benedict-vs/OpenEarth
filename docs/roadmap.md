@@ -130,6 +130,29 @@ burn scar), `URBAN_HEAT` (NDBI−NDVI), `FLOOD_VV_CHANGE` (Emilia-Romagna 2023 i
 `compose.yaml` (uv multi-stage api + nginx web, SSE-safe proxy) + `docs/deploy.md`. Methods
 §10; branch v2/phase6-emit-embeddings.*
 
+## Phase 7 — Science-honesty pass (M) ✅
+
+A three-tier internal review (physics / calibration / ML protocol) turned into a fix round: make
+every headline number defensible or honestly qualified. No new user features — the deliverable is
+trustworthiness.
+*Exit: the asserted detection floor is replaced by a measured one; the ML evaluation is
+protocol-valid; every claim in the methods doc is checkable from the repo alone.* ✅
+*As-built: (0) three-tier findings recorded under `docs/reviews/` (license-safe aggregates only).
+(1) thumbnail cache-key fix, unit-safe validation importer (explicit `rate_unit`, no guessing),
+read-derived `physics_agreement` tri-state + ML-Q point-estimate marking. (2) LUT v5 (ΔΩ grid
+−0.5→6.0 so MBSP blowups invert to finite columns; shared subgrid bit-identical to v4),
+median-centered plume masks, clip/stability/cross-tile/contamination diagnostics, `ALGO_VERSION` 6;
+frozen `calibration_baseline_v5.json` (13 quantified, slope 1.11, median ratio 1.00, Spearman ρ 0.09
+— per-event ranking unsupported; korpezhe un-clamps 5.7→11.0 t/h onto its 11.2 Varon anchor).
+(3) empirical per-site noise floor from identical `analyze` on plume-free pairs (`noise_floor_v1.json`:
+pooled 24.6 t/h, best arid 6.6 t/h, 27/35 pairs quantify something), surfaced as feed/detail context.
+(4) ML v2: site-cluster GroupKFold (23→11 clusters + cross-fold overlap guard), inner-val early-stop
++ threshold selection, net-negative-ΔΩ label gate (69/395), reflect-pad train/serve, serve reference
+pool ±150 d — `ml_eval_v2.json` model scene-F1 0.571 ≥ baseline 0.416 (v1's protocol-invalid 0.597
+retired; 91 % of labels sit below the noise floor). (5) methods honesty rewrite (§1/§7/§8.2/§9).
+License wall intact — no CH4Net derivative (chips/masks/weights/onnx/manifest) committed. Methods
+§1/§7/§8.2/§9; branch v2/phase7-science-fixes.*
+
 ## Backlog (deliberately out of scope until their phase)
 
 - Multi-*source* fusion products (S1+S2): deforestation change, flood mask (VV + MNDWI change),

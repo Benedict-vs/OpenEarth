@@ -84,9 +84,12 @@ def _install_fakes(
     *,
     target_delta: np.ndarray,
     ref_delta: np.ndarray | None = None,
+    target: S2Scene | None = None,
+    reference: S2Scene | None = None,
 ) -> dict[str, int]:
     counts = {"fetch_chip": 0}
-    target, reference = _target_scene(), _reference_scene()
+    target = target or _target_scene()
+    reference = reference or _reference_scene()
 
     def fake_list_scenes(*_a: object, **_k: object) -> list[S2Scene]:
         return [target, reference]
@@ -198,6 +201,82 @@ def test_two_sigmas_are_distinct(monkeypatch: pytest.MonkeyPatch) -> None:
     assert np.isfinite(result.plume.sigma)  # ΔR-space mask σ
     assert np.isfinite(result.emission.sigma_noise_delta_omega)  # ΔΩ-space noise σ
     assert result.plume.sigma != result.emission.sigma_noise_delta_omega
+
+
+# ── Stage 2 diagnostics (fixes 2, 3, 4) ──
+
+
+def test_clip_fractions_present_and_clipped_inversion_gone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The information-free clipped_inversion flag is replaced by per-pass in-mask
+    edge fractions (fix 3)."""
+    _install_fakes(monkeypatch, target_delta=_truth_delta_omega(), ref_delta=np.zeros(_SHAPE))
+    result = analyze(_BBOX, "20180619T074619_x", method="mbmp", mc=McParams(n=60, seed=1))
+    assert "clipped_inversion" not in result.flags  # dead flag
+    assert set(result.clip_fractions) == {"target_lo", "target_hi", "ref_lo", "ref_hi"}
+    assert all(0.0 <= v <= 1.0 for v in result.clip_fractions.values())
+
+
+def test_mask_stability_diagnostic_populated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The MC k-sweep pixel counts are surfaced for the mask-stability flag (fix 4c)."""
+    _install_fakes(monkeypatch, target_delta=_truth_delta_omega())
+    result = analyze(_BBOX, "20180619T074619_x", method="mbmp", mc=McParams(n=60, seed=1))
+    by_k = result.emission.mask_npx_by_k
+    assert by_k
+    assert len(by_k) == len(McParams().k_grid)
+    assert all(isinstance(v, int) for v in by_k.values())
+
+
+def test_reference_contamination_flagged_only_when_reference_has_plume(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reference scene that itself shows an enhancement near the source is flagged
+    (fix 2-flag); a clean reference is not."""
+    blob = _truth_delta_omega()  # same Gaussian centred at (30, 30)
+    _install_fakes(monkeypatch, target_delta=_truth_delta_omega(), ref_delta=blob)
+    contaminated = analyze(_BBOX, "20180619T074619_x", method="mbmp", mc=McParams(n=50, seed=1))
+    assert "possible_reference_contamination" in contaminated.flags
+
+    _install_fakes(monkeypatch, target_delta=_truth_delta_omega(), ref_delta=np.zeros(_SHAPE))
+    clean = analyze(_BBOX, "20180619T074619_x", method="mbmp", mc=McParams(n=50, seed=1))
+    assert "possible_reference_contamination" not in clean.flags
+
+
+def test_mgrs_tile_parse() -> None:
+    assert detect_mod._mgrs_tile("20180619T074619_20180619T075534_T39RUN") == "39RUN"
+    assert detect_mod._mgrs_tile("20180619T074619_x") is None
+
+
+def test_cross_tile_reference_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A reference from a different UTM tile is flagged (fix 4b / Tier 1 F5)."""
+    target = S2Scene(
+        "20180619T074619_20180619T075534_T39RUN",
+        datetime(2018, 6, 19, 7, 46, tzinfo=UTC),
+        5.0,
+        50,
+        "Sentinel-2A",
+        40.0,
+        5.0,
+    )
+    reference = S2Scene(
+        "20180609T074619_20180609T075534_T40RUN",  # different MGRS tile
+        datetime(2018, 6, 9, 7, 46, tzinfo=UTC),
+        5.0,
+        50,
+        "Sentinel-2A",
+        40.0,
+        5.0,
+    )
+    _install_fakes(
+        monkeypatch,
+        target_delta=_truth_delta_omega(),
+        ref_delta=np.zeros(_SHAPE),
+        target=target,
+        reference=reference,
+    )
+    result = analyze(_BBOX, target.scene_id, method="mbmp", mc=McParams(n=50, seed=1))
+    assert "cross_tile_reference" in result.flags
 
 
 def test_mbsp_skips_reference_fetch(monkeypatch: pytest.MonkeyPatch) -> None:

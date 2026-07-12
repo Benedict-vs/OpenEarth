@@ -554,6 +554,23 @@ export interface paths {
     patch: operations["patch_site_api_methane_sites__site_id__patch"];
     trace?: never;
   };
+  "/api/methane/sites/{site_id}/noise-floor": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Site Noise Floor */
+    get: operations["get_site_noise_floor_api_methane_sites__site_id__noise_floor_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/methane/sites/{site_id}/scenes": {
     parameters: {
       query?: never;
@@ -961,6 +978,12 @@ export interface components {
       fmt: "csv" | "geojson";
       /** Source */
       source: string;
+      /**
+       * Unit
+       * @default auto
+       * @enum {string}
+       */
+      unit: "auto" | "t_h" | "kg_h";
     };
     /** CacheStatsOut */
     CacheStatsOut: {
@@ -1025,6 +1048,11 @@ export interface components {
      * @description Full detail: numbers, params, mask + overlay geometry, validation, EMIT.
      */
     DetectionDetailOut: {
+      /**
+       * Below Noise Floor
+       * @default false
+       */
+      below_noise_floor: boolean;
       /** Created At */
       created_at: string;
       emit_json?: components["schemas"]["EmitMatchResult"] | null;
@@ -1032,6 +1060,8 @@ export interface components {
       emit_matches?: number | null;
       /** Flags */
       flags: string[];
+      /** Floor Source */
+      floor_source?: ("site" | "global") | null;
       /** Id */
       id: string;
       /** Ime Kg */
@@ -1042,6 +1072,8 @@ export interface components {
       } | null;
       /** Method */
       method: string;
+      /** Noise Floor Kg H */
+      noise_floor_kg_h?: number | null;
       /** Notes */
       notes: string | null;
       /** Overlay Bounds */
@@ -1050,6 +1082,8 @@ export interface components {
       params: {
         [key: string]: unknown;
       };
+      /** Physics Agreement */
+      physics_agreement?: ("agree" | "physics_no_plume" | "physics_not_run") | null;
       /** Q Kg H */
       q_kg_h: number | null;
       /** Q Sigma Kg H */
@@ -1093,16 +1127,27 @@ export interface components {
      * @description Summary row for the detection feed (headline numbers only).
      */
     DetectionOut: {
+      /**
+       * Below Noise Floor
+       * @default false
+       */
+      below_noise_floor: boolean;
       /** Created At */
       created_at: string;
       /** Emit Matches */
       emit_matches?: number | null;
       /** Flags */
       flags: string[];
+      /** Floor Source */
+      floor_source?: ("site" | "global") | null;
       /** Id */
       id: string;
       /** Method */
       method: string;
+      /** Noise Floor Kg H */
+      noise_floor_kg_h?: number | null;
+      /** Physics Agreement */
+      physics_agreement?: ("agree" | "physics_no_plume" | "physics_not_run") | null;
       /** Q Kg H */
       q_kg_h: number | null;
       /** Q Sigma Kg H */
@@ -1444,6 +1489,20 @@ export interface components {
       model_loaded: boolean;
       /** Model Version */
       model_version?: string | null;
+    };
+    /**
+     * NoiseFloorOut
+     * @description Per-site noise-floor context for the Lab panel (static, before a run).
+     */
+    NoiseFloorOut: {
+      /** Detect Rate */
+      detect_rate: number | null;
+      /** Floor Kg H */
+      floor_kg_h: number | null;
+      /** Floor Source */
+      floor_source: ("site" | "global") | null;
+      /** N Pairs */
+      n_pairs: number | null;
     };
     /** PolygonIn */
     PolygonIn: {
@@ -1946,6 +2005,11 @@ export interface components {
     ValidationImportOut: {
       /** Imported */
       imported: number;
+      /**
+       * Rates Dropped
+       * @default 0
+       */
+      rates_dropped: number;
       /** Skipped */
       skipped: number;
     };
@@ -3241,6 +3305,37 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SiteOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_site_noise_floor_api_methane_sites__site_id__noise_floor_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        site_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NoiseFloorOut"];
         };
       };
       /** @description Validation Error */
