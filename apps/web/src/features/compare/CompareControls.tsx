@@ -1,6 +1,33 @@
 import { useCatalog } from "../../api/queries";
 import type { Dataset } from "../../api/types";
+import type { TimeWindow } from "../../lib/timeWindow";
 import { useCompareStore, type SideConfig } from "../../stores/compareStore";
+import { TimeWindowPicker } from "../explore/TimeWindowPicker";
+
+/** Bridge a side's {date=center, halfDays} to a TimeWindowPicker window + patch. */
+function SideWindow({
+  config,
+  side,
+  onChange,
+}: {
+  config: SideConfig;
+  side: "left" | "right";
+  onChange: (side: "left" | "right", patch: Partial<SideConfig>) => void;
+}) {
+  const window: TimeWindow = { center: config.date, halfDays: config.halfDays };
+  return (
+    <TimeWindowPicker
+      compact
+      window={window}
+      onChange={(patch) => {
+        const next: Partial<SideConfig> = {};
+        if (patch.center !== undefined) next.date = patch.center;
+        if (patch.halfDays !== undefined) next.halfDays = patch.halfDays;
+        onChange(side, next);
+      }}
+    />
+  );
+}
 
 /** Floating control panel for the Compare view: mode, orientation, per-side. */
 export function CompareControls() {
@@ -45,23 +72,15 @@ export function CompareControls() {
             product={left.product}
             onChange={(dataset, product) => setShared({ dataset, product })}
           />
-          <div className="compare-dates">
-            <label>
-              Left date
-              <input
-                type="date"
-                value={left.date}
-                onChange={(e) => setSide("left", { date: e.target.value })}
-              />
-            </label>
-            <label>
-              Right date
-              <input
-                type="date"
-                value={right.date}
-                onChange={(e) => setSide("right", { date: e.target.value })}
-              />
-            </label>
+          <div className="compare-side-windows">
+            <div className="compare-side-window">
+              <span className="compare-side-label">Left (A)</span>
+              <SideWindow config={left} side="left" onChange={setSide} />
+            </div>
+            <div className="compare-side-window">
+              <span className="compare-side-label">Right (B)</span>
+              <SideWindow config={right} side="right" onChange={setSide} />
+            </div>
           </div>
         </div>
       ) : (
@@ -94,14 +113,7 @@ function SidePanel({
         product={config.product}
         onChange={(dataset, product) => onChange(side, { dataset, product })}
       />
-      <label>
-        Date
-        <input
-          type="date"
-          value={config.date}
-          onChange={(e) => onChange(side, { date: e.target.value })}
-        />
-      </label>
+      <SideWindow config={config} side={side} onChange={onChange} />
     </div>
   );
 }

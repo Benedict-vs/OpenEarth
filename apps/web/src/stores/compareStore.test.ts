@@ -5,8 +5,8 @@ function reset() {
   useCompareStore.setState({
     mode: "linked",
     orientation: "vertical",
-    left: { dataset: "s2", product: "NDVI", viz: null, date: "2024-01-01" },
-    right: { dataset: "s2", product: "NDVI", viz: null, date: "2024-06-01" },
+    left: { dataset: "s2", product: "NDVI", viz: null, date: "2024-01-01", halfDays: 3 },
+    right: { dataset: "s2", product: "NDVI", viz: null, date: "2024-06-01", halfDays: 3 },
   });
 }
 
@@ -26,6 +26,22 @@ describe("compareStore", () => {
     useCompareStore.getState().setSide("right", { date: "2024-12-31" });
     expect(useCompareStore.getState().right.date).toBe("2024-12-31");
     expect(useCompareStore.getState().left.date).toBe("2024-01-01");
+  });
+
+  it("per-side halfDays diverge (the smoothing control)", () => {
+    useCompareStore.getState().setSide("left", { halfDays: 15 });
+    expect(useCompareStore.getState().left.halfDays).toBe(15);
+    expect(useCompareStore.getState().right.halfDays).toBe(3); // untouched
+  });
+
+  it("linked setShared keeps each side's window (center + halfDays)", () => {
+    useCompareStore.getState().setSide("left", { halfDays: 45 });
+    useCompareStore.getState().setShared({ product: "NDWI" });
+    const { left, right } = useCompareStore.getState();
+    expect(left.product).toBe("NDWI");
+    expect(right.product).toBe("NDWI");
+    expect(left.halfDays).toBe(45); // window preserved across a shared-layer change
+    expect(right.halfDays).toBe(3);
   });
 
   it("switching mode preserves both side configs", () => {

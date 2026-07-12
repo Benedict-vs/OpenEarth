@@ -2090,10 +2090,16 @@ button.ghost {
   display: flex;
   gap: 6px;
 }
-.compare-dates {
+/* Per-side window controls (linked mode: two windows share a layer). */
+.compare-side-windows {
   display: flex;
-  gap: 10px;
-  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.compare-side-window {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .compare-controls label {
   display: flex;

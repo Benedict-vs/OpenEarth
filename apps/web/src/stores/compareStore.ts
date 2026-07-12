@@ -9,8 +9,10 @@ export interface SideConfig {
   dataset: string;
   product: string;
   viz: VizOverrides | null;
-  /** Target date for the side's date_window composite. */
+  /** Window center for the side's composite. */
   date: string;
+  /** Window half-width in days (the smoothing control; default 3 ≈ "1 week"). */
+  halfDays: number;
 }
 
 /** The shared fields (dataset/product/viz) that linked-mode fans out to both. */
@@ -33,9 +35,10 @@ function initialSides(): { left: SideConfig; right: SideConfig } {
   const { start, end } = defaultDateRange();
   const shared: SharedConfig = { dataset: "s2", product: "NDVI", viz: null };
   // Linked default: same layer, two dates (the classic change comparison).
+  // halfDays 3 keeps the pre-Phase-8 ±3 d behaviour as the migration default.
   return {
-    left: { ...shared, date: start },
-    right: { ...shared, date: end },
+    left: { ...shared, date: start, halfDays: 3 },
+    right: { ...shared, date: end, halfDays: 3 },
   };
 }
 
