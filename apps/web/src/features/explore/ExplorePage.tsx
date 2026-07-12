@@ -10,6 +10,7 @@ import { CatalogBrowser } from "./CatalogBrowser";
 import { ChartPanel } from "./ChartPanel";
 import { LayerEngine } from "./LayerEngine";
 import { LayerPanel } from "./LayerPanel";
+import { PlaybackBar } from "../timelapse/PlaybackBar";
 import { RoiToolbar } from "./RoiToolbar";
 import { TimeWindowPicker } from "./TimeWindowPicker";
 
@@ -109,6 +110,7 @@ export function ExplorePage() {
       <ExploreInner />
       <WindOverlay />
       <WindParticles />
+      <PlaybackBar />
     </MapProvider>
   );
 }

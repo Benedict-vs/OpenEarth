@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { frameUrl, useDeleteRender, useRenameRender, useRenders } from "../../api/timelapseQueries";
 import type { Render } from "../../api/types";
+import { usePlaybackStore } from "../../stores/playbackStore";
+import { useUiStore } from "../../stores/uiStore";
 
 /** Poster = the middle rendered frame (a representative mid-sequence still). */
 function posterUrl(r: Render): string | null {
@@ -18,11 +20,19 @@ export function RenderGallery({
   const { data: renders } = useRenders();
   const del = useDeleteRender();
   const rename = useRenameRender();
+  const setPlaybackRender = usePlaybackStore((s) => s.setRenderId);
+  const navigate = useUiStore((s) => s.navigate);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const promptRename = (r: Render) => {
     const title = window.prompt("Rename render", r.title)?.trim();
     if (title && title !== r.title) rename.mutate({ id: r.id, title });
+  };
+
+  /** Play a finished render on the Explore map (the relocated Playback mode). */
+  const playOnMap = (r: Render) => {
+    setPlaybackRender(r.id);
+    navigate("explore");
   };
 
   if (!renders || renders.length === 0) {
@@ -59,6 +69,18 @@ export function RenderGallery({
               </span>
             </div>
             <div className="render-actions">
+              {r.status === "succeeded" && r.frame_count ? (
+                <button
+                  className="mini"
+                  title="Play this render's frames on the Explore map"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playOnMap(r);
+                  }}
+                >
+                  ▶ Play on map
+                </button>
+              ) : null}
               <button
                 className="mini"
                 title="Rename render"

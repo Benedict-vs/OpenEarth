@@ -7,17 +7,18 @@
  */
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { MutableRefObject } from "react";
 import { mintTiles } from "../api/queries";
 import type { TilesRequest } from "../api/types";
-import { evictableKeys, poolIndices } from "../lib/animation";
+import { evictableKeys, poolIndices, type FrameStatus } from "../lib/animation";
 import { windowMeanDates } from "../lib/timeWindow";
 import type { Layer } from "../stores/layersStore";
 import { useRoiStore } from "../stores/roiStore";
 
 const POOL_RADIUS = 2;
+// EE-budget bound: at most this many mint-ahead requests are ever in flight,
+// even under "Prefetch all" (which widens the pool radius, not this cap).
 const MAX_IN_FLIGHT = 2;
-
-type FrameStatus = "minting" | "ready" | "error";
 
 interface PoolEntry {
   status: FrameStatus;
@@ -29,8 +30,11 @@ function sourceIdForFrame(i: number): string {
 }
 
 export interface BrowseFrames {
-  /** Per-index load status, for the UI dots. */
+  /** Per-index load status, for the UI dots (React state; one render behind). */
   status: Record<number, FrameStatus>;
+  /** The same status, updated *synchronously* with the pool — the play timer
+   *  reads this so it never advances past a frame that is not yet ready. */
+  statusRef: MutableRefObject<Record<number, FrameStatus>>;
 }
 
 export function useBrowseFrames(
@@ -39,23 +43,31 @@ export function useBrowseFrames(
   layer: Layer | null,
   dates: string[],
   index: number,
-  opts: { enabled: boolean; halfDays: number; opacity: number },
+  opts: { enabled: boolean; halfDays: number; opacity: number; poolRadius?: number },
 ): BrowseFrames {
   const roi = useRoiStore((s) => s.roi);
   const pool = useRef<Map<number, PoolEntry>>(new Map());
   const inFlight = useRef(0);
   const [status, setStatus] = useState<Record<number, FrameStatus>>({});
+  const statusRef = useRef<Record<number, FrameStatus>>({});
+  // The *live* index, so a mint's follow-up fill always targets the current
+  // frame — never a stale captured index (competing ensurePool windows evict
+  // each other's edge frames into an infinite re-mint loop when play holds).
+  const indexRef = useRef(index);
 
   const active = opts.enabled && layer !== null && dates.length > 1;
+  const radius = opts.poolRadius ?? POOL_RADIUS;
 
-  // A stable key: any change to layer identity / roi / dates rebuilds the pool.
+  // A stable key: any change to layer identity / roi / dates / window width
+  // rebuilds the pool (each frame is a window, so a width change is new data).
   const poolKey = active
-    ? JSON.stringify([layer.dataset, layer.product, layer.vizOverrides, roi, dates])
+    ? JSON.stringify([layer.dataset, layer.product, layer.vizOverrides, roi, dates, opts.halfDays])
     : "";
 
   const publishStatus = useCallback(() => {
     const next: Record<number, FrameStatus> = {};
     for (const [i, entry] of pool.current) next[i] = entry.status;
+    statusRef.current = next; // synchronous — read by the play timer
     setStatus(next);
   }, []);
 
@@ -91,7 +103,7 @@ export function useBrowseFrames(
   );
 
   const mint = useCallback(
-    async (i: number, currentIndex: number) => {
+    async (i: number) => {
       const frameDate = dates[i];
       if (!map || !layer || frameDate === undefined) return;
       if (pool.current.has(i) || inFlight.current >= MAX_IN_FLIGHT) return;
@@ -137,9 +149,10 @@ export function useBrowseFrames(
       } finally {
         inFlight.current = Math.max(0, inFlight.current - 1);
         publishStatus();
-        swapVisible(currentIndex);
-        // Fill any remaining pool slots freed up by this completion.
-        ensurePoolRef.current(currentIndex);
+        // Follow-up work targets the *live* index, so all in-flight mints agree
+        // on one keep-window (no competing eviction loop).
+        swapVisible(indexRef.current);
+        ensurePoolRef.current(indexRef.current);
       }
     },
     [map, layer, roi, dates, opts.halfDays, opts.opacity, publishStatus, swapVisible],
@@ -149,7 +162,7 @@ export function useBrowseFrames(
   const ensurePool = useCallback(
     (current: number) => {
       if (!map || !active) return;
-      const keep = poolIndices(current, dates.length, POOL_RADIUS);
+      const keep = poolIndices(current, dates.length, radius);
       for (const key of evictableKeys([...pool.current.keys()], keep)) {
         const sid = sourceIdForFrame(key);
         try {
@@ -163,17 +176,18 @@ export function useBrowseFrames(
       // Mint the current frame first, then its neighbours (nearest-out order).
       const ordered = [current, ...keep.filter((k) => k !== current)];
       for (const i of ordered) {
-        if (!pool.current.has(i) && inFlight.current < MAX_IN_FLIGHT) void mint(i, current);
+        if (!pool.current.has(i) && inFlight.current < MAX_IN_FLIGHT) void mint(i);
       }
       publishStatus();
     },
-    [map, active, dates.length, mint, publishStatus],
+    [map, active, dates.length, radius, mint, publishStatus],
   );
   ensurePoolRef.current = ensurePool;
 
   // Rebuild the pool when the animation source parameters change.
   useEffect(() => {
     teardown();
+    statusRef.current = {};
     setStatus({});
     if (!map || !ready || !active) return;
     ensurePoolRef.current(index);
@@ -182,12 +196,14 @@ export function useBrowseFrames(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, ready, active, poolKey, teardown]);
 
-  // On index change: swap the visible frame and top up the pool ahead.
+  // On index change (or when "Prefetch all" widens the radius): swap the
+  // visible frame and top up the pool ahead.
   useEffect(() => {
+    indexRef.current = index;
     if (!map || !ready || !active) return;
     swapVisible(index);
     ensurePoolRef.current(index);
-  }, [map, ready, active, index, swapVisible]);
+  }, [map, ready, active, index, radius, swapVisible]);
 
-  return { status };
+  return { status, statusRef };
 }

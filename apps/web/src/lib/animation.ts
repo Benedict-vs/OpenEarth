@@ -1,6 +1,40 @@
 /** Pure helpers for the Explore animation transport (unit-tested, no map). */
 import type { RoiIn } from "../api/types";
 
+/** Per-frame load status in the browse/preview pool. */
+export type FrameStatus = "minting" | "ready" | "error";
+
+/**
+ * Bounded prefetch cap: "Prefetch all" only appears at or below this many
+ * frames, so the pool never fans out an unbounded number of EE mints.
+ */
+export const PREFETCH_MAX = 24;
+
+/**
+ * Buffer-aware transport step: the next index to display when the play timer
+ * ticks. Advances to the next *ready* frame, but **holds** (returns the current
+ * index) when the next in-order frame is not ready yet — so playback buffers
+ * instead of lying. `error` frames are skipped (they will never load), which is
+ * what keeps an all-error pool from deadlocking: the scan is bounded to `total`
+ * steps and simply holds when nothing is ready. Wrapping to frame 0 only happens
+ * through a ready frame 0.
+ */
+export function advanceFrame(
+  status: Record<number, FrameStatus | undefined>,
+  index: number,
+  total: number,
+): number {
+  if (total <= 1) return index;
+  for (let step = 1; step <= total; step++) {
+    const j = (index + step) % total;
+    const s = status[j];
+    if (s === "ready") return j; // advance to the next ready frame
+    if (s === "error") continue; // permanently failed — skip past it
+    return index; // next in-order frame still loading — hold (buffering)
+  }
+  return index; // nothing ready anywhere (e.g. all error) — hold, never loop
+}
+
 /**
  * MapLibre image-source `coordinates`, in the required corner order:
  * top-left, top-right, bottom-right, bottom-left. The wrong order renders the
