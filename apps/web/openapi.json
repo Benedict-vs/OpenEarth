@@ -3503,42 +3503,103 @@
         "type": "object"
       },
       "WorkspaceDate": {
+        "description": "The Explore view's time state. Phase 8 (``v: 2``) is the window/period\nmodel: a **window** (``center`` \u00b1 ``half_window_days``) and a **period**\n(``period_start``/``period_end``). The v1 fields (``mode``/``start``/``end``/\n``target_date``) are kept optional so old snapshots still validate and the\nclient migrates them on load. The server validates shape, never semantics.",
         "properties": {
+          "center": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Center"
+          },
           "end": {
-            "format": "date",
-            "title": "End",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
           },
           "half_window_days": {
-            "maximum": 30.0,
+            "maximum": 183.0,
             "minimum": 0.0,
             "title": "Half Window Days",
             "type": "integer"
           },
           "mode": {
-            "enum": [
-              "range",
-              "single"
+            "anyOf": [
+              {
+                "enum": [
+                  "range",
+                  "single"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Mode",
-            "type": "string"
+            "title": "Mode"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
           },
           "start": {
-            "format": "date",
-            "title": "Start",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
           },
           "target_date": {
-            "format": "date",
-            "title": "Target Date",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
           }
         },
         "required": [
-          "mode",
-          "start",
-          "end",
-          "target_date",
           "half_window_days"
         ],
         "title": "WorkspaceDate",
@@ -3640,7 +3701,7 @@
         "type": "object"
       },
       "WorkspaceState": {
-        "description": "A restorable snapshot of the Explore view. ``v`` is a schema version so\nPhase 3+ can migrate the shape explicitly instead of guessing at load time;\nan unknown version fails validation rather than being silently misread.",
+        "description": "A restorable snapshot of the Explore view. ``v`` is a schema version so\nthe shape can migrate explicitly instead of being guessed at load time; an\nunknown version fails validation rather than being silently misread. v1\nsnapshots still load (the client migrates them to the window/period model).",
         "properties": {
           "date": {
             "$ref": "#/components/schemas/WorkspaceDate"
@@ -3678,7 +3739,10 @@
             "title": "Roi"
           },
           "v": {
-            "const": 1,
+            "enum": [
+              1,
+              2
+            ],
             "title": "V",
             "type": "integer"
           },

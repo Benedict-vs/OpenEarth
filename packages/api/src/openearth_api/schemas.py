@@ -327,19 +327,33 @@ class WorkspaceLayer(BaseModel):
 
 
 class WorkspaceDate(BaseModel):
-    mode: Literal["range", "single"]
-    start: date
-    end: date
-    target_date: date
-    half_window_days: int = Field(ge=0, le=30)
+    """The Explore view's time state. Phase 8 (``v: 2``) is the window/period
+    model: a **window** (``center`` ± ``half_window_days``) and a **period**
+    (``period_start``/``period_end``). The v1 fields (``mode``/``start``/``end``/
+    ``target_date``) are kept optional so old snapshots still validate and the
+    client migrates them on load. The server validates shape, never semantics."""
+
+    # v2 — window + period
+    center: date | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    # ``half_window_days`` spans both versions (v1 date-window half-width, v2
+    # window half-width). Widened to the window custom bound (0–183 d).
+    half_window_days: int = Field(ge=0, le=183)
+    # v1 — kept optional for migration
+    mode: Literal["range", "single"] | None = None
+    start: date | None = None
+    end: date | None = None
+    target_date: date | None = None
 
 
 class WorkspaceState(BaseModel):
     """A restorable snapshot of the Explore view. ``v`` is a schema version so
-    Phase 3+ can migrate the shape explicitly instead of guessing at load time;
-    an unknown version fails validation rather than being silently misread."""
+    the shape can migrate explicitly instead of being guessed at load time; an
+    unknown version fails validation rather than being silently misread. v1
+    snapshots still load (the client migrates them to the window/period model)."""
 
-    v: Literal[1]
+    v: Literal[1, 2]
     layers: list[WorkspaceLayer]
     roi: RoiIn | None = None
     date: WorkspaceDate

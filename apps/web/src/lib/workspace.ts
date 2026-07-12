@@ -6,8 +6,19 @@
  * mutates stores — it never mints tiles or touches the map. Re-adding layers
  * through the store's `addLayer` lets the existing `useMintLayer` reaction do
  * the minting, so there is no second mint path to keep in sync.
+ *
+ * `captureWorkspace` writes v2 only (the window/period model); `applyWorkspace`
+ * accepts both v1 and v2, migrating v1's mode/range/single shape on load.
  */
 import type { WorkspaceState } from "../api/types";
+import {
+  defaultPeriod,
+  defaultWindow,
+  rangeToWindow,
+  windowRange,
+  type Period,
+  type TimeWindow,
+} from "./timeWindow";
 import { useDateStore } from "../stores/dateStore";
 import { useLayersStore } from "../stores/layersStore";
 import { useRoiStore } from "../stores/roiStore";
@@ -18,11 +29,11 @@ import { useWindStore } from "../stores/windStore";
 export function captureWorkspace(): WorkspaceState {
   const { layers } = useLayersStore.getState();
   const roi = useRoiStore.getState().roi;
-  const { mode, start, end, targetDate, halfWindowDays } = useDateStore.getState();
+  const { window, period } = useDateStore.getState();
   const wind = useWindStore.getState().enabled;
 
   return {
-    v: 1,
+    v: 2,
     layers: layers.map((l) => ({
       dataset: l.dataset,
       product: l.product,
@@ -33,14 +44,41 @@ export function captureWorkspace(): WorkspaceState {
     })),
     roi: roi,
     date: {
-      mode,
-      start,
-      end,
-      target_date: targetDate,
-      half_window_days: halfWindowDays,
+      center: window.center,
+      half_window_days: window.halfDays,
+      period_start: period.start,
+      period_end: period.end,
     },
     wind,
   };
+}
+
+/** Resolve a snapshot's date block to the window/period model (v1 → migrated). */
+function migrateDate(state: WorkspaceState): { window: TimeWindow; period: Period } {
+  const d = state.date;
+  // v2: the shape is already window + period.
+  if (state.v === 2 && d.center && d.period_start && d.period_end) {
+    return {
+      window: { center: d.center, halfDays: d.half_window_days },
+      period: { start: d.period_start, end: d.period_end },
+    };
+  }
+  // v1 "single": window = target_date ± half; period = center ± 180 d (end-clamped).
+  if (d.mode === "single" && d.target_date) {
+    return {
+      window: { center: d.target_date, halfDays: d.half_window_days },
+      period: windowRange({ center: d.target_date, halfDays: 180 }),
+    };
+  }
+  // v1 "range": window = midpoint ± ceil(span/2); period = the range itself.
+  if (d.start && d.end) {
+    return {
+      window: rangeToWindow(d.start, d.end),
+      period: { start: d.start, end: d.end },
+    };
+  }
+  // Malformed date block — fall back to session defaults rather than throw.
+  return { window: defaultWindow(), period: defaultPeriod() };
 }
 
 /** Restore a snapshot: clear the layer stack, seed the shared stores, then
@@ -51,13 +89,8 @@ export function applyWorkspace(state: WorkspaceState): void {
   for (const layer of [...layersStore.layers]) layersStore.removeLayer(layer.id);
 
   useRoiStore.getState().setRoi(state.roi ?? null);
-  useDateStore.setState({
-    mode: state.date.mode,
-    start: state.date.start,
-    end: state.date.end,
-    targetDate: state.date.target_date,
-    halfWindowDays: state.date.half_window_days,
-  });
+  const { window, period } = migrateDate(state);
+  useDateStore.setState({ window, period });
   useWindStore.getState().setEnabled(state.wind);
 
   for (const wl of state.layers) {
