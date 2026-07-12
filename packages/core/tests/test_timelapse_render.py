@@ -18,6 +18,7 @@ from openearth.timelapse import (
     FrameWindow,
     _frame_dimensions,
     encode_movie,
+    expand_frames,
     render_frames,
 )
 
@@ -211,16 +212,44 @@ def test_render_all_empty_raises_job_error(
         )
 
 
-def test_render_progress_and_cancel(fake_ee: None, tmp_path: Path) -> None:
-    windows = _windows(4)
+def test_cancel_after_two_frames_salvages_partial(fake_ee: None, tmp_path: Path) -> None:
+    windows = _windows(6)
     seen: list[tuple[int, int]] = []
 
+    manifest = render_frames(
+        "s5p",
+        "NO2",
+        BBOX,
+        windows,
+        out_dir=tmp_path,
+        max_dim=16,
+        even_dims=True,
+        vis_min=0.0,
+        vis_max=0.0003,
+        annotations=AnnotationOptions(),
+        fetch=lambda url: _png_bytes(8, 8, (0, 0, 0)),
+        on_progress=lambda done, total: seen.append((done, total)),
+        should_cancel=lambda: len(seen) >= 2,  # cancel after 2 frames complete
+    )
+    # Partial render: the two completed frames are kept, flagged cancelled.
+    assert manifest.cancelled is True
+    assert manifest.rendered_count == 2
+    assert [p.name for p in manifest.frame_paths] == ["frame_0000.png", "frame_0001.png"]
+    for p in manifest.frame_paths:
+        assert p.exists()
+    assert list(tmp_path.glob(".staging_*")) == []  # stragglers swept
+    # The manifest on disk records the partial state.
+    on_disk = json.loads((tmp_path / "manifest.json").read_text())
+    assert on_disk["cancelled"] is True
+
+
+def test_cancel_before_any_frame_raises(fake_ee: None, tmp_path: Path) -> None:
     with pytest.raises(JobError, match="cancelled"):
         render_frames(
             "s5p",
             "NO2",
             BBOX,
-            windows,
+            _windows(4),
             out_dir=tmp_path,
             max_dim=16,
             even_dims=True,
@@ -228,11 +257,104 @@ def test_render_progress_and_cancel(fake_ee: None, tmp_path: Path) -> None:
             vis_max=0.0003,
             annotations=AnnotationOptions(),
             fetch=lambda url: _png_bytes(8, 8, (0, 0, 0)),
-            on_progress=lambda done, total: seen.append((done, total)),
-            should_cancel=lambda: len(seen) >= 2,  # cancel after 2 frames
+            should_cancel=lambda: True,  # cancelled before the first frame lands
         )
-    assert seen  # progress fired before cancel
-    assert list(tmp_path.glob(".staging_*")) == []  # staging cleaned on cancel
+    assert list(tmp_path.glob("frame_*.png")) == []
+    assert list(tmp_path.glob(".staging_*")) == []
+
+
+def test_one_failing_frame_does_not_kill_render(
+    fake_ee: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-empty mint failure is recorded ``failed``, not raised."""
+    windows = _windows(4)
+    bad_start = windows[2].start.isoformat()
+    real_thumb = tl.thumb_url
+
+    def thumb_or_boom(image: object, spec: object, roi: object, **kw: object) -> str:
+        _, start = image  # type: ignore[misc]
+        if start.isoformat() == bad_start:  # type: ignore[union-attr]
+            raise RuntimeError("EE minting blew up on this window")
+        return real_thumb(image, spec, roi, **kw)
+
+    monkeypatch.setattr(tl, "thumb_url", thumb_or_boom)
+
+    manifest = render_frames(
+        "s5p",
+        "NO2",
+        BBOX,
+        windows,
+        out_dir=tmp_path,
+        max_dim=16,
+        even_dims=True,
+        vis_min=0.0,
+        vis_max=0.0003,
+        annotations=AnnotationOptions(),
+        fetch=lambda url: _png_bytes(8, 8, (0, 0, 0)),
+    )
+    assert manifest.rendered_count == 3
+    assert [r.status for r in manifest.results] == ["rendered", "rendered", "failed", "rendered"]
+
+
+def test_dead_pipeline_breaker_aborts_after_probe(
+    fake_ee: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A consistently failing pipeline aborts at the probe with the breaker
+    message (not the terminal all-empty/failed message), and stops consuming
+    windows there — on_progress fires exactly EARLY_ABORT_PROBE times."""
+
+    def always_boom(image: object, spec: object, roi: object, **kw: object) -> str:
+        raise RuntimeError("EE is down")
+
+    monkeypatch.setattr(tl, "thumb_url", always_boom)
+    progress: list[int] = []
+
+    with pytest.raises(JobError, match="failing consistently"):
+        render_frames(
+            "s5p",
+            "NO2",
+            BBOX,
+            _windows(20),
+            out_dir=tmp_path,
+            max_dim=16,
+            even_dims=True,
+            vis_min=0.0,
+            vis_max=0.0003,
+            annotations=AnnotationOptions(),
+            fetch=lambda url: _png_bytes(8, 8, (0, 0, 0)),
+            on_progress=lambda done, total: progress.append(done),
+        )
+    assert len(progress) == tl.EARLY_ABORT_PROBE  # consumer stopped at the probe
+
+
+def test_all_empty_windows_do_not_trip_the_breaker(
+    fake_ee: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run of empty windows (winter gaps) is legitimate — the breaker only
+    fires on *failures*, so an all-empty render reaches the terminal check."""
+
+    def always_empty(image: object, spec: object, roi: object, **kw: object) -> str:
+        raise EmptyCollectionError("no images")
+
+    monkeypatch.setattr(tl, "thumb_url", always_empty)
+    progress: list[int] = []
+
+    with pytest.raises(JobError, match="no usable frames"):
+        render_frames(
+            "s5p",
+            "NO2",
+            BBOX,
+            _windows(20),
+            out_dir=tmp_path,
+            max_dim=16,
+            even_dims=True,
+            vis_min=0.0,
+            vis_max=0.0003,
+            annotations=AnnotationOptions(),
+            fetch=lambda url: _png_bytes(8, 8, (0, 0, 0)),
+            on_progress=lambda done, total: progress.append(done),
+        )
+    assert len(progress) == 20  # every window consumed — no early abort on empties
 
 
 # ── encode_movie ─────────────────────────────────────────────────
@@ -278,3 +400,45 @@ def test_encode_webm(tmp_path: Path) -> None:
 def test_encode_empty_raises(tmp_path: Path) -> None:
     with pytest.raises(JobError, match="no frames"):
         encode_movie([], tmp_path / "x.mp4", fmt="mp4", fps=6)
+
+
+# ── tween (frame-to-frame smoothing) — plan is pure, tested directly ──
+
+
+def test_expand_frames_no_tween_is_identity() -> None:
+    paths = [Path(f"frame_{i:04d}.png") for i in range(3)]
+    plan = expand_frames(paths, tween=0)
+    assert plan == [(p, p, 0.0) for p in paths]
+
+
+def test_expand_frames_inserts_blends_with_correct_alphas() -> None:
+    p0, p1, p2 = (Path(f"frame_{i:04d}.png") for i in range(3))
+    plan = expand_frames([p0, p1, p2], tween=1)
+    # N + (N-1)*tween = 3 + 2 = 5 output frames; blends at α = 1/2.
+    assert plan == [
+        (p0, p0, 0.0),
+        (p0, p1, 0.5),
+        (p1, p1, 0.0),
+        (p1, p2, 0.5),
+        (p2, p2, 0.0),
+    ]
+
+
+def test_expand_frames_tween_three_alphas() -> None:
+    p0, p1 = Path("a.png"), Path("b.png")
+    plan = expand_frames([p0, p1], tween=3)
+    assert plan == [
+        (p0, p0, 0.0),
+        (p0, p1, 0.25),
+        (p0, p1, 0.5),
+        (p0, p1, 0.75),
+        (p1, p1, 0.0),
+    ]
+
+
+def test_encode_gif_tween_expands_frame_count(tmp_path: Path) -> None:
+    frames = _make_frames(tmp_path, 4)
+    out = tmp_path / "movie.gif"
+    encode_movie(frames, out, fmt="gif", fps=6, tween=1)
+    with Image.open(out) as im:
+        assert im.n_frames == 7  # 4 + (4-1)*1
