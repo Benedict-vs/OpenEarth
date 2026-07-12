@@ -84,8 +84,11 @@ def measure_latency_ms(onnx_path: Path, hw: tuple[int, int], *, runs: int = 30) 
 
 
 def _git_hash() -> str:
+    """Full HEAD hash, ``-dirty`` when the tree has uncommitted changes (fix 10b)."""
     try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        h = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        dirty = subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()
+        return f"{h}-dirty" if dirty else h
     except Exception:
         return "unknown"
 
@@ -99,6 +102,7 @@ def write_manifest(
     latency_ms_p50: float,
     latency_chip_hw: tuple[int, int],
     provenance: dict,
+    threshold: float = THRESHOLD,
 ) -> None:
     """The serving contract next to the ``.onnx`` (lives in data_dir — not committed)."""
     manifest = {
@@ -110,7 +114,7 @@ def write_manifest(
         "opset": OPSET,
         "exporter": exporter,
         "input_layout": "NCHW; channels in `channels` order; normalized by channel_stats",
-        "threshold": THRESHOLD,
+        "threshold": threshold,  # deployed = median of the CV folds' inner-val thresholds
         "min_px": MIN_PX,
         "latency_ms_p50": round(latency_ms_p50, 2),
         "latency_chip_hw": list(latency_chip_hw),
@@ -143,10 +147,14 @@ def build_deployment(
     chip_hw = (128, 96)  # a representative padded serve-time chip
     latency = measure_latency_ms(onnx_path, chip_hw)
 
-    cv_f1 = None
-    eval_json = Path("scripts/data/ml_eval_v1.json")
+    cv_f1, cv_protocol, threshold = None, None, THRESHOLD
+    eval_json = Path("scripts/data/ml_eval_v2.json")
     if eval_json.exists():
-        cv_f1 = json.loads(eval_json.read_text())["aggregate"]["model_scene_f1"]
+        ev = json.loads(eval_json.read_text())
+        cv_f1 = ev["aggregate"]["model_scene_f1"]
+        cv_protocol = ev.get("cv_protocol")
+        # Deployed threshold = median of the folds' inner-val-selected thresholds.
+        threshold = float(ev["aggregate"].get("deployed_threshold", THRESHOLD))
 
     write_manifest(
         out_dir / f"{model_version}.json",
@@ -155,9 +163,12 @@ def build_deployment(
         exporter=exporter,
         latency_ms_p50=latency,
         latency_chip_hw=chip_hw,
+        threshold=threshold,
         provenance={
             "encoder": encoder,
             "cv_scene_f1": cv_f1,
+            # The number carries its protocol qualifier wherever it resurfaces (fix 10b).
+            "cv_protocol": cv_protocol,
             "trained_on": "CH4Net (recovered metadata); weights not committed",
         },
     )
