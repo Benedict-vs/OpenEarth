@@ -205,6 +205,10 @@ export const FLAG_HINTS: Record<string, string> = {
     "reference from a different orbit — larger view-angle/BRDF difference than a same-orbit pair",
   nan_in_mask: "some masked pixels have no retrieval (NaN); they contribute zero to the IME",
   wind_fallback_used: "ERA5-Land had no cell here; global ERA5 10 m wind was used",
+  composite_reference_unavailable:
+    "too few same-orbit scenes for a composite reference — fell back to a single reference",
+  composite_amf_spread:
+    "the composite's members span a wide solar/viewing geometry — the median-AMF ref-pass inversion is a coarse approximation here",
 };
 
 /** Format a 0–1 fraction as a integer percent, or "—". */

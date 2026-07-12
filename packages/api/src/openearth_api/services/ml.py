@@ -215,6 +215,10 @@ def _scan_one_scene(
     engine: Any,
 ) -> str | None:
     """One scene → a detection row if the model proposes ≥1 candidate, else None."""
+    # The ML scan stays on a SINGLE reference deliberately: the model was trained
+    # against single-reference channels (Phase 7 aligned the serve pool to
+    # training), so a composite reference would break channel parity. The
+    # composite mode is a physics-analyze option only — do not thread it here.
     reference = pick_reference(scene, candidates)
     if reference is None:
         return None

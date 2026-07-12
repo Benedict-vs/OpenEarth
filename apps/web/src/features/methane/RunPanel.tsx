@@ -45,6 +45,8 @@ export function RunPanel() {
       roi: analysisAreaToBBox(area),
       target_scene_id: target,
       method: params.method,
+      // Composite reference is an MBMP-only option; MBSP has no reference pass.
+      reference_mode: params.method === "mbmp" ? params.referenceMode : "single",
       k_sigma: params.kSigma,
       min_area_px: params.minAreaPx,
       seed: params.seed,
@@ -94,6 +96,34 @@ export function RunPanel() {
           ))}
         </div>
         <p className="muted method-note">{METHOD_TIPS[params.method]}</p>
+        {params.method === "mbmp" ? (
+          <fieldset className="reference-mode">
+            <legend>Reference</legend>
+            <label>
+              <input
+                type="radio"
+                name="reference-mode"
+                checked={params.referenceMode === "single"}
+                onChange={() => setParams({ referenceMode: "single" })}
+              />
+              Single scene (auto or picked)
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="reference-mode"
+                checked={params.referenceMode === "composite"}
+                onChange={() => setParams({ referenceMode: "composite" })}
+              />
+              Composite — median of up to 5 same-orbit scenes
+            </label>
+            <p className="muted small">
+              {params.referenceMode === "composite"
+                ? "Robust background for recurrent emitters — an intermittent plume must appear in half the scenes to contaminate it."
+                : "The classic MBMP reference: one plume-free pass, auto-selected or the scene you pick."}
+            </p>
+          </fieldset>
+        ) : null}
         {floor.data?.floor_kg_h != null ? (
           <p className="muted floor-context" title={NOISE_FLOOR_TOOLTIP}>
             Site noise floor: {formatFloorTh(floor.data.floor_kg_h)} ({floor.data.floor_source}

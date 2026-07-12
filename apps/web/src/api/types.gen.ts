@@ -898,6 +898,12 @@ export interface components {
        * @default 5
        */
       min_area_px: number;
+      /**
+       * Reference Mode
+       * @default single
+       * @enum {string}
+       */
+      reference_mode: "single" | "composite";
       /** Reference Scene Id */
       reference_scene_id?: string | null;
       roi?: components["schemas"]["BBoxIn"] | null;

@@ -27,6 +27,15 @@
             "title": "Min Area Px",
             "type": "integer"
           },
+          "reference_mode": {
+            "default": "single",
+            "enum": [
+              "single",
+              "composite"
+            ],
+            "title": "Reference Mode",
+            "type": "string"
+          },
           "reference_scene_id": {
             "anyOf": [
               {

@@ -257,6 +257,23 @@ def test_analyze_requires_site_or_roi(client: TestClient, analyze_ready: None) -
     assert resp.status_code == 422  # neither site_id nor roi
 
 
+def test_analyze_composite_with_explicit_reference_is_422(
+    client: TestClient, analyze_ready: None
+) -> None:
+    site_id = client.get("/api/methane/sites").json()[0]["id"]
+    resp = client.post(
+        "/api/methane/analyze",
+        json={
+            "site_id": site_id,
+            "roi": KORPEZHE_SUB,
+            "target_scene_id": "20180619T074619_x",
+            "reference_scene_id": "20180609T074619_x",
+            "reference_mode": "composite",  # contradiction → 422
+        },
+    )
+    assert resp.status_code == 422
+
+
 def test_analyze_rejects_oversized_bbox_at_submit(client: TestClient, analyze_ready: None) -> None:
     # Seeded site ROIs are browse-scale (~100 km); without a chip-sized roi the
     # submit must 422 immediately instead of failing minutes into the job.

@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from openearth.geometry import BBox, PolygonROI
 
@@ -429,11 +429,24 @@ class AnalyzeRequest(BaseModel):
     roi: BBoxIn | None = None
     target_scene_id: str = Field(min_length=1)
     reference_scene_id: str | None = None
+    # Opt-in composite reference (MBMP only): a median over up to 5 same-orbit
+    # scenes, robust against an intermittent plume contaminating the background.
+    reference_mode: Literal["single", "composite"] = "single"
     method: Literal["mbmp", "mbsp"] = "mbmp"
     k_sigma: float = Field(default=2.0, ge=0.5, le=5.0)
     min_area_px: int = Field(default=5, ge=1, le=100000)
     source_lonlat: tuple[float, float] | None = None
     seed: int = 0
+
+    @model_validator(mode="after")
+    def _composite_excludes_explicit_reference(self) -> AnalyzeRequest:
+        # An explicit reference scene IS single mode — the two are contradictory.
+        if self.reference_mode == "composite" and self.reference_scene_id is not None:
+            raise ValueError(
+                "reference_mode='composite' cannot be combined with an explicit "
+                "reference_scene_id (pick one: a chosen scene is single-reference mode)."
+            )
+        return self
 
 
 class DetectionOut(BaseModel):
