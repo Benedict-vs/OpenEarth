@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useDetections } from "../../api/methaneQueries";
 import type { Detection } from "../../api/types";
-import { ML_Q_CAPTION, disagreementBadge, formatEmission } from "../../lib/methane";
+import {
+  ML_Q_CAPTION,
+  NOISE_FLOOR_TOOLTIP,
+  disagreementBadge,
+  formatEmission,
+} from "../../lib/methane";
 import { useMethaneStore } from "../../stores/methaneStore";
 
 type SourceFilter = "all" | "physics" | "ml";
@@ -86,6 +91,11 @@ function DetectionCard({
         {isMl && detection.score != null ? (
           <span className="score-tag" title="Max candidate probability">
             score {detection.score.toFixed(2)}
+          </span>
+        ) : null}
+        {detection.below_noise_floor ? (
+          <span className="floor-chip" title={NOISE_FLOOR_TOOLTIP}>
+            below noise floor
           </span>
         ) : null}
         {detection.emit_matches != null && detection.emit_matches > 0 ? (

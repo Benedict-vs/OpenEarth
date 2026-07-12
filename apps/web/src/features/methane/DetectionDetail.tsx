@@ -9,8 +9,10 @@ import type { DetectionDetail as DetectionDetailT, MethaneHistogram } from "../.
 import {
   FLAG_HINTS,
   ML_Q_CAPTION,
+  NOISE_FLOOR_TOOLTIP,
   detectionNumbers,
   disagreementBadge,
+  formatFloorTh,
   mlDetectionNumbers,
   pctFraction,
   verdictBadge,
@@ -52,6 +54,16 @@ export function DetectionDetail() {
         </div>
         <span className={`status-chip ${detail.status}`}>{detail.status}</span>
       </div>
+
+      {detail.noise_floor_kg_h != null ? (
+        <p
+          className={`floor-note${detail.below_noise_floor ? " below" : ""}`}
+          title={NOISE_FLOOR_TOOLTIP}
+        >
+          Noise floor ({detail.floor_source}): {formatFloorTh(detail.noise_floor_kg_h)} —{" "}
+          {detail.below_noise_floor ? "Q is at or below it" : "Q is above it"}
+        </p>
+      ) : null}
 
       {isMl ? (
         <MlCandidatePanel detail={detail} />

@@ -1321,6 +1321,29 @@ button.ghost {
   color: var(--muted);
 }
 
+/* Noise-floor context (fix 1 + fix 9b) */
+.floor-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #3a2a12;
+  color: #f0a336;
+  cursor: help;
+}
+.floor-note {
+  font-size: 12px;
+  margin: 6px 0;
+  cursor: help;
+}
+.floor-note.below {
+  color: #f0a336;
+}
+.floor-context {
+  font-size: 11px;
+  margin-top: 4px;
+  cursor: help;
+}
+
 /* Validation panel */
 .validation-panel summary {
   cursor: pointer;

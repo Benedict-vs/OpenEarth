@@ -11,6 +11,7 @@ import type {
   JobCreated,
   MlScanRequest,
   MlStatus,
+  NoiseFloor,
   ReferenceEvent,
   SceneInfo,
   ScreeningRequest,
@@ -105,6 +106,16 @@ export function useMlStatus() {
     queryKey: ["methane", "ml", "status"],
     queryFn: () => apiGet<MlStatus>("/api/methane/ml/status"),
     staleTime: 60_000,
+  });
+}
+
+/** The site's empirical noise floor — static Lab context before a run (fix 1). */
+export function useSiteNoiseFloor(siteId: number | null) {
+  return useQuery({
+    queryKey: ["methane", "noise-floor", siteId],
+    enabled: siteId != null,
+    staleTime: 5 * 60_000,
+    queryFn: () => apiGet<NoiseFloor>(`/api/methane/sites/${siteId}/noise-floor`),
   });
 }
 

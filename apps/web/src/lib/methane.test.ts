@@ -9,6 +9,7 @@ import {
   detectionNumbers,
   disagreementBadge,
   formatEmission,
+  formatFloorTh,
   histogramOption,
   kghToTh,
   mlDetectionNumbers,
@@ -158,6 +159,14 @@ describe("formatEmission approx", () => {
     expect(formatEmission(4800, null)).toBe("4.8 t/h");
     expect(formatEmission(8000, 2000)).toBe("8.0 ± 2.0 t/h");
     expect(formatEmission(null, null, { approx: true })).toBe("—");
+  });
+});
+
+describe("formatFloorTh", () => {
+  it("formats a kg/h floor as t/h, else —", () => {
+    expect(formatFloorTh(6300)).toBe("6.3 t/h");
+    expect(formatFloorTh(null)).toBe("—");
+    expect(formatFloorTh(undefined)).toBe("—");
   });
 });
 

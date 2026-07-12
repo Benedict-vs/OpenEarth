@@ -181,6 +181,16 @@ export function mlDetectionNumbers(detail: DetectionDetail): NumberRow[] {
   ];
 }
 
+/** Tooltip for the empirical-noise-floor context (fix 1 + fix 9b). */
+export const NOISE_FLOOR_TOOLTIP =
+  "at or below the median Q this pipeline retrieves from plume-free scene pairs at this site — indistinguishable from retrieval noise";
+
+/** Format a floor Q (kg/h) as "6.3 t/h", or "—". */
+export function formatFloorTh(kgh: number | null | undefined): string {
+  const t = kghToTh(kgh);
+  return t == null ? "—" : `${t.toFixed(1)} t/h`;
+}
+
 /** Human-readable hints for the detector's QC flags (Phase 7 diagnostics). */
 export const FLAG_HINTS: Record<string, string> = {
   cross_tile_reference:

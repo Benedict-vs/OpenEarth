@@ -48,6 +48,7 @@ export type DetectionPatch = components["schemas"]["DetectionPatch"];
 export type ScreeningRequest = components["schemas"]["ScreeningRequest"];
 export type MlScanRequest = components["schemas"]["MlScanRequest"];
 export type MlStatus = components["schemas"]["MlStatusOut"];
+export type NoiseFloor = components["schemas"]["NoiseFloorOut"];
 export type ReferenceEvent = components["schemas"]["ReferenceEventOut"];
 
 // ── EMIT plumes (Phase 6) ──────────────────────────────────
