@@ -182,8 +182,9 @@ export function TimelapsePage() {
             </div>
             <p className="muted step-note">
               Each frame is one window, stepped along the period: a frame starts every{" "}
-              <b>{form.intervalDays}</b> days and averages <b>{form.windowDays ?? form.intervalDays}</b>{" "}
-              days of scenes. A window wider than the interval overlaps frames, smoothing cloud gaps.
+              <b>{form.intervalDays}</b> days and averages{" "}
+              <b>{form.windowDays ?? form.intervalDays}</b> days of scenes. A window wider than the
+              interval overlaps frames, smoothing cloud gaps.
             </p>
           </>
         ) : null}
@@ -226,10 +227,7 @@ export function TimelapsePage() {
 
         <label>
           Smoothing
-          <select
-            value={form.tween}
-            onChange={(e) => setForm({ tween: Number(e.target.value) })}
-          >
+          <select value={form.tween} onChange={(e) => setForm({ tween: Number(e.target.value) })}>
             <option value={0}>Off</option>
             <option value={1}>2×</option>
             <option value={3}>4×</option>

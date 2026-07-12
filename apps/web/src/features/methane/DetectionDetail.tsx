@@ -238,10 +238,22 @@ function ReferenceBlock({ detail }: { detail: DetectionDetailT }) {
     };
     try {
       const { job_id } = await submitAnalyze(body);
-      setJob({ jobId: job_id, step: 0, total: 7, message: "Retry (composite)…", status: "running" });
+      setJob({
+        jobId: job_id,
+        step: 0,
+        total: 7,
+        message: "Retry (composite)…",
+        status: "running",
+      });
       subscribeJob(job_id, {
         onProgress: (d) =>
-          setJob({ jobId: job_id, step: d.done, total: d.total, message: d.message, status: "running" }),
+          setJob({
+            jobId: job_id,
+            step: d.done,
+            total: d.total,
+            message: d.message,
+            status: "running",
+          }),
         onDone: (d) => {
           setJob({ jobId: job_id, step: 7, total: 7, message: "Done", status: "done" });
           const detId = (d.result as { detection_id?: string }).detection_id;
@@ -250,7 +262,14 @@ function ReferenceBlock({ detail }: { detail: DetectionDetailT }) {
           setRetrying(false);
         },
         onError: (d) => {
-          setJob({ jobId: job_id, step: 0, total: 7, message: d.detail, status: "error", detail: d.detail });
+          setJob({
+            jobId: job_id,
+            step: 0,
+            total: 7,
+            message: d.detail,
+            status: "error",
+            detail: d.detail,
+          });
           setRetrying(false);
         },
       });

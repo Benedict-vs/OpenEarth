@@ -61,11 +61,7 @@ export function buildTilesRequest(
 function currentParamsKey(layerId: string): string | null {
   const layer = useLayersStore.getState().layers.find((l) => l.id === layerId);
   if (!layer) return null;
-  const body = buildTilesRequest(
-    layer,
-    useRoiStore.getState().roi,
-    useDateStore.getState().window,
-  );
+  const body = buildTilesRequest(layer, useRoiStore.getState().roi, useDateStore.getState().window);
   return JSON.stringify(body);
 }
 

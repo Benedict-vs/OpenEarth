@@ -26,7 +26,13 @@ const LAYERS: WorkspaceState["layers"] = [
   },
 ];
 
-const ROI: WorkspaceState["roi"] = { kind: "bbox", west: -103, south: 31.5, east: -102, north: 32.5 };
+const ROI: WorkspaceState["roi"] = {
+  kind: "bbox",
+  west: -103,
+  south: 31.5,
+  east: -102,
+  north: 32.5,
+};
 
 // A committed v2 snapshot (the shape captureWorkspace writes).
 const STATE_V2: WorkspaceState = {

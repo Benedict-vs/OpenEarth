@@ -13,7 +13,12 @@ interface PeriodPickerProps {
   compact?: boolean;
 }
 
-export function PeriodPicker({ period, onChange, label = "Period", compact = false }: PeriodPickerProps) {
+export function PeriodPicker({
+  period,
+  onChange,
+  label = "Period",
+  compact = false,
+}: PeriodPickerProps) {
   return (
     <div className={compact ? "period-picker compact" : "period-picker"}>
       {label ? <span className="period-label muted">{label}</span> : null}
