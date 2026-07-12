@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import re
 import threading
+import warnings
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -29,8 +30,8 @@ from openearth.methane.conversion import (
 )
 from openearth.methane.ime import EmissionEstimate, McParams, quantify
 from openearth.methane.plume import PlumeMask, detect_plume
-from openearth.methane.retrieval import fetch_chip, mbmp, mbsp
-from openearth.methane.scenes import S2Scene, list_scenes, pick_reference
+from openearth.methane.retrieval import RetrievalChip, fetch_chip, mbmp, mbsp
+from openearth.methane.scenes import S2Scene, list_scenes, pick_reference, pick_reference_set
 from openearth.methane.wind import (
     GLOBAL_ERA5_HOURLY_ID,
     WindSample,
@@ -48,6 +49,20 @@ _TOTAL_STEPS = 7
 # Days on each side of the target to gather MBMP reference candidates.
 _REFERENCE_WINDOW_DAYS = 130
 
+# ── Composite reference (opt-in, Phase 8) ──────────────────────────
+# k same-orbit, same-spacecraft reference chips whose per-pixel median replaces
+# the single reference (a 50 % breakdown point against an intermittent plume
+# contaminating the background). Fewer than COMPOSITE_MIN eligible members →
+# fall back to single (the run proceeds; the Lab says why).
+COMPOSITE_SIZE = 5
+COMPOSITE_MIN = 3
+# The reporting LUT interpolates the forward curve on a 0.25-wide AMF grid
+# (conversion.forward_signal). A composite's members span a ±120 d window, over
+# which the solar zenith drifts; when their AMF max−min exceeds one grid step the
+# median-AMF approximation smears across more than one interpolation interval, so
+# we flag it (the run still proceeds).
+AMF_SPREAD_MAX = 0.25
+
 _DEFAULT_MC = McParams()
 
 # Flag when >5% of masked pixels hit the reporting-LUT high edge (fix 3): the
@@ -59,6 +74,15 @@ _LUT_HI_CLIP_FLAG_FRACTION = 0.05
 _MASK_STABILITY_RATIO_MAX = 4.0
 # MGRS tile in an S2 system:index, e.g. ..._T39RUN → "39RUN" (fix 4b / Tier 1 F5).
 _MGRS_TILE_RE = re.compile(r"_T(\d{2}[A-Z]{3})")
+
+
+@dataclass(frozen=True)
+class ReferenceMember:
+    """One member of a composite reference (for the Lab's reference block)."""
+
+    scene_id: str
+    days_from_target: float
+    amf: float
 
 
 @dataclass(frozen=True)
@@ -81,6 +105,28 @@ class DetectionResult:
     # Per-pass in-mask fractions on the reporting-LUT grid ends (fix 3):
     # target_lo/target_hi/ref_lo/ref_hi. Replaces the whole-chip clip flag.
     clip_fractions: dict[str, float]
+    # Composite-reference provenance (Phase 8; "single" or "composite"). For a
+    # composite: the members that were medianed, and their AMF max−min spread.
+    reference_mode: str = "single"
+    reference_members: list[ReferenceMember] = field(default_factory=list)
+    composite_amf_spread: float = 0.0
+
+
+def _median_composite_chip(chips: list[RetrievalChip]) -> RetrievalChip:
+    """Per-band, per-pixel median across same-orbit reference chips.
+
+    A pixel that is NaN (masked) in some members medians over the rest; NaN in
+    all of them stays NaN. The nearest member (``chips[0]``) is the display
+    anchor — its scene/grid carry through unchanged.
+    """
+    anchor = chips[0]
+    bands: dict[str, NDArray[np.float32]] = {}
+    for name in anchor.bands:
+        stack = np.stack([c.bands[name] for c in chips], axis=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN slice → NaN, expected
+            bands[name] = np.nanmedian(stack, axis=0).astype(np.float32)
+    return RetrievalChip(scene=anchor.scene, grid=anchor.grid, bands=bands)
 
 
 def _scene_date(scene_id: str) -> datetime:
@@ -132,6 +178,7 @@ def analyze(
     target_scene_id: str,
     *,
     reference_scene_id: str | None = None,
+    reference_mode: Literal["single", "composite"] = "single",
     method: str = "mbmp",
     k_sigma: float = 2.0,
     min_area_px: int = 5,
@@ -144,6 +191,11 @@ def analyze(
 
     ``method='mbmp'`` (default) differences a reference scene (auto-selected
     unless *reference_scene_id* is given); ``'mbsp'`` skips the reference pass.
+    ``reference_mode='composite'`` (opt-in, MBMP only, ignored when an explicit
+    *reference_scene_id* is given) replaces the single reference with a per-pixel
+    median over up to ``COMPOSITE_SIZE`` same-orbit/same-spacecraft scenes — a
+    robust background for recurrent emitters; too few eligible members falls back
+    to single (``flags`` gains ``'composite_reference_unavailable'``).
     No plume above threshold is a valid result (``flags`` gains ``'no_plume'``),
     not an exception.
     """
@@ -177,11 +229,22 @@ def analyze(
         raise RetrievalError(f"Target scene {target_scene_id!r} not found over this ROI.")
 
     reference: S2Scene | None = None
+    # Members of a composite reference (empty ⇒ single-reference mode).
+    composite_members: list[S2Scene] = []
     if method == "mbmp":
         if reference_scene_id is not None:
+            # An explicit scene is single mode by construction (composite ignored).
             reference = by_id.get(reference_scene_id)
             if reference is None:
                 raise RetrievalError(f"Reference scene {reference_scene_id!r} not found.")
+        elif reference_mode == "composite":
+            candidates = pick_reference_set(target, scenes, COMPOSITE_SIZE)
+            if len(candidates) < COMPOSITE_MIN:
+                flags.append("composite_reference_unavailable")
+                reference = pick_reference(target, scenes)  # graceful single fallback
+            else:
+                composite_members = candidates
+                reference = candidates[0]  # nearest member = the display anchor
         else:
             reference = pick_reference(target, scenes)
         if reference is not None and reference.relative_orbit != target.relative_orbit:
@@ -191,14 +254,40 @@ def analyze(
             if t_tile and r_tile and t_tile != r_tile:
                 flags.append("cross_tile_reference")
 
-    # ── Step 2: fetch reference chip (skipped for MBSP) ──
+    # ── Step 2: fetch reference chip(s) (skipped for MBSP) ──
     check_cancel()
-    if method == "mbmp" and reference is not None:
+    ref_chip: RetrievalChip | None = None
+    # Reference-pass AMF: the member median for a composite (declared
+    # approximation — solar zenith drifts over the member span), else the single
+    # reference's own AMF. None when there is no reference pass.
+    ref_amf: float | None = None
+    reference_members: list[ReferenceMember] = []
+    composite_amf_spread = 0.0
+    if method == "mbmp" and composite_members:
+        progress(2, f"Fetching {len(composite_members)} reference chips")
+        # Serial fetches — each rides the shared ee_call semaphore; never a new
+        # parallel EE path (k = COMPOSITE_SIZE round-trips per analyze).
+        member_chips = [fetch_chip(m, bbox) for m in composite_members]
+        ref_chip = _median_composite_chip(member_chips)
+        member_amfs = [m.amf for m in composite_members]
+        ref_amf = float(np.median(member_amfs))
+        composite_amf_spread = float(max(member_amfs) - min(member_amfs))
+        if composite_amf_spread > AMF_SPREAD_MAX:
+            flags.append("composite_amf_spread")
+        reference_members = [
+            ReferenceMember(
+                scene_id=m.scene_id,
+                days_from_target=(m.time - target.time).total_seconds() / 86400.0,
+                amf=m.amf,
+            )
+            for m in composite_members
+        ]
+    elif method == "mbmp" and reference is not None:
         progress(2, "Fetching reference chip")
         ref_chip = fetch_chip(reference, bbox)
+        ref_amf = reference.amf
     else:
         progress(2, "skipped")
-        ref_chip = None
 
     # ── Step 3: fetch target chip ──
     check_cancel()
@@ -240,14 +329,15 @@ def analyze(
     d_omega_r: NDArray[np.float64] | None = None
     mask_d_omega_r: NDArray[np.float64] | None = None
     if method == "mbmp" and reference is not None and ref_chip is not None:
+        assert ref_amf is not None  # set alongside ref_chip (single or composite)
         r_result = mbsp(
             ref_chip.bands["B11"].astype(np.float64), ref_chip.bands["B12"].astype(np.float64)
         )
-        d_omega_r = invert_fractional_signal(
-            r_result.delta_r, lut, reference.spacecraft, reference.amf
-        )
+        # Composite members are same-spacecraft (hard constraint), so the anchor's
+        # spacecraft is the whole set's; the AMF is the member median.
+        d_omega_r = invert_fractional_signal(r_result.delta_r, lut, reference.spacecraft, ref_amf)
         mask_d_omega_r = invert_fractional_signal(
-            r_result.delta_r, mask_lut, reference.spacecraft, reference.amf
+            r_result.delta_r, mask_lut, reference.spacecraft, ref_amf
         )
         delta_omega = d_omega_t - d_omega_r
         mask_delta_omega = mask_d_omega_t - mask_d_omega_r
@@ -337,4 +427,7 @@ def analyze(
         calibration=calibration,
         flags=flags,
         clip_fractions=clip_fractions,
+        reference_mode="composite" if composite_members else "single",
+        reference_members=reference_members,
+        composite_amf_spread=composite_amf_spread,
     )

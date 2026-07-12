@@ -11,7 +11,7 @@ import pytest
 from openearth.errors import RetrievalError
 from openearth.geometry import BBox
 from openearth.methane import scenes as scenes_mod
-from openearth.methane.scenes import S2Scene, list_scenes, pick_reference
+from openearth.methane.scenes import S2Scene, list_scenes, pick_reference, pick_reference_set
 
 
 def _scene(
@@ -103,6 +103,47 @@ def test_pick_reference_excludes_same_overpass() -> None:
     )
     real_ref = _scene("earlier", 14)  # 5 days before
     assert pick_reference(target, [same_overpass, real_ref]).scene_id == "earlier"
+
+
+# ── pick_reference_set (composite reference) ──
+
+
+def test_pick_reference_set_nearest_k_same_orbit_spacecraft() -> None:
+    target = _scene("t", 19, orbit=50, sat="Sentinel-2A")
+    cands = [
+        _scene("d3", 16),  # |Δt| 3
+        _scene("d1", 18),  # |Δt| 1 (nearest)
+        _scene("d5", 14),  # |Δt| 5
+        _scene("d9", 10),  # |Δt| 9
+    ]
+    picked = pick_reference_set(target, cands, 3)
+    assert [s.scene_id for s in picked] == ["d1", "d3", "d5"]  # nearest 3, in order
+
+
+def test_pick_reference_set_hard_filters_orbit_and_spacecraft() -> None:
+    target = _scene("t", 19, orbit=50, sat="Sentinel-2A")
+    good = _scene("ok", 17, orbit=50, sat="Sentinel-2A")
+    diff_orbit = _scene("orb", 18, orbit=93, sat="Sentinel-2A")  # excluded (hard)
+    diff_sat = _scene("sat", 18, orbit=50, sat="Sentinel-2B")  # excluded (hard)
+    picked = pick_reference_set(target, [good, diff_orbit, diff_sat], 5)
+    assert [s.scene_id for s in picked] == ["ok"]
+
+
+def test_pick_reference_set_cloud_overpass_and_range_gates() -> None:
+    target = _scene("t", 19)
+    cloudy = _scene("cloud", 15, cloud=80.0)  # excluded
+    same_overpass = S2Scene(
+        "same", datetime(2018, 6, 19, 7, 40, tzinfo=UTC), 5.0, 50, "Sentinel-2A", 30.0, 5.0
+    )  # Δt ≈ 0 → excluded
+    far = S2Scene("far", datetime(2018, 1, 1, tzinfo=UTC), 5.0, 50, "Sentinel-2A", 30.0, 5.0)
+    good = _scene("good", 12)
+    picked = pick_reference_set(target, [cloudy, same_overpass, far, good], 5)
+    assert [s.scene_id for s in picked] == ["good"]
+
+
+def test_pick_reference_set_empty_when_nothing_qualifies() -> None:
+    target = _scene("t", 19, orbit=50)
+    assert pick_reference_set(target, [_scene("x", 18, orbit=93)], 5) == []
 
 
 # ── list_scenes parsing (canned getInfo payload) ──
