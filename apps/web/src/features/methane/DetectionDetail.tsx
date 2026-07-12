@@ -55,7 +55,7 @@ export function DetectionDetail() {
         <span className={`status-chip ${detail.status}`}>{detail.status}</span>
       </div>
 
-      {detail.noise_floor_kg_h != null ? (
+      {detail.noise_floor_kg_h != null && detail.q_kg_h != null ? (
         <p
           className={`floor-note${detail.below_noise_floor ? " below" : ""}`}
           title={NOISE_FLOOR_TOOLTIP}
@@ -168,7 +168,7 @@ function PhysicsDiagnostics({ detail }: { detail: DetectionDetailT }) {
                 </th>
                 <td>
                   target {pctFraction(clip.target_hi)} / {pctFraction(clip.target_lo)}
-                  {clip.ref_hi != null || clip.ref_lo != null
+                  {detail.method === "mbmp"
                     ? ` · ref ${pctFraction(clip.ref_hi)} / ${pctFraction(clip.ref_lo)}`
                     : ""}
                 </td>
