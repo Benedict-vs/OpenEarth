@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # OpenEarth v2
 
-Satellite-based environmental analysis (**Phase 7 complete** — science-honesty pass; v1 Streamlit app retired):
+Satellite-based environmental analysis (**Phase 8 complete** — design pass: window/period time model, resilient renders, opt-in composite reference; Phase 7 = science-honesty pass; v1 Streamlit app retired):
 Python core library (`packages/core`) + FastAPI backend (`packages/api`) + React/MapLibre
 frontend (`apps/web`) + an offline ML training package (`packages/ml`), with a physics-honest
 methane detection suite (the Methane Lab), side-by-side Compare, a Timelapse Studio, an
@@ -56,11 +56,15 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
     blowups invert to finite columns; ΔR→ΔΩ→ΔXCH4 — pure, strict mypy;
     `load_mask_lut` = frozen `ch4_lut_mask.npz` used ONLY to build footprints, decoupled from
     the reporting LUT so masks are invariant to LUT recalibration — Phase 3.5 Stage 2),
-    `scenes.py` (S2 L1C search + `pick_reference`, which excludes the same-overpass tile),
+    `scenes.py` (S2 L1C search + `pick_reference`, excludes the same-overpass tile; Phase 8
+    `pick_reference_set` = nearest-k with orbit AND spacecraft HARD for the composite),
     `retrieval.py` (calibrated MBSP/MBMP on `computePixels` chips; bands are unpadded B4/B3/B2),
     `plume.py` (robust-σ threshold + components + outline), `ime.py` (IME + seeded joint MC;
     `quantify(mask_field=…)` thresholds the frozen-LUT ΔΩ, IME uses reporting ΔΩ),
-    `detect.py` (7-step cancellable orchestrator), `tropomi.py` (S5P screening),
+    `detect.py` (7-step cancellable orchestrator; `analyze(reference_mode="single"|"composite")` —
+    Phase 8 opt-in default-off median-composite MBMP reference, k=5, median-AMF + spread flag,
+    single fallback below 3 members; the median composite did NOT rescue the persistent-emitter
+    case, so it stays default-off — evidence in `docs/methane_methods.md` §7.1), `tropomi.py` (S5P screening),
     `validation.py` (IMEO/SRON parse + cross-match; Phase 7 unit-safe importer — explicit
     `rate_unit` + per-alias scaling, no unit guessing, `rates_dropped` for out-of-range), `channels.py` (Phase 5 ML input stack:
     5 physics channels — MBMP/MBSP ΔR + B12/B11 ratio + SWIR — via `build_channels`/`normalize`/
@@ -134,11 +138,19 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
     `disagreement` flag, written off-loop; npz adds a `prob` map so the overlay/`array.npz` routes
     serve it unchanged) and `GET /methane/ml/status` (Settings). Lazy `ort.InferenceSession` (CPU) +
     manifest — missing model = 503 at submit, `create_app()` stays model-free. **onnxruntime only,
-    never torch**; the model is a candidate ranker requiring human review, never autonomous.
+    never torch**; the model is a candidate ranker requiring human review, never autonomous. The ML
+    scan stays **single-reference** (`pick_reference`, a guarded comment) — the composite reference
+    is a physics-analyze option only; a composite would break channel parity with training.
   - **Timelapse routes** (`routers/timelapse.py`, `services/timelapse.py`): the `timelapse`
     render job (SSE `frame` events → `{render_id}`; runner writes the `renders` row + frames +
     manifest + movie off-loop), gallery list, detail (row + manifest), immutable frame PNGs,
     movie download, delete (409 while running). Artifacts at `data_dir/timelapse/{render_id}/`.
+    Phase 8 resilience: `render_frames` degrades a failed frame to `failed` (dead-pipeline breaker
+    aborts only on *consistent* EE failure) and, on cancel with ≥1 frame, RETURNS a `cancelled=True`
+    manifest — the runner keeps it as a "partial" row (status `cancelled` + `frame_count`, no enum
+    change/migration) with a movie when ≥2 frames. `TimelapseRequest.tween` (0–4) cross-fades at
+    encode time (`encode_movie(tween=…)`, fps scaled by tween+1); the GIF cap is post-expansion.
+    Web "Stop render" hits the existing `DELETE /jobs/{job_id}`.
 - `packages/ml/` (dist `openearth-ml`) — **offline** U-Net training/eval/export; **torch + smp live
   here only, never in core/api** (`test_no_ml_deps.py` enforces it). `data.py` (npz chip dataset,
   GroupKFold by **site-cluster** — sites <5 km single-linkage-merged, `assert_no_fold_overlap` guard,
@@ -155,12 +167,23 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
   (no react-map-gl). **No-refetch rule**: layer controls only touch paint/layout/moveLayer;
   re-mints go through `setTiles` on the existing source. API types are generated
   (`src/api/types.gen.ts` — never edit; run `make gen` after API schema changes).
-  Views (state switcher in `App.tsx`): Explore, Compare (`@maplibre/maplibre-gl-compare`,
+  Views: `App.tsx` renders the switch, but view state lives in `uiStore` (Phase 8) so a feature
+  can `navigate(view)` without prop-drilling. Views: Explore, Compare (`@maplibre/maplibre-gl-compare`,
   two per-instance maps), Methane Lab (EMIT plume overlay + match chip; compare products get a
   reference-window picker in the LayerPanel), Timelapse Studio, Embeddings Explorer (own map;
   similarity/change/cluster; CC-BY footer), Settings. Explore's **wind particle layer**
   (`src/map/wind/`) is a vendored webgl-wind MapLibre custom layer (ISC; GPU state texture,
   streaks projected through the map matrix) fed by `/wind/field` — no deck.gl, no API change.
+  - **Time model (Phase 8)** — one **window** (`{center, halfDays}`; `dateStore` v2) + one
+    **period** (`{start, end}`), shared everywhere via `lib/timeWindow.ts` + `TimeWindowPicker`/
+    `PeriodPicker`. A window compiles to `composite:"mean"` over `windowMeanDates` (exclusive-end
+    range = the old `date_window` semantics) — NEVER `date_window`, so a ±45/custom width never
+    rides the tiles `half_window_days ≤ 30` cap (tiles schema untouched). Workspace state is v2
+    (window+period); `applyWorkspace` migrates v1 losslessly. Explore's **Preview** transport
+    (AnimationBar) is buffer-aware — `advanceFrame` holds on an unready pooled frame (never advances
+    past the ready frontier; reads a synchronous status ref, not the one-render-behind state).
+    Finished-render playback is the gallery's "Play on map" → `playbackStore` + a docked
+    `features/timelapse/PlaybackBar` on the Explore map (not the old AnimationBar Playback mode).
 
 ## Conventions
 
