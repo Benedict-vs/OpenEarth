@@ -1297,6 +1297,30 @@ button.ghost {
   margin-top: 4px;
 }
 
+/* Phase 7 inversion/mask diagnostics (fixes 2, 3, 4) */
+.diagnostics {
+  margin-top: 8px;
+}
+.flag-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.flag-hint {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #3a2a12;
+  color: #f0a336;
+  cursor: help;
+}
+.diag-table td,
+.diag-table th {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 /* Validation panel */
 .validation-panel summary {
   cursor: pointer;

@@ -12,6 +12,7 @@ import {
   histogramOption,
   kghToTh,
   mlDetectionNumbers,
+  pctFraction,
   toImageCoordinates,
   verdictBadge,
 } from "./methane";
@@ -157,6 +158,16 @@ describe("formatEmission approx", () => {
     expect(formatEmission(4800, null)).toBe("4.8 t/h");
     expect(formatEmission(8000, 2000)).toBe("8.0 ± 2.0 t/h");
     expect(formatEmission(null, null, { approx: true })).toBe("—");
+  });
+});
+
+describe("pctFraction", () => {
+  it("renders a 0–1 fraction as integer percent, else —", () => {
+    expect(pctFraction(0.6701)).toBe("67%");
+    expect(pctFraction(0)).toBe("0%");
+    expect(pctFraction(null)).toBe("—");
+    expect(pctFraction(undefined)).toBe("—");
+    expect(pctFraction(NaN)).toBe("—");
   });
 });
 

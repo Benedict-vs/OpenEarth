@@ -7,10 +7,12 @@ import {
 } from "../../api/methaneQueries";
 import type { DetectionDetail as DetectionDetailT, MethaneHistogram } from "../../api/types";
 import {
+  FLAG_HINTS,
   ML_Q_CAPTION,
   detectionNumbers,
   disagreementBadge,
   mlDetectionNumbers,
+  pctFraction,
   verdictBadge,
 } from "../../lib/methane";
 import { useMethaneStore } from "../../stores/methaneStore";
@@ -71,6 +73,7 @@ export function DetectionDetail() {
             <h4>Monte-Carlo Q</h4>
             <McHistogram histogram={histogram} />
           </div>
+          <PhysicsDiagnostics detail={detail} />
         </>
       )}
 
@@ -116,6 +119,60 @@ export function DetectionDetail() {
       <ValidationPanel />
 
       <EmitSection detId={detId} detail={detail} />
+    </div>
+  );
+}
+
+/** Phase 7 inversion/mask diagnostics: QC-flag hints, in-mask LUT-range clipping,
+ * and the mask's k-sensitivity (fixes 2, 3, 4). */
+function PhysicsDiagnostics({ detail }: { detail: DetectionDetailT }) {
+  const result = (detail.result ?? {}) as Record<string, unknown>;
+  const clip = (result.clip_fractions ?? {}) as Record<string, number>;
+  const byK = (result.mask_npx_by_k ?? {}) as Record<string, number>;
+  const flags = detail.flags.filter((f) => f !== "no_plume");
+  // Sort by numeric k — JS iterates integer-like object keys ("2") before "1.5".
+  const kEntries = Object.entries(byK).sort((a, b) => Number(a[0]) - Number(b[0]));
+  const hasClip = Object.keys(clip).length > 0;
+
+  if (!flags.length && !hasClip && !kEntries.length) return null;
+  return (
+    <div className="diagnostics">
+      {flags.length > 0 ? (
+        <div className="flag-hints">
+          {flags.map((f) => (
+            <span key={f} className="flag-hint" title={FLAG_HINTS[f] ?? "QC flag"}>
+              {f}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {hasClip || kEntries.length ? (
+        <table className="numbers-table diag-table">
+          <tbody>
+            {hasClip ? (
+              <tr>
+                <th title="Fraction of masked pixels at the top / bottom of the reporting-LUT ΔΩ range (per pass)">
+                  Inversion range hi/lo
+                </th>
+                <td>
+                  target {pctFraction(clip.target_hi)} / {pctFraction(clip.target_lo)}
+                  {clip.ref_hi != null || clip.ref_lo != null
+                    ? ` · ref ${pctFraction(clip.ref_hi)} / ${pctFraction(clip.ref_lo)}`
+                    : ""}
+                </td>
+              </tr>
+            ) : null}
+            {kEntries.length ? (
+              <tr>
+                <th title="Plume pixel count at each k in the Monte-Carlo threshold sweep — a large swing means an unstable mask">
+                  Mask npx by k
+                </th>
+                <td>{kEntries.map(([k, n]) => `k${k}:${n}`).join("  ")}</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      ) : null}
     </div>
   );
 }

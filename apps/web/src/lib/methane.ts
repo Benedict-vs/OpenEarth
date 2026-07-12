@@ -181,6 +181,27 @@ export function mlDetectionNumbers(detail: DetectionDetail): NumberRow[] {
   ];
 }
 
+/** Human-readable hints for the detector's QC flags (Phase 7 diagnostics). */
+export const FLAG_HINTS: Record<string, string> = {
+  cross_tile_reference:
+    "reference from a different UTM tile — registration/BRDF structure inflates noise; prefer a same-tile reference",
+  possible_reference_contamination:
+    "the reference scene itself shows an enhancement near the source — a recurrent emitter may have no plume-free reference; consider MBSP or pin a different date",
+  unstable_mask:
+    "the plume mask swings by ≥4× across the k-sweep (or a k empties it) — the rate is mask-noise-dominated, order-of-magnitude only",
+  lut_hi_clipped_mask:
+    "much of the masked plume hit the top of the inversion range — the reported column and rate are biased low",
+  different_orbit_reference:
+    "reference from a different orbit — larger view-angle/BRDF difference than a same-orbit pair",
+  nan_in_mask: "some masked pixels have no retrieval (NaN); they contribute zero to the IME",
+  wind_fallback_used: "ERA5-Land had no cell here; global ERA5 10 m wind was used",
+};
+
+/** Format a 0–1 fraction as a integer percent, or "—". */
+export function pctFraction(value: number | null | undefined): string {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value * 100)}%` : "—";
+}
+
 /** Map the read-derived ML↔physics agreement state (fix 8) to a badge.
  * ``agree`` means a physics run found an actual plume on the same scene — not
  * merely that a physics row exists (a no-plume run writes a row too). */

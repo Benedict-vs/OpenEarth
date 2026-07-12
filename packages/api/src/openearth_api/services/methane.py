@@ -319,6 +319,11 @@ def _result_payload(result: DetectionResult, xch4_max: float | None) -> dict[str
                 "k_sigma": result.plume.k_sigma,
                 "sigma": result.plume.sigma,
             },
+            # Phase 7 diagnostics (fixes 3, 4c): per-pass in-mask reporting-LUT edge
+            # fractions and the mask pixel count at each MC k. Untyped result content —
+            # the Lab renders them; no schema change.
+            "clip_fractions": result.clip_fractions,
+            "mask_npx_by_k": em.mask_npx_by_k,
             "target_scene_id": result.target.scene_id,
             "reference_scene_id": result.reference.scene_id if result.reference else None,
             "spacecraft": result.target.spacecraft,
