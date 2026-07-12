@@ -31,18 +31,40 @@ def lut() -> conversion.CH4Lut:
 
 
 def test_lut_structure(lut: conversion.CH4Lut) -> None:
-    assert lut.version == "4"
-    assert lut.delta_omega.shape == (351,)
+    assert lut.version == "5"
+    assert lut.delta_omega.shape == (651,)
     assert lut.amf.shape == (9,)
     for name in ("Sentinel-2A", "Sentinel-2B"):
-        assert lut.m[name].shape == (9, 351)
+        assert lut.m[name].shape == (9, 651)
         assert np.isfinite(lut.m[name]).all()
-    # Grid endpoints as pinned in the plan (ΔΩ top raised to 3.0 in v3 so
-    # saturated super-emitter cores don't clip at the grid end).
+    # Grid endpoints: ΔΩ top raised to 6.0 in v5 (fix 5) so strong plumes invert to
+    # finite columns instead of capping; lo end stays −0.5 (Ω_bg = 0.65).
     assert lut.delta_omega[0] == pytest.approx(-0.5)
-    assert lut.delta_omega[-1] == pytest.approx(3.0)
+    assert lut.delta_omega[-1] == pytest.approx(6.0)
     assert lut.amf[0] == pytest.approx(2.0)
     assert lut.amf[-1] == pytest.approx(4.0)
+
+
+_V4_LUT_PATH = (
+    _REPO_ROOT / "packages" / "core" / "src" / "openearth" / "methane" / "data" / "ch4_lut_v4.npz"
+)
+
+
+def test_v5_shared_subgrid_identical_to_v4(lut: conversion.CH4Lut) -> None:
+    """v5's first 351 ΔΩ points and their m values match the committed v4 LUT (fix 5).
+
+    v5 only *extends* the range (3.0 → 6.0) with identical physics, so the shared
+    subgrid must be bit-identical. A divergence means the HAPI line-list inputs
+    drifted between v4 and the v5 regeneration — the tripwire that says do not freeze.
+    """
+    v4 = conversion.load_lut(_V4_LUT_PATH)
+    assert lut.version == "5"
+    assert v4.version == "4"
+    n = v4.delta_omega.size  # 351
+    np.testing.assert_array_equal(lut.delta_omega[:n], v4.delta_omega)  # bit-identical grid
+    np.testing.assert_array_equal(lut.amf, v4.amf)
+    for name in ("Sentinel-2A", "Sentinel-2B"):
+        np.testing.assert_allclose(lut.m[name][:, :n], v4.m[name], rtol=1e-9, atol=1e-12)
 
 
 def test_provenance_parses(lut: conversion.CH4Lut) -> None:

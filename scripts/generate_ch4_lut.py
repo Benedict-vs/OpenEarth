@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Generate the committed CH4 absorption LUT (``ch4_lut_v4.npz``).
+"""Generate the committed CH4 absorption LUT (``ch4_lut_v5.npz``).
 
 Run manually, once, with network access (HITRAN line tables are cached in the
 scratch directory and re-used offline on later runs):
@@ -104,12 +104,16 @@ SRF_CSV = REPO_ROOT / "scripts" / "data" / "s2_srf_b11_b12.csv"
 SOLAR_CSV = REPO_ROOT / "scripts" / "data" / "tsis1_hsrs_b11_b12.csv"
 AFGL_H2O_CSV = REPO_ROOT / "scripts" / "data" / "afgl_us_standard_h2o.csv"
 LUT_OUT = (
-    REPO_ROOT / "packages" / "core" / "src" / "openearth" / "methane" / "data" / "ch4_lut_v4.npz"
+    REPO_ROOT / "packages" / "core" / "src" / "openearth" / "methane" / "data" / "ch4_lut_v5.npz"
 )
 
-# The ΔΩ × AMF grid the runtime interpolates over. The ΔΩ top end is 3.0 (v2:
-# 2.0) so saturated super-emitter cores don't silently clip at the grid end.
-DELTA_OMEGA_GRID = np.linspace(-0.5, 3.0, 351)  # mol/m²
+# The ΔΩ × AMF grid the runtime interpolates over. The ΔΩ top end is 6.0 (v4: 3.0,
+# v2: 2.0) so saturated super-emitter cores (Tier 1 F3: gulf-of-thailand 67 %,
+# turkmenistan-south 34 % in-mask hi-clip) invert to finite columns instead of
+# capping. The step stays exactly 0.01, so the first 351 points coincide bit-for-bit
+# with v4 (the shared-subgrid identity test). The lo end stays −0.5 (Ω_bg = 0.65;
+# a lower edge would tabulate negative total columns).
+DELTA_OMEGA_GRID = np.linspace(-0.5, 6.0, 651)  # mol/m²
 AMF_GRID = np.round(np.arange(2.0, 4.0 + 1e-9, 0.25), 4)  # 9 points, 2.0…4.0
 
 
@@ -531,6 +535,22 @@ def main() -> None:
     interfering = compute_interfering_cross_sections(args.scratch, layers)
     grids = build_lut_arrays(cross_sections, interfering, layers, srf, solar, h2o_columns)
 
+    # Fix 5: the extended ΔΩ range only helps if the forward curve stays invertible.
+    # Assert m(ΔΩ) is strictly monotone (decreasing) for every spacecraft × AMF and
+    # report dm/dΔΩ at the top edge — the Beer–Lambert curve flattens with saturation,
+    # so a slope that decays toward zero would make the top-of-range inversion
+    # ill-conditioned. Recorded in the commit message regardless.
+    d_omega_step = float(DELTA_OMEGA_GRID[-1] - DELTA_OMEGA_GRID[-2])
+    for key, arr in grids.items():
+        diffs = np.diff(arr, axis=1)  # (M, N-1)
+        if not np.all(diffs < 0.0):
+            raise SystemExit(f"{key}: m(ΔΩ) is not strictly decreasing — inversion is ill-posed")
+        top_slopes = diffs[:, -1] / d_omega_step  # dm/dΔΩ at ΔΩ = 6.0, per AMF
+        print(
+            f"{key}: dm/dΔΩ at ΔΩ={DELTA_OMEGA_GRID[-1]:.1f} "
+            f"∈ [{float(top_slopes.min()):.5f}, {float(top_slopes.max()):.5f}] over AMF"
+        )
+
     provenance = {
         "generated_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "hitran_fetch_date": datetime.now(UTC).date().isoformat(),
@@ -558,11 +578,12 @@ def main() -> None:
             "h2o_total_column_mol_m2": round(float(np.sum(h2o_columns)), 2),
         },
         "model": (
-            "layered Beer-Lambert with interfering absorbers + solar-radiance weighting (v4): "
+            "layered Beer-Lambert with interfering absorbers + solar-radiance weighting (v5): "
             "well-mixed CH4/CO2 + AFGL H2O background over the US Standard Atmosphere 1976 in "
             "equal-mass layers (per-layer absorber-weighted T/p Voigt cross sections); band weight "
             "w(ν) = SRF(ν)·E_ν(ν)·e^(−AMF·τ_bg); enhancement CH4-only in the lowest "
-            f"{ENHANCEMENT_TOP_M:.0f} m (Varon et al. 2021 placement). Adds H2O/CO2 + solar to v3."
+            f"{ENHANCEMENT_TOP_M:.0f} m (Varon et al. 2021 placement). v4 physics unchanged; v5 "
+            "extends the ΔΩ grid to 6.0 mol/m² (first 351 points identical to v4)."
         ),
         "n_layers": N_LAYERS,
         "layer_mass_fractions": [round(f, 6) for f, _, _ in layers],
@@ -587,7 +608,7 @@ def main() -> None:
         amf=AMF_GRID,
         m_s2a=grids["s2a"],
         m_s2b=grids["s2b"],
-        version="4",
+        version="5",
         provenance=json.dumps(provenance),
     )
     print(f"Wrote {args.out} ({args.out.stat().st_size / 1024:.0f} KiB)")

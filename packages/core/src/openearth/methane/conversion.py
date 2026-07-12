@@ -1,7 +1,7 @@
 """Load the committed CH4 absorption LUT and convert MBSP/MBMP fractional
 signal ΔR to a methane column enhancement ΔΩ (and ΔXCH4).
 
-The LUT (``methane/data/ch4_lut_v4.npz``) is generated offline by
+The LUT (``methane/data/ch4_lut_v5.npz``) is generated offline by
 ``scripts/generate_ch4_lut.py`` (HITRAN + Sentinel-2 SRFs) and shipped inside
 the package; nothing here touches Earth Engine or HAPI. This module is pure
 NumPy and passes mypy strict with no exemptions.
@@ -27,7 +27,7 @@ from numpy.typing import NDArray
 from openearth.methane.constants import OMEGA_AIR_MOL_M2
 
 _METHANE_PACKAGE = "openearth.methane"
-_LUT_FILENAME = "ch4_lut_v4.npz"
+_LUT_FILENAME = "ch4_lut_v5.npz"
 # Frozen canonical inversion used ONLY to build plume masks (Phase 3.5 Stage 2). Decoupling
 # the masking inversion from the reporting LUT makes plume footprints invariant to a
 # reporting-LUT recalibration: v3→v4 changes the retrieved columns/IME but never which pixels
@@ -68,7 +68,7 @@ def _load_lut_cached(path_str: str) -> CH4Lut:
 
 
 def load_lut(path: Path | None = None) -> CH4Lut:
-    """Load the CH4 LUT (cached). *path* defaults to the packaged ``ch4_lut_v4.npz``."""
+    """Load the CH4 LUT (cached). *path* defaults to the packaged ``ch4_lut_v5.npz``."""
     resolved = path if path is not None else _packaged_lut_path()
     return _load_lut_cached(str(resolved))
 
@@ -117,6 +117,22 @@ def invert_fractional_signal(
     m_rev = m[::-1]
     do_rev = delta_omega[::-1]
     return np.asarray(np.interp(delta_r, m_rev, do_rev), dtype=np.float64)
+
+
+def edge_fractions(
+    delta_omega: NDArray[np.float64], mask: NDArray[np.bool_], lo: float, hi: float
+) -> tuple[float, float]:
+    """``(lo_frac, hi_frac)``: the fraction of masked, finite pixels whose per-pass
+    ΔΩ sits on the low / high reporting-LUT grid end (fix 3 / Tier 1 F3).
+
+    Generalises the harness's ``_lut_saturated_fraction`` — the in-mask inversion-range
+    diagnostic that replaces the information-free whole-chip ``clipped_inversion`` flag
+    (the bright −0.5 edge was hit by 0.3–22 % of chip pixels in every event).
+    """
+    in_mask = delta_omega[mask & np.isfinite(delta_omega)]
+    if in_mask.size == 0:
+        return 0.0, 0.0
+    return float(np.mean(in_mask <= lo)), float(np.mean(in_mask >= hi))
 
 
 def delta_omega_to_xch4_ppb(

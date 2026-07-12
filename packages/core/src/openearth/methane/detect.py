@@ -8,6 +8,7 @@ them and manages progress/cancellation. Offline tests fake ``list_scenes``,
 
 from __future__ import annotations
 
+import re
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -21,12 +22,13 @@ from openearth.errors import JobError, RetrievalError
 from openearth.methane.constants import SIGMA_U10_FLOOR_MS
 from openearth.methane.conversion import (
     delta_omega_to_xch4_ppb,
+    edge_fractions,
     invert_fractional_signal,
     load_lut,
     load_mask_lut,
 )
 from openearth.methane.ime import EmissionEstimate, McParams, quantify
-from openearth.methane.plume import PlumeMask
+from openearth.methane.plume import PlumeMask, detect_plume
 from openearth.methane.retrieval import fetch_chip, mbmp, mbsp
 from openearth.methane.scenes import S2Scene, list_scenes, pick_reference
 from openearth.methane.wind import (
@@ -48,6 +50,16 @@ _REFERENCE_WINDOW_DAYS = 130
 
 _DEFAULT_MC = McParams()
 
+# Flag when >5% of masked pixels hit the reporting-LUT high edge (fix 3): the
+# retrieved column is range-capped there, biasing a strong plume low.
+_LUT_HI_CLIP_FLAG_FRACTION = 0.05
+# Flag an unstable mask (fix 4c / Tier 1 F2) when the MC k-sweep's pixel count
+# swings by ≥ this ratio, or any k empties a mask the display k did not — the
+# order-of-magnitude mask noise made visible, not fixed.
+_MASK_STABILITY_RATIO_MAX = 4.0
+# MGRS tile in an S2 system:index, e.g. ..._T39RUN → "39RUN" (fix 4b / Tier 1 F5).
+_MGRS_TILE_RE = re.compile(r"_T(\d{2}[A-Z]{3})")
+
 
 @dataclass(frozen=True)
 class DetectionResult:
@@ -66,6 +78,9 @@ class DetectionResult:
     wind: WindSample
     calibration: dict[str, float]  # c_target, c_ref, n_excluded_*
     flags: list[str]
+    # Per-pass in-mask fractions on the reporting-LUT grid ends (fix 3):
+    # target_lo/target_hi/ref_lo/ref_hi. Replaces the whole-chip clip flag.
+    clip_fractions: dict[str, float]
 
 
 def _scene_date(scene_id: str) -> datetime:
@@ -87,12 +102,10 @@ def _resolve_source_rc(
     return None
 
 
-def _clipped(delta_omega: NDArray[np.float64], lo: float, hi: float) -> bool:
-    """True if any inverted pixel landed on a LUT ΔΩ grid edge (saturation)."""
-    finite = delta_omega[np.isfinite(delta_omega)]
-    if finite.size == 0:
-        return False
-    return bool(np.any((finite <= lo) | (finite >= hi)))
+def _mgrs_tile(scene_id: str) -> str | None:
+    """The MGRS tile id embedded in an S2 system:index, or None (fix 4b)."""
+    match = _MGRS_TILE_RE.search(scene_id)
+    return match.group(1) if match else None
 
 
 def _overpass_wind(bbox: BBox, when: datetime) -> tuple[WindSample, float, bool]:
@@ -173,6 +186,10 @@ def analyze(
             reference = pick_reference(target, scenes)
         if reference is not None and reference.relative_orbit != target.relative_orbit:
             flags.append("different_orbit_reference")
+        if reference is not None:
+            t_tile, r_tile = _mgrs_tile(target.scene_id), _mgrs_tile(reference.scene_id)
+            if t_tile and r_tile and t_tile != r_tile:
+                flags.append("cross_tile_reference")
 
     # ── Step 2: fetch reference chip (skipped for MBSP) ──
     check_cancel()
@@ -217,9 +234,11 @@ def analyze(
         "n_excluded_target": float(t_result.n_excluded),
         "n_excluded_ref": 0.0,
     }
-    if _clipped(d_omega_t, lo, hi):
-        flags.append("clipped_inversion")
 
+    # Per-pass reporting-LUT ΔΩ, kept in scope for the in-mask clip diagnostics
+    # (fix 3) and the reference-contamination check (fix 2-flag) below.
+    d_omega_r: NDArray[np.float64] | None = None
+    mask_d_omega_r: NDArray[np.float64] | None = None
     if method == "mbmp" and reference is not None and ref_chip is not None:
         r_result = mbsp(
             ref_chip.bands["B11"].astype(np.float64), ref_chip.bands["B12"].astype(np.float64)
@@ -235,8 +254,6 @@ def analyze(
         delta_r = mbmp(t_result, r_result)
         calibration["c_ref"] = r_result.c
         calibration["n_excluded_ref"] = float(r_result.n_excluded)
-        if "clipped_inversion" not in flags and _clipped(d_omega_r, lo, hi):
-            flags.append("clipped_inversion")
     else:
         delta_omega = d_omega_t
         mask_delta_omega = mask_d_omega_t
@@ -250,6 +267,17 @@ def analyze(
     check_cancel()
     progress(6, "Detecting plume")
     source_rc = _resolve_source_rc(source_lonlat, grid)
+
+    # Reference-contamination diagnostic (fix 2-flag / Tier 1 F4): a recurrent emitter
+    # may have no plume-free reference. Run the same detector on the reference's OWN
+    # mask-LUT ΔΩ — a surviving component means the reference itself shows an
+    # enhancement near the source, which over-subtracts. Zero extra EE round-trips.
+    if mask_d_omega_r is not None:
+        ref_self = detect_plume(
+            mask_d_omega_r, grid, k_sigma=k_sigma, min_area_px=min_area_px, source_rc=source_rc
+        )
+        if ref_self.n_pixels > 0:
+            flags.append("possible_reference_contamination")
 
     # ── Step 7: Monte-Carlo quantification ──
     check_cancel()
@@ -274,6 +302,26 @@ def analyze(
     elif bool(np.isnan(delta_omega[plume.mask]).any()):
         flags.append("nan_in_mask")
 
+    # In-mask inversion-range diagnostics (fix 3): fraction of masked pixels on each
+    # reporting-LUT grid end, per pass. Replaces the whole-chip clipped_inversion flag;
+    # a strong high-clip biases the reported column low → lut_hi_clipped_mask.
+    t_lo, t_hi = edge_fractions(d_omega_t, plume.mask, lo, hi)
+    if d_omega_r is not None:
+        r_lo, r_hi = edge_fractions(d_omega_r, plume.mask, lo, hi)
+    else:
+        r_lo, r_hi = 0.0, 0.0
+    clip_fractions = {"target_lo": t_lo, "target_hi": t_hi, "ref_lo": r_lo, "ref_hi": r_hi}
+    if t_hi > _LUT_HI_CLIP_FLAG_FRACTION:
+        flags.append("lut_hi_clipped_mask")
+
+    # Mask-stability diagnostic (fix 4c): the MC already labeled the mask at every k
+    # in its grid — flag an order-of-magnitude swing or a k that empties the mask.
+    npx = list(emission.mask_npx_by_k.values())
+    if plume.n_pixels > 0 and npx:
+        lo_n, hi_n = min(npx), max(npx)
+        if lo_n == 0 or hi_n / lo_n >= _MASK_STABILITY_RATIO_MAX:
+            flags.append("unstable_mask")
+
     return DetectionResult(
         target=target,
         reference=reference if method == "mbmp" else None,
@@ -288,4 +336,5 @@ def analyze(
         wind=wind,
         calibration=calibration,
         flags=flags,
+        clip_fractions=clip_fractions,
     )

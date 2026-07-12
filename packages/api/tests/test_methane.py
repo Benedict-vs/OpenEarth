@@ -186,6 +186,7 @@ def _canned_result(with_plume: bool = True) -> Any:
         wind=WindSample.from_uv(scene.time, 4.0, 0.0, "test"),
         calibration={"c_target": 1.02, "c_ref": float("nan"), "n_excluded_target": 3.0},
         flags=[] if with_plume else ["no_plume"],
+        clip_fractions={"target_lo": 0.0, "target_hi": 0.0, "ref_lo": 0.0, "ref_hi": 0.0},
     )
 
 

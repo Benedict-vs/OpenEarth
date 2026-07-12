@@ -160,6 +160,18 @@ def test_log_scatter_matches_definition() -> None:
     assert h.log_scatter(_SYNTH_PUB, _SYNTH_PUB) == pytest.approx(0.0)
 
 
+def test_spearman_rank_correlation() -> None:
+    h = _load_harness()
+    # Perfectly monotone → ρ = 1; reversed → ρ = −1.
+    asc = np.array([10.0, 20.0, 30.0, 40.0])
+    assert h.spearman(np.array([1.0, 2.0, 3.0, 4.0]), asc)[0] == pytest.approx(1.0)
+    assert h.spearman(np.array([4.0, 3.0, 2.0, 1.0]), asc)[0] == pytest.approx(-1.0)
+    # n < 3 → NaN (ρ undefined), not a crash.
+    rho, pval = h.spearman(np.array([1.0, 2.0]), np.array([1.0, 2.0]))
+    assert np.isnan(rho)
+    assert np.isnan(pval)
+
+
 # ── Stage 1b: frozen baseline (version-coupled to the packaged LUT) ──
 
 
