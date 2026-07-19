@@ -2,7 +2,7 @@
 name = "openearth-api"
 version = "2.0.0a0"
 description = "OpenEarth FastAPI backend: catalog, tiles, thumbnails."
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "openearth-core",
     "fastapi>=0.115,<1",

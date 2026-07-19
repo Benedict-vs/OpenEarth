@@ -6,7 +6,7 @@
 # the .venv and packages/ source. Build context is the repo root.
 
 # ── builder ──────────────────────────────────────────────────────
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -25,7 +25,7 @@ COPY packages/ ./packages/
 RUN uv sync --frozen --no-dev --no-editable --package openearth-api
 
 # ── runtime ──────────────────────────────────────────────────────
-FROM python:3.13-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm AS runtime
 
 # rasterio's manylinux wheel links the system libexpat, which slim omits.
 RUN apt-get update && apt-get install -y --no-install-recommends libexpat1 \

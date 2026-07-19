@@ -68,7 +68,7 @@ project. New public GEE collections can be added from a TOML file with zero code
 
 ## Quickstart
 
-Requires [uv](https://docs.astral.sh/uv/) (Python 3.13, pinned via `.python-version`) and, for the
+Requires [uv](https://docs.astral.sh/uv/) (Python 3.14, pinned via `.python-version`) and, for the
 web app, [pnpm](https://pnpm.io) with Node ≥ 22.
 
 ```bash

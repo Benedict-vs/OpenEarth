@@ -14,7 +14,7 @@ stack (see `docs/deploy.md`).
 ## Commands
 
 ```bash
-uv sync --all-packages        # whole dev env (uv workspace, Python 3.13 pinned)
+uv sync --all-packages        # whole dev env (uv workspace, Python 3.14 pinned)
 uv run pytest                 # offline unit tests — no Earth Engine, run these after changes
 uv run ruff check . && uv run ruff format --check .
 uv run mypy                   # strict on packages/core AND packages/api
