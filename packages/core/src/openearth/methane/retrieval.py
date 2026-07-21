@@ -23,15 +23,17 @@ from numpy.typing import NDArray
 
 from openearth.catalog.builtin.s2 import S2_COLLECTION_ID
 from openearth.ee.pixels import GridSpec, fetch_pixels, grid_for
+from openearth.methane.plume import robust_sigma
 
 if TYPE_CHECKING:
     from openearth.geometry import BBox
     from openearth.methane.scenes import S2Scene
 
-# B11/B12 drive the retrieval; B4/B3/B2 are the UI's RGB context (5 ≤ MAX_BANDS).
-# S2_HARMONIZED band ids are unpadded (B4, not B04) — verified against the live
-# collection's Available bands list.
-CHIP_BANDS = ("B11", "B12", "B4", "B3", "B2")
+# B11/B12 drive the retrieval; B4/B3/B2 are the UI's RGB context; B8A feeds the
+# NHI SWNIR flare condition (Phase 9). 6 = MAX_BANDS (no cap change). S2_HARMONIZED
+# band ids are unpadded (B4, not B04) — verified against the live collection's
+# Available bands list.
+CHIP_BANDS = ("B11", "B12", "B4", "B3", "B2", "B8A")
 
 # Explicit fill for EE-masked pixels — set before the fetch, mapped to NaN after
 # (never treat a legitimate DN 0 as fill).
@@ -126,24 +128,55 @@ def _delta_r(r11: NDArray[np.float64], r12: NDArray[np.float64], c: float) -> ND
     return dr
 
 
-def mbsp(r11: NDArray[np.float64], r12: NDArray[np.float64]) -> MbspResult:
-    """Calibrated MBSP fractional signal with a single plume-excluding refit."""
+def mbsp(
+    r11: NDArray[np.float64],
+    r12: NDArray[np.float64],
+    *,
+    robust_cut: bool = False,
+    exclude: NDArray[np.bool_] | None = None,
+) -> MbspResult:
+    """Calibrated MBSP fractional signal with a single plume-excluding refit.
+
+    The defaults reproduce the legacy behaviour **bit-for-bit** — the ML seam
+    (``channels.build_channels``) relies on this and a golden parity test enforces
+    it. Opt-in robustness (Phase 9):
+
+    * ``robust_cut`` swaps the refit's exclusion σ from ``np.nanstd`` (which a
+      strong plume inflates) to the MAD-based :func:`plume.robust_sigma`.
+    * ``exclude`` (a bool mask, e.g. NHI flare-hot pixels) drops pixels from
+      **both** the initial and the refit calibration (and from the σ estimate),
+      so a thermal hotspot cannot bias ``c``.
+    """
     r11 = np.asarray(r11, dtype=np.float64)
     r12 = np.asarray(r12, dtype=np.float64)
     valid = np.isfinite(r11) & np.isfinite(r12)
+    if exclude is not None:
+        valid = valid & ~np.asarray(exclude, dtype=bool)
 
     c_initial = _fit_c(r11, r12, valid)
     dr0 = _delta_r(r11, r12, c_initial)
-    sigma = float(np.nanstd(dr0))
+    # dr0 is already NaN outside {r11,r12 finite, r11≠0}, so with the default
+    # exclude=None this masking is a no-op and the legacy path is reproduced
+    # exactly; with an exclude it also removes the hot pixels from the σ estimate.
+    dr_valid = np.where(valid, dr0, np.nan)
+    if robust_cut:
+        # Robust rejection pairs a robust SCALE (MAD-σ, plume-insensitive) with a
+        # robust LOCATION (the median): c_initial is slightly plume-biased, so the
+        # background sits a hair off zero, and a tiny MAD-σ around zero would miss
+        # it. Centering on the median keeps the background and excludes the plume.
+        center = float(np.nanmedian(dr_valid))
+        sigma = robust_sigma(dr_valid)
+    else:
+        center = 0.0
+        sigma = float(np.nanstd(dr_valid))
 
-    # Drop |ΔR| > 1σ so a real plume can't drag the calibration toward itself.
-    keep = valid & np.isfinite(dr0) & (np.abs(dr0) <= sigma)
-    # A flat/degenerate field (σ ≈ 0) would leave nothing to refit on; keep the
-    # initial calibration rather than discarding every pixel.
-    if not np.isfinite(sigma) or sigma == 0.0 or np.count_nonzero(keep) < 3:
+    # Drop |ΔR − center| > 1σ so a real plume can't drag the calibration toward
+    # itself. Too few surviving background pixels ⇒ keep the initial calibration.
+    keep = valid & np.isfinite(dr0) & (np.abs(dr0 - center) <= sigma)
+    if not np.isfinite(sigma) or np.count_nonzero(keep) < 3:
         return MbspResult(delta_r=dr0, c=c_initial, c_initial=c_initial, n_excluded=0)
 
-    n_excluded = int(np.count_nonzero(valid & np.isfinite(dr0) & (np.abs(dr0) > sigma)))
+    n_excluded = int(np.count_nonzero(valid & np.isfinite(dr0) & (np.abs(dr0 - center) > sigma)))
     c = _fit_c(r11, r12, keep)
     return MbspResult(
         delta_r=_delta_r(r11, r12, c), c=c, c_initial=c_initial, n_excluded=n_excluded

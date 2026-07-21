@@ -50,6 +50,7 @@ from openearth.methane.conversion import (
     load_lut,
     load_mask_lut,
 )
+from openearth.methane.flare import nhi_hot_mask
 from openearth.methane.ime import McParams, emission_over_mask, quantify
 from openearth.methane.metrics import (
     log_scatter,
@@ -278,6 +279,9 @@ class ProductScore:
     u10_ms: float
     ime_kg: float
     l_m: float
+    # NHI post-floor hot-pixel count on the target chip (per product; expected 0 on
+    # the flare-free simulated scenes). Same across a product's method/mode rows.
+    n_hot: int = 0
     # MC subset (None unless this product was sampled for the seeded MC):
     ci_contains_truth: bool | None = None
     q_mc_kg_h: float | None = None
@@ -298,6 +302,26 @@ def _invert_pass(delta_r: NDArray[np.float64], spacecraft: str, amf: float) -> _
         reporting=invert_fractional_signal(delta_r, load_lut(), spacecraft, amf),
         mask=invert_fractional_signal(delta_r, load_mask_lut(), spacecraft, amf),
     )
+
+
+def _retrieve(
+    bands: dict[str, NDArray[np.float64]], spacecraft: str, amf: float
+) -> tuple[_Inverted, int]:
+    """One retrieval pass, mirroring detect.analyze's ALGO-7 bundle exactly.
+
+    Under ALGO 6 (v1) this is a plain default mbsp; under ALGO 7 (v2) it opts into
+    the NHI flare exclusion + robust-σ refit and NaN-s the hot pixels before
+    inversion. Returns the inverted pass and the post-floor NHI hot-pixel count
+    (expected 0 on the flare-free simulated scenes — the false-positive regression).
+    """
+    if ALGO_VERSION < 7:
+        dr = mbsp(bands["B11"], bands["B12"]).delta_r
+        return _invert_pass(dr, spacecraft, amf), 0
+    hot = nhi_hot_mask(bands, spacecraft)
+    n_hot = int(nhi_hot_mask(bands, spacecraft, dilate=False).sum())
+    dr = mbsp(bands["B11"], bands["B12"], robust_cut=True, exclude=hot).delta_r.copy()
+    dr[hot] = np.nan
+    return _invert_pass(dr, spacecraft, amf), n_hot
 
 
 def _truth_mask(truth_xch4: NDArray[np.float64]) -> NDArray[np.bool_]:
@@ -346,6 +370,7 @@ def _score_product(
     truth_mask: NDArray[np.bool_],
     wind: WindSample,
     run_mc: bool,
+    n_hot: int,
 ) -> ProductScore:
     """Score one product×method×source-mode: detect, IoU, IME Q, ΔXCH4 residual."""
     source_rc = None
@@ -395,6 +420,7 @@ def _score_product(
         u10_ms=prod.u10_ms,
         ime_kg=float(emission.ime_kg),
         l_m=float(emission.l_m),
+        n_hot=n_hot,
         ci_contains_truth=ci_ok,
         q_mc_kg_h=q_mc,
         q_mc_sigma_kg_h=q_mc_sigma,
@@ -421,17 +447,14 @@ def score_all(paths: list[Path]) -> list[ProductScore]:
             print(f"  ! no Q0 reference for {site} plume{plume}; skipping group", file=sys.stderr)
             continue
         ref = read_product(q0_path)
-        ref_dr = mbsp(ref.bands["B11"], ref.bands["B12"]).delta_r
-        ref_pass = _invert_pass(ref_dr, SPACECRAFT, ref.amf)
+        ref_pass, _ = _retrieve(ref.bands, SPACECRAFT, ref.amf)  # Q0 is flare-free
 
         for path in group:
             name = parse_product_name(path.name)
             if name.q_true_kg_h == 0.0:
                 continue
             prod = read_product(path)
-            t_pass = _invert_pass(
-                mbsp(prod.bands["B11"], prod.bands["B12"]).delta_r, SPACECRAFT, prod.amf
-            )
+            t_pass, n_hot = _retrieve(prod.bands, SPACECRAFT, prod.amf)
             truth_mask = _truth_mask(prod.truth_xch4)
             wind = WindSample.from_uv(
                 datetime(name.acquired.year, name.acquired.month, name.acquired.day, tzinfo=UTC),
@@ -449,7 +472,15 @@ def score_all(paths: list[Path]) -> list[ProductScore]:
                 for mode in _SOURCE_MODES:
                     scores.append(
                         _score_product(
-                            prod, reporting, mask_field, method, mode, truth_mask, wind, run_mc
+                            prod,
+                            reporting,
+                            mask_field,
+                            method,
+                            mode,
+                            truth_mask,
+                            wind,
+                            run_mc,
+                            n_hot,
                         )
                     )
             scored_idx += 1
@@ -671,6 +702,23 @@ def build_result(scores: list[ProductScore]) -> dict[str, object]:
         },
         "sites": _aggregate(scores),
         "alpha_beta": _alpha_beta(scores),
+        "nhi": _nhi_summary(scores),
+    }
+
+
+def _nhi_summary(scores: list[ProductScore]) -> dict[str, object]:
+    """NHI flare-fire count over unique products — expected 0 on the simulated
+    (flare-free) scenes. A non-zero count is the false-positive regression signal,
+    NOT a win (the bundle's positive evidence is unit tests + a live spot check)."""
+    per_product: dict[tuple[str, int, float], int] = {}
+    for s in scores:
+        per_product[(s.site, s.plume, s.q_true_kg_h)] = s.n_hot
+    return {
+        "n_products": len(per_product),
+        "products_fired": sum(1 for v in per_product.values() if v > 0),
+        "total_hot_pixels": sum(per_product.values()),
+        "note": "expected 0 — simulated scenes have no flares; NHI firing here would "
+        "be a false positive (regression guard, never reported as a win)",
     }
 
 
@@ -702,6 +750,11 @@ def _print_summary(result: dict[str, object]) -> None:
     print(
         f"\nα,β: n={ab['n_points']} U10={ab['u10_values_ms']} span={ab['u10_span_ms']} m/s "
         f"→ {ab['decision']}"
+    )
+    nhi = result["nhi"]  # type: ignore[index]
+    print(
+        f"NHI fires: {nhi['products_fired']}/{nhi['n_products']} products, "
+        f"{nhi['total_hot_pixels']} hot pixels (expected 0)"
     )
 
 

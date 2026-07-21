@@ -30,7 +30,9 @@ if TYPE_CHECKING:
 # 4: plume footprint thresholded on the frozen mask-LUT ΔΩ (invariant to reporting-LUT swaps).
 # 5: CH4 LUT v4 (interfering H2O/CO2 + TSIS-1 solar weighting) changed methane ΔΩ/ΔXCH4 outputs.
 # 6: LUT v5 (ΔΩ grid to 6.0) + median-centered plume masks moved masks + columns (Phase 7 Stage 2).
-ALGO_VERSION = 6
+# 7: retrieval-robustness bundle (Phase 9) — analyze opts into robust-σ refit + NHI flare
+#    exclusion, shifting every ΔR calibration (and thus ΔΩ/IME/masks) slightly.
+ALGO_VERSION = 7
 
 # Open-ended date ranges keep collecting new scenes upstream; closed
 # historical ranges are immutable.
