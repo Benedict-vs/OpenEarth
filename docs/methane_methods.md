@@ -292,8 +292,10 @@ is a human PATCH only).
   factor across bands, so the *sign* conditions translate exactly — `NHI_SWIR > 0 ⇔ ρ12·E12 >
   ρ11·E11` (ρ12/ρ11 > E11/E12 ≈ 2.881 S2A / 2.816 S2B) and `NHI_SWNIR > 0 ⇔ ρ11·E11 > ρ8A·E8A`. This
   is **our documented adaptation** of NHI to reflectance chips: we replace the reference
-  implementation's absolute radiance floor with a declared reflectance floor (ρ12 ≥ 0.01) and dilate
-  the hot set 1 px. The hot pixels are dropped from the calibration (`exclude` + robust-σ refit) and
+  implementation's absolute radiance floor with a declared reflectance floor (ρ12 ≥ 0.01), require
+  the ρ8A/ρ11 entering the sign conditions to be **non-negative** (reflectance is physically ≥ 0;
+  negative numerical artifacts — L1C DN offsets in dark pixels, simulation noise — would satisfy a
+  sign condition trivially), and dilate the hot set 1 px. The hot pixels are dropped from the calibration (`exclude` + robust-σ refit) and
   NaN-ed before inversion (`flare_lit_target` / `flare_lit_reference`, `n_hot_*`). The audit's
   reflectance shorthand "(B12−B11)/(B12+B11) > 0" is **wrong** (it fires on ordinary bright soil) and
   is not implemented.
@@ -573,12 +575,14 @@ honesty finding: our reported σ is *not* a bias bar.
 vs `…_v1.json`) is the bundle's regression guard, not a win: MBSP slopes and CI coverage improve
 slightly (CI 0.16→0.20); MBMP central bias is stable (slope 0.622→0.625); Permian MBMP log-scatter
 **halves** (0.158→0.081) — the robust cut trades a hair of slope for precision. No systematic
-degradation, so the bundle merges. **NHI fires on 13 pixels** (predicted 0): all at the *single*
-deepest-absorption pixel of plume shape 4 at extreme flux (46–50 t/h), where the WRF-LES forward
-model drives B11 reflectance negative/near-zero and the ratio condition flips — a **simulation
-boundary artifact, not a realistic false positive** (~2 × 10⁻⁶ of pixels). NHI is implemented
-exactly at the Marchese sign rules; a physical ρ ≥ 0 validity guard would drop this to 4 and is
-recorded as a recommendation, not silently added.
+degradation, so the bundle merges. **NHI fires on 4 pixels** (predicted 0): the un-guarded sign
+rules fired on 13, all at the *single* deepest-absorption pixel of plume shape 4 at extreme flux
+(46–50 t/h), where the WRF-LES forward model drives B11 reflectance negative/near-zero and the
+ratio condition flips. The physical ρ ≥ 0 validity guard (surfaced in review, adopted pre-merge —
+reflectance is non-negative, so negative artifacts are invalid data, never flares) removes the
+negative-B11 cases; the residual 4 are the same extreme-flux pixel with near-zero-but-positive
+B11 — a **simulation boundary artifact, not a realistic false positive** (~3 × 10⁻⁷ of pixels),
+reported honestly rather than guarded away.
 
 **α,β (F6) evidence block.** For every detected MBMP-hinted product we back out the implied effective
 wind U_eff = Q_true · L / (IME · 3600) and fit U_eff = α·U10 + β against the file's true U10. The

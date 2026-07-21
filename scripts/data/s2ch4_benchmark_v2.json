@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "provenance": {
-    "git_hash": "7bbd9c1",
+    "git_hash": "2a8bcea",
     "algo_version": 7,
     "lut_version": "5",
     "mask_lut_version": "mask-1",
@@ -10,7 +10,7 @@
       "version": 2,
       "license": "CC0-1.0"
     },
-    "run_utc": "2026-07-21T13:40:37.013995+00:00",
+    "run_utc": "2026-07-21T15:00:49.007911+00:00",
     "n_products_scored": 1330
   },
   "conventions": {
@@ -92,10 +92,10 @@
           ],
           "q_recovery": {
             "n": 373,
-            "slope_through_origin": 0.8282,
+            "slope_through_origin": 0.8289,
             "median_ratio": 1.2534,
             "log_scatter": 0.5524,
-            "theil_sen_slope": 0.1176,
+            "theil_sen_slope": 0.1179,
             "spearman_rho": 0.2083,
             "spearman_p": 0.0001
           },
@@ -169,9 +169,9 @@
           ],
           "q_recovery": {
             "n": 386,
-            "slope_through_origin": 0.8204,
+            "slope_through_origin": 0.821,
             "median_ratio": 1.4527,
-            "log_scatter": 0.5606,
+            "log_scatter": 0.5545,
             "theil_sen_slope": 0.1135,
             "spearman_rho": 0.3228,
             "spearman_p": 0.0
@@ -248,11 +248,11 @@
           ],
           "q_recovery": {
             "n": 450,
-            "slope_through_origin": 0.6248,
+            "slope_through_origin": 0.6256,
             "median_ratio": 0.5656,
             "log_scatter": 0.0489,
             "theil_sen_slope": 0.5568,
-            "spearman_rho": 0.98,
+            "spearman_rho": 0.9803,
             "spearman_p": 0.0
           },
           "ci_coverage": {
@@ -325,11 +325,11 @@
           ],
           "q_recovery": {
             "n": 450,
-            "slope_through_origin": 0.6248,
+            "slope_through_origin": 0.6256,
             "median_ratio": 0.5656,
             "log_scatter": 0.0489,
             "theil_sen_slope": 0.5568,
-            "spearman_rho": 0.98,
+            "spearman_rho": 0.9803,
             "spearman_p": 0.0
           },
           "ci_coverage": {
@@ -406,11 +406,11 @@
           ],
           "q_recovery": {
             "n": 401,
-            "slope_through_origin": 0.796,
+            "slope_through_origin": 0.7971,
             "median_ratio": 1.0479,
-            "log_scatter": 0.362,
-            "theil_sen_slope": 0.5688,
-            "spearman_rho": 0.785,
+            "log_scatter": 0.3595,
+            "theil_sen_slope": 0.5708,
+            "spearman_rho": 0.7852,
             "spearman_p": 0.0
           },
           "ci_coverage": {
@@ -483,11 +483,11 @@
           ],
           "q_recovery": {
             "n": 401,
-            "slope_through_origin": 0.8083,
+            "slope_through_origin": 0.8094,
             "median_ratio": 1.0461,
-            "log_scatter": 0.3272,
-            "theil_sen_slope": 0.5821,
-            "spearman_rho": 0.7931,
+            "log_scatter": 0.3256,
+            "theil_sen_slope": 0.5838,
+            "spearman_rho": 0.7933,
             "spearman_p": 0.0
           },
           "ci_coverage": {
@@ -562,11 +562,11 @@
           ],
           "q_recovery": {
             "n": 450,
-            "slope_through_origin": 0.6254,
+            "slope_through_origin": 0.6261,
             "median_ratio": 0.5566,
             "log_scatter": 0.0477,
             "theil_sen_slope": 0.561,
-            "spearman_rho": 0.9828,
+            "spearman_rho": 0.983,
             "spearman_p": 0.0
           },
           "ci_coverage": {
@@ -639,11 +639,11 @@
           ],
           "q_recovery": {
             "n": 450,
-            "slope_through_origin": 0.6254,
+            "slope_through_origin": 0.6261,
             "median_ratio": 0.5566,
             "log_scatter": 0.0477,
             "theil_sen_slope": 0.561,
-            "spearman_rho": 0.9828,
+            "spearman_rho": 0.983,
             "spearman_p": 0.0
           },
           "ci_coverage": {
@@ -726,7 +726,7 @@
             "coverage": 0.2326
           },
           "median_iou_detected": 0.0,
-          "median_xch4_bias_ppb": 602.2157,
+          "median_xch4_bias_ppb": 585.7535,
           "median_xch4_rms_ppb": 3751.7421
         },
         "blind": {
@@ -797,7 +797,7 @@
             "coverage": 0.2558
           },
           "median_iou_detected": 0.0,
-          "median_xch4_bias_ppb": 602.2157,
+          "median_xch4_bias_ppb": 585.7535,
           "median_xch4_rms_ppb": 3751.7421
         }
       },
@@ -864,11 +864,11 @@
           ],
           "q_recovery": {
             "n": 430,
-            "slope_through_origin": 0.6028,
+            "slope_through_origin": 0.604,
             "median_ratio": 0.5722,
             "log_scatter": 0.081,
             "theil_sen_slope": 0.5649,
-            "spearman_rho": 0.9325,
+            "spearman_rho": 0.9329,
             "spearman_p": 0.0
           },
           "ci_coverage": {
@@ -876,7 +876,7 @@
             "coverage": 0.0
           },
           "median_iou_detected": 0.3428,
-          "median_xch4_bias_ppb": -287.9267,
+          "median_xch4_bias_ppb": -296.4784,
           "median_xch4_rms_ppb": 678.3946
         },
         "blind": {
@@ -941,11 +941,11 @@
           ],
           "q_recovery": {
             "n": 430,
-            "slope_through_origin": 0.6028,
+            "slope_through_origin": 0.6039,
             "median_ratio": 0.5722,
             "log_scatter": 0.081,
             "theil_sen_slope": 0.565,
-            "spearman_rho": 0.9325,
+            "spearman_rho": 0.9329,
             "spearman_p": 0.0
           },
           "ci_coverage": {
@@ -953,7 +953,7 @@
             "coverage": 0.0
           },
           "median_iou_detected": 0.3428,
-          "median_xch4_bias_ppb": -287.9267,
+          "median_xch4_bias_ppb": -296.4784,
           "median_xch4_rms_ppb": 678.3946
         }
       }
@@ -976,15 +976,15 @@
     },
     "fit": {
       "fitted": true,
-      "alpha_hat": 0.2011,
-      "beta_hat": 2.0247,
+      "alpha_hat": 0.1966,
+      "beta_hat": 2.0376,
       "alpha_ci95": [
-        0.1242,
-        0.278
+        0.1204,
+        0.2728
       ],
       "beta_ci95": [
-        1.7598,
-        2.2896
+        1.7751,
+        2.3
       ]
     },
     "adopt_refit": false,
@@ -992,8 +992,8 @@
   },
   "nhi": {
     "n_products": 1330,
-    "products_fired": 13,
-    "total_hot_pixels": 13,
+    "products_fired": 4,
+    "total_hot_pixels": 4,
     "note": "expected 0 \u2014 simulated scenes have no flares; NHI firing here would be a false positive (regression guard, never reported as a win)"
   }
 }

@@ -1,9 +1,9 @@
 {
   "version": 2,
   "provenance": {
-    "git_hash": "7bbd9c1",
+    "git_hash": "2a8bcea",
     "lut_version": "5",
-    "run_utc": "2026-07-21T13:51:06.381131+00:00",
+    "run_utc": "2026-07-21T15:08:24.553101+00:00",
     "window": [
       "2022-01-01",
       "2024-01-01"
@@ -519,9 +519,9 @@
       "detect_rate": 0.4,
       "q_noise_kg_h": [
         23842.72,
-        46661.05
+        46968.71
       ],
-      "floor_kg_h": 35251.89,
+      "floor_kg_h": 35405.71,
       "pairs": [
         {
           "target_scene_id": "20220701T095041_20220701T095042_T33UYR",
@@ -566,8 +566,8 @@
           "target_scene_id": "20230112T095249_20230112T095252_T34UCA",
           "reference_scene_id": "20230107T095401_20230107T095402_T33UYR",
           "no_plume": false,
-          "q_kg_h": 46661.05,
-          "q_sigma_kg_h": 17450.49,
+          "q_kg_h": 46968.71,
+          "q_sigma_kg_h": 17299.3,
           "n_px": 19,
           "u10_ms": 5.055,
           "flags": [
