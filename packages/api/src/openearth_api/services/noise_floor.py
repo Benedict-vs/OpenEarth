@@ -16,7 +16,10 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-_FLOOR_FILENAME = "noise_floor_v1.json"
+# Phase 9 (ALGO 7): the robust-σ refit + NHI exclusion shift the retrieved noise
+# Qs, so the served floor is re-frozen as v2 (v1 kept for lineage). Bump in lockstep
+# with a scripts/noise_floor.py --freeze rerun.
+_FLOOR_FILENAME = "noise_floor_v2.json"
 
 
 @lru_cache(maxsize=4)

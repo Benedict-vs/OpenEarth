@@ -164,7 +164,10 @@ def mbsp(
         # robust LOCATION (the median): c_initial is slightly plume-biased, so the
         # background sits a hair off zero, and a tiny MAD-σ around zero would miss
         # it. Centering on the median keeps the background and excludes the plume.
-        center = float(np.nanmedian(dr_valid))
+        # Median over the finite values directly (== nanmedian) so a fully-masked
+        # chip doesn't emit an all-NaN-slice warning; the σ guard handles it below.
+        finite_dr = dr_valid[np.isfinite(dr_valid)]
+        center = float(np.median(finite_dr)) if finite_dr.size else 0.0
         sigma = robust_sigma(dr_valid)
     else:
         center = 0.0

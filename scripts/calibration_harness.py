@@ -12,6 +12,13 @@ produces is what makes Stages 2 and 3 falsifiable.
     OPENEARTH_EE_TESTS=1 uv run python scripts/calibration_harness.py --freeze   # write baseline
     OPENEARTH_EE_TESTS=1 uv run python scripts/calibration_harness.py --compare  # diff vs baseline
 
+Baseline lineage is append-only. ``_baseline_path`` keys by LUT version, so a
+same-LUT re-freeze (e.g. the Phase 9 ALGO-7 bundle, which changes the retrieval
+but not the LUT) MUST use ``--freeze-as`` to write beside the old file, never over
+it: ``--freeze --freeze-as 5.1`` writes ``calibration_baseline_v5.1.json`` (LUT v5,
+ALGO 7) while ``calibration_baseline_v5.json`` (LUT v5, ALGO 6) stays untouched.
+Every baseline stamps its ``algo_version`` so the lineage is explicit.
+
 A ``no_plume`` result or any per-event failure is a recorded *exclusion with
 reason*, never a crash; the run is healthy when every event yields either a
 finite Q or a documented exclusion and at least ``_MIN_QUANTIFIED`` events are
@@ -47,6 +54,7 @@ from openearth.methane.metrics import (
     spearman,
     theil_sen_slope,
 )
+from openearth_api.cache import ALGO_VERSION
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _EVENTS_PATH = _REPO_ROOT / "scripts" / "data" / "calibration_events.json"
@@ -194,6 +202,7 @@ def run_harness(reference_mode: str = "single") -> dict[str, object]:
     return {
         "schema": 1,
         "lut_version": lut.version,
+        "algo_version": ALGO_VERSION,
         "reference_mode": reference_mode,
         "mc_seed": _MC.seed,
         "mc_n": _MC.n,
@@ -206,7 +215,8 @@ def run_harness(reference_mode: str = "single") -> dict[str, object]:
 
 def _print_table(baseline: dict[str, object]) -> None:
     print(
-        f"LUT v{baseline['lut_version']}  ref={baseline.get('reference_mode', 'single')}  "
+        f"LUT v{baseline['lut_version']}  ALGO {baseline.get('algo_version', '?')}  "
+        f"ref={baseline.get('reference_mode', 'single')}  "
         f"seed={baseline['mc_seed']}  n={baseline['mc_n']}  "
         f"git={baseline['git_hash']}"
     )
@@ -234,8 +244,9 @@ def _print_table(baseline: dict[str, object]) -> None:
     )
 
 
-def _baseline_path(lut_version: str) -> Path:
-    return _REPO_ROOT / "scripts" / "data" / f"calibration_baseline_v{lut_version}.json"
+def _baseline_path(version: str) -> Path:
+    """Baseline file for a version label (LUT version, or an explicit ``--freeze-as``)."""
+    return _REPO_ROOT / "scripts" / "data" / f"calibration_baseline_v{version}.json"
 
 
 def main() -> int:
@@ -253,6 +264,13 @@ def main() -> int:
         default="single",
         help="MBMP reference: single (default) or median composite (opt-in evidence)",
     )
+    parser.add_argument(
+        "--freeze-as",
+        default=None,
+        metavar="VERSION",
+        help="version label for the output file (e.g. 5.1); defaults to the LUT "
+        "version. Use for a same-LUT re-freeze so the old baseline is never overwritten.",
+    )
     args = parser.parse_args()
 
     if args.freeze and args.reference_mode == "composite":
@@ -268,7 +286,8 @@ def main() -> int:
         print(f"\nFAIL: only {a['n_quantified']} events quantified (need ≥ {_MIN_QUANTIFIED})")  # type: ignore[index]
         return 1
 
-    path = _baseline_path(str(baseline["lut_version"]))
+    version = args.freeze_as if args.freeze_as is not None else str(baseline["lut_version"])
+    path = _baseline_path(version)
     if args.freeze:
         with open(path, "w") as fh:
             json.dump(baseline, fh, indent=2)

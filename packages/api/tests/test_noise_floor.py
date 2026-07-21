@@ -72,11 +72,11 @@ def test_load_floor_reads_file_and_handles_absence(tmp_path: Path) -> None:
 
 
 def test_packaged_floor_schema_when_present() -> None:
-    """If the v1 floor has been frozen, validate its shape (schema pin)."""
+    """If the packaged floor (v2 under ALGO 7) has been frozen, pin its shape."""
     floor = load_floor()  # packaged
     if not floor:
         return  # not frozen yet — covered by the loader tests above
-    assert floor["version"] == 1
+    assert floor["version"] == 2
     assert set(floor["provenance"]) >= {"git_hash", "lut_version", "run_utc", "window"}
     assert "floor_kg_h" in floor["global"]
     for entry in floor["sites"].values():
