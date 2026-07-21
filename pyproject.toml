@@ -33,6 +33,11 @@ dev = [
     "mypy>=1.14,<2",
     "pandas-stubs>=2.0",
     "pre-commit>=4,<5",
+    # Reads the S2CH4 simulated-plume netCDF4/HDF5 files for the offline benchmark
+    # (scripts/s2ch4_benchmark.py + its fixture-driven tests). Script/test-only: it
+    # is imported ONLY inside scripts/ (via importlib in the tests), never under
+    # packages/ — the dep wall in test_no_h5py_deps.py enforces that.
+    "h5py>=3.11",
 ]
 # Used ONLY by scripts/generate_ch4_lut.py to (re)generate the committed CH4 LUT:
 #   uv run --group lut python scripts/generate_ch4_lut.py

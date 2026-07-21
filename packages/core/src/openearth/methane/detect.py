@@ -28,9 +28,16 @@ from openearth.methane.conversion import (
     load_lut,
     load_mask_lut,
 )
+from openearth.methane.evidence import (
+    SURFACE_CORRELATION_CUT,
+    b12_dimming_ok,
+    chip_flags,
+    surface_correlation,
+)
+from openearth.methane.flare import nhi_hot_mask
 from openearth.methane.ime import EmissionEstimate, McParams, quantify
 from openearth.methane.plume import PlumeMask, detect_plume
-from openearth.methane.retrieval import RetrievalChip, fetch_chip, mbmp, mbsp
+from openearth.methane.retrieval import RetrievalChip, fetch_chip, mbsp
 from openearth.methane.scenes import S2Scene, list_scenes, pick_reference, pick_reference_set
 from openearth.methane.wind import (
     GLOBAL_ERA5_HOURLY_ID,
@@ -110,6 +117,10 @@ class DetectionResult:
     reference_mode: str = "single"
     reference_members: list[ReferenceMember] = field(default_factory=list)
     composite_amf_spread: float = 0.0
+    # NHI flare-hot pixel counts (Phase 9; post-floor, pre-dilation). Ride result_json
+    # (no migration); ``flare_lit_*`` flags fire when either is ≥ 1.
+    n_hot_target: int = 0
+    n_hot_reference: int = 0
 
 
 def _median_composite_chip(chips: list[RetrievalChip]) -> RetrievalChip:
@@ -297,6 +308,8 @@ def analyze(
     rgb = np.stack(
         [target_chip.bands["B4"], target_chip.bands["B3"], target_chip.bands["B2"]], axis=-1
     ).astype(np.float32)
+    # Chip-validity diagnostics (Phase 9; flag-only, nothing is gated on them).
+    flags.extend(chip_flags(target_chip.bands))
 
     # ── Step 4: sample wind (×3) ──
     check_cancel()
@@ -309,13 +322,26 @@ def analyze(
     check_cancel()
     progress(5, "Retrieving + inverting")
     lo, hi = float(lut.delta_omega[0]), float(lut.delta_omega[-1])
+
+    # NHI flare-hot exclusion (Phase 9): a lit gas flare's SWIR thermal signal
+    # corrupts the B11/B12 retrieval, and a lit→unlit transition between target and
+    # reference can mimic a plume at the stack. Drop the hot pixels (dilated) from
+    # the calibration (exclude + robust_cut) and NaN them in ΔR before inversion, so
+    # a hotspot neither biases c nor invents a plume. Post-floor count → flare_lit_*.
+    t_hot = nhi_hot_mask(target_chip.bands, target.spacecraft)
+    n_hot_target = int(nhi_hot_mask(target_chip.bands, target.spacecraft, dilate=False).sum())
+    if n_hot_target > 0:
+        flags.append("flare_lit_target")
     t_result = mbsp(
-        target_chip.bands["B11"].astype(np.float64), target_chip.bands["B12"].astype(np.float64)
+        target_chip.bands["B11"].astype(np.float64),
+        target_chip.bands["B12"].astype(np.float64),
+        robust_cut=True,
+        exclude=t_hot,
     )
-    d_omega_t = invert_fractional_signal(t_result.delta_r, lut, target.spacecraft, target.amf)
-    mask_d_omega_t = invert_fractional_signal(
-        t_result.delta_r, mask_lut, target.spacecraft, target.amf
-    )
+    delta_r_t = t_result.delta_r.copy()
+    delta_r_t[t_hot] = np.nan
+    d_omega_t = invert_fractional_signal(delta_r_t, lut, target.spacecraft, target.amf)
+    mask_d_omega_t = invert_fractional_signal(delta_r_t, mask_lut, target.spacecraft, target.amf)
 
     calibration = {
         "c_target": t_result.c,
@@ -328,26 +354,38 @@ def analyze(
     # (fix 3) and the reference-contamination check (fix 2-flag) below.
     d_omega_r: NDArray[np.float64] | None = None
     mask_d_omega_r: NDArray[np.float64] | None = None
+    n_hot_reference = 0
     if method == "mbmp" and reference is not None and ref_chip is not None:
         assert ref_amf is not None  # set alongside ref_chip (single or composite)
-        r_result = mbsp(
-            ref_chip.bands["B11"].astype(np.float64), ref_chip.bands["B12"].astype(np.float64)
+        r_hot = nhi_hot_mask(ref_chip.bands, reference.spacecraft)
+        n_hot_reference = int(
+            nhi_hot_mask(ref_chip.bands, reference.spacecraft, dilate=False).sum()
         )
+        if n_hot_reference > 0:
+            flags.append("flare_lit_reference")
+        r_result = mbsp(
+            ref_chip.bands["B11"].astype(np.float64),
+            ref_chip.bands["B12"].astype(np.float64),
+            robust_cut=True,
+            exclude=r_hot,
+        )
+        delta_r_r = r_result.delta_r.copy()
+        delta_r_r[r_hot] = np.nan
         # Composite members are same-spacecraft (hard constraint), so the anchor's
         # spacecraft is the whole set's; the AMF is the member median.
-        d_omega_r = invert_fractional_signal(r_result.delta_r, lut, reference.spacecraft, ref_amf)
+        d_omega_r = invert_fractional_signal(delta_r_r, lut, reference.spacecraft, ref_amf)
         mask_d_omega_r = invert_fractional_signal(
-            r_result.delta_r, mask_lut, reference.spacecraft, ref_amf
+            delta_r_r, mask_lut, reference.spacecraft, ref_amf
         )
         delta_omega = d_omega_t - d_omega_r
         mask_delta_omega = mask_d_omega_t - mask_d_omega_r
-        delta_r = mbmp(t_result, r_result)
+        delta_r = delta_r_t - delta_r_r
         calibration["c_ref"] = r_result.c
         calibration["n_excluded_ref"] = float(r_result.n_excluded)
     else:
         delta_omega = d_omega_t
         mask_delta_omega = mask_d_omega_t
-        delta_r = t_result.delta_r
+        delta_r = delta_r_t
 
     delta_omega = np.asarray(delta_omega, dtype=np.float64)
     mask_delta_omega = np.asarray(mask_delta_omega, dtype=np.float64)
@@ -389,8 +427,18 @@ def analyze(
     )
     if plume.n_pixels == 0:
         flags.append("no_plume")
-    elif bool(np.isnan(delta_omega[plume.mask]).any()):
-        flags.append("nan_in_mask")
+    else:
+        if bool(np.isnan(delta_omega[plume.mask]).any()):
+            flags.append("nan_in_mask")
+        # False-positive evidence checks (Phase 9; flag-only). Ehret dimming sign:
+        # a real plume absorbs in B12, so the in-mask mean target-pass ΔR is < 0.
+        if not b12_dimming_ok(delta_r_t, plume.mask):
+            flags.append("not_b12_dimming")
+        # S2 methane plumes are RGB-invisible; a mask correlated with B4/B3/B2 is
+        # tracking a visible surface feature, not gas.
+        blind = {b: target_chip.bands[b] for b in ("B4", "B3", "B2")}
+        if surface_correlation(plume.mask, blind) > SURFACE_CORRELATION_CUT:
+            flags.append("surface_correlated")
 
     # In-mask inversion-range diagnostics (fix 3): fraction of masked pixels on each
     # reporting-LUT grid end, per pass. Replaces the whole-chip clipped_inversion flag;
@@ -430,4 +478,6 @@ def analyze(
         reference_mode="composite" if composite_members else "single",
         reference_members=reference_members,
         composite_amf_spread=composite_amf_spread,
+        n_hot_target=n_hot_target,
+        n_hot_reference=n_hot_reference,
     )

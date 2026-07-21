@@ -92,6 +92,7 @@ export function DetectionDetail() {
             <h4>Monte-Carlo Q</h4>
             <McHistogram histogram={histogram} />
           </div>
+          <FlareState detail={detail} />
           <PhysicsDiagnostics detail={detail} />
         </>
       )}
@@ -141,6 +142,35 @@ export function DetectionDetail() {
 
       <EmitSection detId={detId} detail={detail} />
     </div>
+  );
+}
+
+/** Phase 9 flare-state callout: shown when a lit flare (NHI hot pixel) was found in
+ * the target or reference. A lit→unlit transition between the two scenes can mimic a
+ * plume at the stack; the hot pixels are excluded from the retrieval and the mask. */
+function FlareState({ detail }: { detail: DetectionDetailT }) {
+  const litTarget = detail.flags.includes("flare_lit_target");
+  const litReference = detail.flags.includes("flare_lit_reference");
+  if (!litTarget && !litReference) return null;
+
+  const result = (detail.result ?? {}) as Record<string, unknown>;
+  const nHotTarget = typeof result.n_hot_target === "number" ? result.n_hot_target : 0;
+  const nHotReference = typeof result.n_hot_reference === "number" ? result.n_hot_reference : 0;
+
+  const where =
+    litTarget && litReference ? "target and reference" : litTarget ? "target" : "reference";
+  const counts = [
+    litTarget ? `${nHotTarget} px target` : null,
+    litReference ? `${nHotReference} px reference` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <p className="flare-state" title="NHI hot pixels are excluded from the calibration and mask">
+      🔥 Flare lit in {where} ({counts}) — a lit→unlit transition can mimic a plume at the stack;
+      the hot pixels are excluded from the retrieval.
+    </p>
   );
 }
 

@@ -1470,6 +1470,15 @@ button.ghost {
   margin-top: 4px;
   cursor: help;
 }
+.flare-state {
+  font-size: 12px;
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-left: 2px solid #f0a336;
+  background: rgba(240, 163, 54, 0.08);
+  color: #f0a336;
+  cursor: help;
+}
 
 /* Validation panel */
 .validation-panel summary {

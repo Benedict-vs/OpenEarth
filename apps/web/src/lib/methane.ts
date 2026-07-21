@@ -209,6 +209,16 @@ export const FLAG_HINTS: Record<string, string> = {
     "too few same-orbit scenes for a composite reference — fell back to a single reference",
   composite_amf_spread:
     "the composite's members span a wide solar/viewing geometry — the median-AMF ref-pass inversion is a coarse approximation here",
+  flare_lit_target:
+    "a lit gas flare (NHI hot pixel) in the target scene — its SWIR thermal signal corrupts the B11/B12 retrieval; the hot pixels are excluded from the calibration and NaN-ed before inversion",
+  flare_lit_reference:
+    "a lit flare in the reference scene — a lit→unlit transition between scenes can mimic a plume at the stack; the hot pixels are excluded",
+  not_b12_dimming:
+    "the in-mask mean B12 signal is not dimming (target ΔR ≥ 0) — a real methane plume absorbs in B12, so this component may be a surface or reference artifact",
+  surface_correlated:
+    "the plume mask correlates with the visible (B4/B3/B2) bands — methane is invisible there, so the mask may be tracking a surface feature, not gas",
+  sparse_chip: "fewer than 70% of the chip's pixels are valid — the retrieval is unreliable here",
+  cloudy_chip: "high mean blue-band (B2) reflectance suggests cloud/haze contamination",
 };
 
 /** Format a 0–1 fraction as a integer percent, or "—". */

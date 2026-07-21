@@ -12,6 +12,13 @@ produces is what makes Stages 2 and 3 falsifiable.
     OPENEARTH_EE_TESTS=1 uv run python scripts/calibration_harness.py --freeze   # write baseline
     OPENEARTH_EE_TESTS=1 uv run python scripts/calibration_harness.py --compare  # diff vs baseline
 
+Baseline lineage is append-only. ``_baseline_path`` keys by LUT version, so a
+same-LUT re-freeze (e.g. the Phase 9 ALGO-7 bundle, which changes the retrieval
+but not the LUT) MUST use ``--freeze-as`` to write beside the old file, never over
+it: ``--freeze --freeze-as 5.1`` writes ``calibration_baseline_v5.1.json`` (LUT v5,
+ALGO 7) while ``calibration_baseline_v5.json`` (LUT v5, ALGO 6) stays untouched.
+Every baseline stamps its ``algo_version`` so the lineage is explicit.
+
 A ``no_plume`` result or any per-event failure is a recorded *exclusion with
 reason*, never a crash; the run is healthy when every event yields either a
 finite Q or a documented exclusion and at least ``_MIN_QUANTIFIED`` events are
@@ -34,13 +41,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
-from scipy.stats import spearmanr
 
 from openearth.ee.client import initialize
 from openearth.geometry import BBox
 from openearth.methane.conversion import load_lut
 from openearth.methane.detect import DetectionResult, analyze
 from openearth.methane.ime import McParams
+from openearth.methane.metrics import (
+    log_scatter,
+    median_ratio,
+    slope_through_origin,
+    spearman,
+    theil_sen_slope,
+)
+from openearth_api.cache import ALGO_VERSION
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _EVENTS_PATH = _REPO_ROOT / "scripts" / "data" / "calibration_events.json"
@@ -60,62 +74,11 @@ MBSP_VALIDITY_DELTA_OMEGA = 3.0  # mol/m²
 _INVALID_FRACTION_MAX = 0.20
 
 
-# ── Aggregate diagnostics (pure — offline unit-tested in test_calibration_events.py) ──
-
-
-def slope_through_origin(q_ours: np.ndarray, q_pub: np.ndarray) -> float:
-    """Least-squares slope of a line through the origin: Σ(qₒ·qₚ) / Σ(qₚ²)."""
-    q_ours = np.asarray(q_ours, dtype=np.float64)
-    q_pub = np.asarray(q_pub, dtype=np.float64)
-    denom = float(np.sum(q_pub**2))
-    if denom == 0.0:
-        return float("nan")
-    return float(np.sum(q_ours * q_pub) / denom)
-
-
-def median_ratio(q_ours: np.ndarray, q_pub: np.ndarray) -> float:
-    """median(qₒ / qₚ) — a robust central bias, insensitive to a few outliers."""
-    q_ours = np.asarray(q_ours, dtype=np.float64)
-    q_pub = np.asarray(q_pub, dtype=np.float64)
-    return float(np.median(q_ours / q_pub))
-
-
-def log_scatter(q_ours: np.ndarray, q_pub: np.ndarray) -> float:
-    """Robust log-scatter s = 1.4826 · MAD(log10(qₒ / qₚ)) — a spread, not a bias."""
-    q_ours = np.asarray(q_ours, dtype=np.float64)
-    q_pub = np.asarray(q_pub, dtype=np.float64)
-    log_ratio = np.log10(q_ours / q_pub)
-    mad = float(np.median(np.abs(log_ratio - np.median(log_ratio))))
-    return 1.4826 * mad
-
-
-def theil_sen_slope(q_ours: np.ndarray, q_pub: np.ndarray) -> float:
-    """Theil–Sen pairwise-slope estimator — a robustness cross-check on the LSQ slope.
-
-    Median over all pairs i<j of (qₒⱼ − qₒᵢ)/(qₚⱼ − qₚᵢ). Reported, never gated on.
-    """
-    q_ours = np.asarray(q_ours, dtype=np.float64)
-    q_pub = np.asarray(q_pub, dtype=np.float64)
-    slopes: list[float] = []
-    n = len(q_pub)
-    for i in range(n):
-        for j in range(i + 1, n):
-            dx = q_pub[j] - q_pub[i]
-            if dx != 0.0:
-                slopes.append(float((q_ours[j] - q_ours[i]) / dx))
-    if not slopes:
-        return float("nan")
-    return float(np.median(slopes))
-
-
-def spearman(q_ours: np.ndarray, q_pub: np.ndarray) -> tuple[float, float]:
-    """Spearman rank correlation ρ and its p-value — the per-event *skill* metric the
-    review made a first-class diagnostic (ρ = 0.19, p = 0.5, n = 15 on v4). Reported,
-    never gated on; NaN for n < 3 (ρ undefined)."""
-    if len(q_ours) < 3:
-        return float("nan"), float("nan")
-    result = spearmanr(q_ours, q_pub)
-    return float(result.statistic), float(result.pvalue)
+# ── Aggregate diagnostics ──
+# The metric functions (slope_through_origin, median_ratio, log_scatter,
+# theil_sen_slope, spearman) moved to openearth.methane.metrics (Phase 9 Stage 1)
+# so the S2CH4 benchmark shares them verbatim; unit-tested there. This file's
+# aggregates() dict shape is unchanged.
 
 
 def aggregates(q_ours: list[float], q_pub: list[float]) -> dict[str, float]:
@@ -239,6 +202,7 @@ def run_harness(reference_mode: str = "single") -> dict[str, object]:
     return {
         "schema": 1,
         "lut_version": lut.version,
+        "algo_version": ALGO_VERSION,
         "reference_mode": reference_mode,
         "mc_seed": _MC.seed,
         "mc_n": _MC.n,
@@ -251,7 +215,8 @@ def run_harness(reference_mode: str = "single") -> dict[str, object]:
 
 def _print_table(baseline: dict[str, object]) -> None:
     print(
-        f"LUT v{baseline['lut_version']}  ref={baseline.get('reference_mode', 'single')}  "
+        f"LUT v{baseline['lut_version']}  ALGO {baseline.get('algo_version', '?')}  "
+        f"ref={baseline.get('reference_mode', 'single')}  "
         f"seed={baseline['mc_seed']}  n={baseline['mc_n']}  "
         f"git={baseline['git_hash']}"
     )
@@ -279,8 +244,9 @@ def _print_table(baseline: dict[str, object]) -> None:
     )
 
 
-def _baseline_path(lut_version: str) -> Path:
-    return _REPO_ROOT / "scripts" / "data" / f"calibration_baseline_v{lut_version}.json"
+def _baseline_path(version: str) -> Path:
+    """Baseline file for a version label (LUT version, or an explicit ``--freeze-as``)."""
+    return _REPO_ROOT / "scripts" / "data" / f"calibration_baseline_v{version}.json"
 
 
 def main() -> int:
@@ -298,6 +264,13 @@ def main() -> int:
         default="single",
         help="MBMP reference: single (default) or median composite (opt-in evidence)",
     )
+    parser.add_argument(
+        "--freeze-as",
+        default=None,
+        metavar="VERSION",
+        help="version label for the output file (e.g. 5.1); defaults to the LUT "
+        "version. Use for a same-LUT re-freeze so the old baseline is never overwritten.",
+    )
     args = parser.parse_args()
 
     if args.freeze and args.reference_mode == "composite":
@@ -313,7 +286,8 @@ def main() -> int:
         print(f"\nFAIL: only {a['n_quantified']} events quantified (need ≥ {_MIN_QUANTIFIED})")  # type: ignore[index]
         return 1
 
-    path = _baseline_path(str(baseline["lut_version"]))
+    version = args.freeze_as if args.freeze_as is not None else str(baseline["lut_version"])
+    path = _baseline_path(version)
     if args.freeze:
         with open(path, "w") as fh:
             json.dump(baseline, fh, indent=2)

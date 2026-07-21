@@ -184,6 +184,37 @@ Preview transport if usage shows people still expect *smooth* playback there rat
 it as an honest buffer-aware scrubber (the escape hatch is "Render as timelapse…"). Branch
 v2/phase8-design-pass.*
 
+## Phase 9 — Measure, then change: S2CH4 truth benchmark + retrieval-robustness bundle (L) ✅
+
+Give the repo a ground-truth instrument first (an offline benchmark against the S2CH4
+simulated-plume dataset — real L1C scenes, WRF-LES plumes, known flux, CC0), *then* land the
+literature-derived robustness bundle with its effect measured by that instrument and the existing
+harnesses, not asserted.
+*Exit: the benchmark reproduces per-site detection floors and flux-recovery curves offline from
+committed fixtures + a local download; the bundle lands behind one ALGO_VERSION bump with pre/post
+benchmark JSONs frozen; every existing gate (validate_events, calibration harness, noise floor) is
+re-frozen with lineage intact (v5 → v5.1, floor v1 → v2); the new flags are visible in the Lab.* ✅
+*As-built: (0/1) `scripts/fetch_s2ch4.py` + `scripts/s2ch4_benchmark.py` recompose detect.py's pure
+chain against truth; `s2ch4_benchmark_v1.json` frozen under ALGO 6 BEFORE any change
+(instrument-before-intervention). Per-site min detectable Q ~0.5 t/h (Hassi/Korpeje) / ~5 t/h
+(Permian) — Gorroño's 1–2 / 5–10 t/h order; Spearman ρ 0.98 with a ~38 % low bias (the declared
+perfect-reference upper bound — same-scene Q0). (2) ALGO 7 bundle: NHI flare mask (Marchese 2019,
+translated to reflectance chips), robust-σ + median-centered mbsp refit, NHI exclusion, Ehret
+dimming-sign / RGB-surface-correlation / chip-validity flags — all opt-in, build_channels
+byte-identical (parity golden). (3) A/B v1→v2 approximately neutral (MBSP slopes/CI up, MBMP central
+bias stable, Permian log-scatter halved); NHI fires on 13 sim-artifact pixels (plume-4 extreme-flux
+negative-reflectance cores), 0 realistic false positives. Calibration re-frozen v5.1 (median_ratio
+0.996→1.034), noise floor v2 (global 24.6→22.0 t/h, floors drop where σ was flare-inflated),
+2-event gate green. α,β (F6): U10 span 1.12 m/s < 3 → insufficient_wind_diversity (evidence recorded,
+no refit — the pre-declared expected outcome). D12 stays parked (no exclusion shift). The instrument
+is now the tool that will measure Phase-10 candidates. Branch v2/phase9-benchmark-bundle.*
+
+Leftover handoffs (deliberately not in scope): a physical ρ≥0 NHI validity guard (would drop the
+13 sim-artifact fires to 4 — physically correct but outside the plan's NHI spec, flagged for review);
+the σ=0.7 anti-alias pre-blur (passes through the channels seam → co-lands with an ML retrain + its
+own ALGO bump + noise_floor v3; the benchmark is the tool that will measure it); **D10** Ehret
+regression background; **D11** ML-tier fate; **D12** unchanged.
+
 ## Backlog (deliberately out of scope until their phase)
 
 - Multi-*source* fusion products (S1+S2): deforestation change, flood mask (VV + MNDWI change),

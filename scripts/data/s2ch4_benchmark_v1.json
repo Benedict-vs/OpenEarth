@@ -1,0 +1,993 @@
+{
+  "schema": 1,
+  "provenance": {
+    "git_hash": "f046fc4",
+    "algo_version": 6,
+    "lut_version": "5",
+    "mask_lut_version": "mask-1",
+    "dataset": {
+      "doi": "10.7910/DVN/KRNPEH",
+      "version": 2,
+      "license": "CC0-1.0"
+    },
+    "run_utc": "2026-07-21T13:09:55.322181+00:00",
+    "n_products_scored": 1330
+  },
+  "conventions": {
+    "reference": "same-plume Q0 (perfect-reference upper bound; not a reference-selection test \u2014 that is Phase 10, on live pairs)",
+    "spacecraft": "Sentinel-2A",
+    "truth_mask": "xch4 >= 0.05 * per-product peak xch4 (Q-invariant: the forward model is linear in flux)",
+    "detect": {
+      "k_sigma": 2.0,
+      "min_area_px": 5
+    },
+    "sigma_u10_ms": 0.0,
+    "invalid_fraction_max": 0.2,
+    "min_detectable_q": "lower edge of the lowest Q bin with >= 50% detection across the 5 plume shapes",
+    "ci_band": "MC q_median +/- 1 sigma (n=500, seed=0, sigma_u10=0)",
+    "mc_subset": "every 10th scored product"
+  },
+  "sites": {
+    "hassi": {
+      "mbsp": {
+        "hinted": {
+          "n_products": 450,
+          "n_detected": 450,
+          "min_detectable_q_kg_h": 500,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 20,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 75,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 375,
+            "slope_through_origin": 0.8064,
+            "median_ratio": 1.1985,
+            "log_scatter": 0.5461,
+            "theil_sen_slope": 0.1277,
+            "spearman_rho": 0.2247,
+            "spearman_p": 0.0
+          },
+          "ci_coverage": {
+            "n": 45,
+            "coverage": 0.1556
+          },
+          "median_iou_detected": 0.0478,
+          "median_xch4_bias_ppb": -238.5369,
+          "median_xch4_rms_ppb": 597.0235
+        },
+        "blind": {
+          "n_products": 450,
+          "n_detected": 450,
+          "min_detectable_q_kg_h": 500,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 20,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 75,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 387,
+            "slope_through_origin": 0.8014,
+            "median_ratio": 1.406,
+            "log_scatter": 0.5525,
+            "theil_sen_slope": 0.1173,
+            "spearman_rho": 0.3298,
+            "spearman_p": 0.0
+          },
+          "ci_coverage": {
+            "n": 45,
+            "coverage": 0.1556
+          },
+          "median_iou_detected": 0.0,
+          "median_xch4_bias_ppb": -238.5369,
+          "median_xch4_rms_ppb": 597.0235
+        }
+      },
+      "mbmp": {
+        "hinted": {
+          "n_products": 450,
+          "n_detected": 450,
+          "min_detectable_q_kg_h": 500,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 20,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 75,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 450,
+            "slope_through_origin": 0.6217,
+            "median_ratio": 0.5731,
+            "log_scatter": 0.051,
+            "theil_sen_slope": 0.5521,
+            "spearman_rho": 0.9815,
+            "spearman_p": 0.0
+          },
+          "ci_coverage": {
+            "n": 45,
+            "coverage": 0.0
+          },
+          "median_iou_detected": 0.4971,
+          "median_xch4_bias_ppb": -97.143,
+          "median_xch4_rms_ppb": 131.098
+        },
+        "blind": {
+          "n_products": 450,
+          "n_detected": 450,
+          "min_detectable_q_kg_h": 500,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 20,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 75,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 450,
+            "slope_through_origin": 0.6217,
+            "median_ratio": 0.5731,
+            "log_scatter": 0.051,
+            "theil_sen_slope": 0.5521,
+            "spearman_rho": 0.9815,
+            "spearman_p": 0.0
+          },
+          "ci_coverage": {
+            "n": 45,
+            "coverage": 0.0
+          },
+          "median_iou_detected": 0.4971,
+          "median_xch4_bias_ppb": -97.143,
+          "median_xch4_rms_ppb": 131.098
+        }
+      }
+    },
+    "korpeje": {
+      "mbsp": {
+        "hinted": {
+          "n_products": 450,
+          "n_detected": 450,
+          "min_detectable_q_kg_h": 500,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 20,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 75,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 403,
+            "slope_through_origin": 0.7938,
+            "median_ratio": 1.0464,
+            "log_scatter": 0.3558,
+            "theil_sen_slope": 0.574,
+            "spearman_rho": 0.7891,
+            "spearman_p": 0.0
+          },
+          "ci_coverage": {
+            "n": 45,
+            "coverage": 0.1778
+          },
+          "median_iou_detected": 0.0478,
+          "median_xch4_bias_ppb": -260.9326,
+          "median_xch4_rms_ppb": 560.9021
+        },
+        "blind": {
+          "n_products": 450,
+          "n_detected": 450,
+          "min_detectable_q_kg_h": 500,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 20,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 75,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 403,
+            "slope_through_origin": 0.8057,
+            "median_ratio": 1.0445,
+            "log_scatter": 0.3275,
+            "theil_sen_slope": 0.5868,
+            "spearman_rho": 0.797,
+            "spearman_p": 0.0
+          },
+          "ci_coverage": {
+            "n": 45,
+            "coverage": 0.1778
+          },
+          "median_iou_detected": 0.0508,
+          "median_xch4_bias_ppb": -260.9326,
+          "median_xch4_rms_ppb": 560.9021
+        }
+      },
+      "mbmp": {
+        "hinted": {
+          "n_products": 450,
+          "n_detected": 450,
+          "min_detectable_q_kg_h": 500,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 20,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 75,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 450,
+            "slope_through_origin": 0.6223,
+            "median_ratio": 0.5506,
+            "log_scatter": 0.0368,
+            "theil_sen_slope": 0.5558,
+            "spearman_rho": 0.9832,
+            "spearman_p": 0.0
+          },
+          "ci_coverage": {
+            "n": 45,
+            "coverage": 0.0
+          },
+          "median_iou_detected": 0.4918,
+          "median_xch4_bias_ppb": -101.4583,
+          "median_xch4_rms_ppb": 140.421
+        },
+        "blind": {
+          "n_products": 450,
+          "n_detected": 450,
+          "min_detectable_q_kg_h": 500,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 20,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 25,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 75,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 450,
+            "slope_through_origin": 0.6223,
+            "median_ratio": 0.5506,
+            "log_scatter": 0.0368,
+            "theil_sen_slope": 0.5558,
+            "spearman_rho": 0.9832,
+            "spearman_p": 0.0
+          },
+          "ci_coverage": {
+            "n": 45,
+            "coverage": 0.0
+          },
+          "median_iou_detected": 0.4918,
+          "median_xch4_bias_ppb": -101.4583,
+          "median_xch4_rms_ppb": 140.421
+        }
+      }
+    },
+    "permian": {
+      "mbsp": {
+        "hinted": {
+          "n_products": 430,
+          "n_detected": 430,
+          "min_detectable_q_kg_h": 5000,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 65,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 60,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 125,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 0
+          },
+          "ci_coverage": {
+            "n": 43,
+            "coverage": 0.2093
+          },
+          "median_iou_detected": 0.0,
+          "median_xch4_bias_ppb": 700.0815,
+          "median_xch4_rms_ppb": 3777.5026
+        },
+        "blind": {
+          "n_products": 430,
+          "n_detected": 430,
+          "min_detectable_q_kg_h": 5000,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 65,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 60,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 125,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 0
+          },
+          "ci_coverage": {
+            "n": 43,
+            "coverage": 0.2326
+          },
+          "median_iou_detected": 0.0,
+          "median_xch4_bias_ppb": 700.0815,
+          "median_xch4_rms_ppb": 3777.5026
+        }
+      },
+      "mbmp": {
+        "hinted": {
+          "n_products": 430,
+          "n_detected": 430,
+          "min_detectable_q_kg_h": 5000,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 65,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 60,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 125,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 430,
+            "slope_through_origin": 0.6284,
+            "median_ratio": 0.5933,
+            "log_scatter": 0.1576,
+            "theil_sen_slope": 0.6115,
+            "spearman_rho": 0.9374,
+            "spearman_p": 0.0
+          },
+          "ci_coverage": {
+            "n": 43,
+            "coverage": 0.0
+          },
+          "median_iou_detected": 0.3528,
+          "median_xch4_bias_ppb": -281.5653,
+          "median_xch4_rms_ppb": 641.4069
+        },
+        "blind": {
+          "n_products": 430,
+          "n_detected": 430,
+          "min_detectable_q_kg_h": 5000,
+          "detection_curve": [
+            {
+              "q_lo_kg_h": 500,
+              "q_hi_kg_h": 1000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 1000,
+              "q_hi_kg_h": 2000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 2000,
+              "q_hi_kg_h": 3000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 3000,
+              "q_hi_kg_h": 5000,
+              "n": 0,
+              "detect_rate": null
+            },
+            {
+              "q_lo_kg_h": 5000,
+              "q_hi_kg_h": 7500,
+              "n": 65,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 7500,
+              "q_hi_kg_h": 10000,
+              "n": 60,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 10000,
+              "q_hi_kg_h": 15000,
+              "n": 125,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 15000,
+              "q_hi_kg_h": 25000,
+              "n": 50,
+              "detect_rate": 1.0
+            },
+            {
+              "q_lo_kg_h": 25000,
+              "q_hi_kg_h": 50001,
+              "n": 130,
+              "detect_rate": 1.0
+            }
+          ],
+          "q_recovery": {
+            "n": 430,
+            "slope_through_origin": 0.6284,
+            "median_ratio": 0.5933,
+            "log_scatter": 0.1576,
+            "theil_sen_slope": 0.6115,
+            "spearman_rho": 0.9374,
+            "spearman_p": 0.0
+          },
+          "ci_coverage": {
+            "n": 43,
+            "coverage": 0.0
+          },
+          "median_iou_detected": 0.3528,
+          "median_xch4_bias_ppb": -281.5653,
+          "median_xch4_rms_ppb": 641.4069
+        }
+      }
+    }
+  },
+  "alpha_beta": {
+    "config": "mbmp/hinted",
+    "n_points": 1330,
+    "u10_values_ms": [
+      2.693,
+      3.034,
+      3.754,
+      3.767,
+      3.813
+    ],
+    "u10_span_ms": 1.12,
+    "varon": {
+      "alpha": 0.33,
+      "beta": 0.45
+    },
+    "fit": {
+      "fitted": true,
+      "alpha_hat": -0.1065,
+      "beta_hat": 3.0003,
+      "alpha_ci95": [
+        -0.1663,
+        -0.0466
+      ],
+      "beta_ci95": [
+        2.7943,
+        3.2063
+      ]
+    },
+    "adopt_refit": false,
+    "decision": "insufficient_wind_diversity"
+  }
+}

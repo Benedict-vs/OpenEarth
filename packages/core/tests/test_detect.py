@@ -130,6 +130,80 @@ def test_analyze_recovers_injected_plume_q_within_20pct(monkeypatch: pytest.Monk
     assert np.isfinite(result.calibration["c_ref"])
 
 
+def _textured_chip(
+    scene: S2Scene,
+    base11: np.ndarray,
+    base12: np.ndarray,
+    *,
+    flare_rc: tuple[int, int, int, int] | None = None,
+) -> RetrievalChip:
+    """A textured plume-free chip (robust_sigma > 0), optionally with a SWIR flare."""
+    b11, b12 = base11.copy(), base12.copy()
+    if flare_rc is not None:
+        r0, r1, c0, c1 = flare_rc
+        b11[r0:r1, c0:c1] = 0.1  # low B11, bright B12 → ρ12/ρ11 = 9 ≫ 2.88 (SWIR hot)
+        b12[r0:r1, c0:c1] = 0.9
+    bands: dict[str, np.ndarray] = {"B11": b11, "B12": b12}
+    for extra in CHIP_BANDS[2:]:
+        bands[extra] = np.full(_SHAPE, 0.15, dtype=np.float32)
+    return RetrievalChip(scene=scene, grid=_grid(), bands=bands)
+
+
+def test_mbmp_flare_state_transition_suppressed(monkeypatch: pytest.MonkeyPatch) -> None:
+    from openearth.methane.conversion import invert_fractional_signal, load_mask_lut
+    from openearth.methane.retrieval import mbsp
+
+    # A shared textured background so both chips difference to ~0 off the flare (and
+    # robust_sigma > 0, as on real chips). A 4×4 lit flare is in the reference only.
+    rng = np.random.default_rng(0)
+    base11 = rng.uniform(0.18, 0.24, _SHAPE).astype(np.float32)
+    base12 = (base11 * (1.0 + rng.normal(0.0, 0.008, _SHAPE))).astype(np.float32)
+    flare = (10, 14, 10, 14)
+    target, reference = _target_scene(), _reference_scene()
+
+    def fake_list_scenes(*_a: object, **_k: object) -> list[S2Scene]:
+        return [target, reference]
+
+    def fake_fetch_chip(scene: S2Scene, bbox: BBox, **_k: object) -> RetrievalChip:
+        if scene.scene_id == target.scene_id:
+            return _textured_chip(scene, base11, base12)
+        return _textured_chip(scene, base11, base12, flare_rc=flare)
+
+    def fake_wind(_roi: object, when: datetime, **_k: object) -> WindSample:
+        return WindSample.from_uv(when, 4.0, 0.0, ERA5_LAND_HOURLY_ID)
+
+    monkeypatch.setattr(detect_mod, "list_scenes", fake_list_scenes)
+    monkeypatch.setattr(detect_mod, "fetch_chip", fake_fetch_chip)
+    monkeypatch.setattr(detect_mod, "sample_wind_at", fake_wind)
+
+    # Old path (no NHI): the reference flare inverts to a large ΔΩ, so plain MBMP
+    # differencing invents a positive plume component at the flare cluster.
+    mlut = load_mask_lut()
+    tgt = _textured_chip(target, base11, base12)
+    ref = _textured_chip(reference, base11, base12, flare_rc=flare)
+    dot = invert_fractional_signal(
+        mbsp(tgt.bands["B11"].astype(np.float64), tgt.bands["B12"].astype(np.float64)).delta_r,
+        mlut,
+        "Sentinel-2A",
+        target.amf,
+    )
+    dor = invert_fractional_signal(
+        mbsp(ref.bands["B11"].astype(np.float64), ref.bands["B12"].astype(np.float64)).delta_r,
+        mlut,
+        "Sentinel-2A",
+        reference.amf,
+    )
+    fake = detect_plume(dot - dor, _grid(), k_sigma=2.0)
+    assert fake.mask[10:14, 10:14].any(), "old path should invent a plume at the flare"
+
+    # New path (analyze opts into NHI): the flare is flagged and excluded, no plume.
+    result = analyze(_BBOX, target.scene_id, method="mbmp", mc=McParams(n=50, seed=0))
+    assert "flare_lit_reference" in result.flags
+    assert result.n_hot_reference == 16  # the 4×4 cluster (post-floor, pre-dilation)
+    assert result.n_hot_target == 0
+    assert not result.plume.mask[10:14, 10:14].any()
+
+
 def test_progress_called_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch, target_delta=_truth_delta_omega())
     steps: list[tuple[int, int, str]] = []

@@ -334,6 +334,9 @@ def _result_payload(result: DetectionResult, xch4_max: float | None) -> dict[str
             # "single"/"composite"; members carries per-scene {scene_id,
             # days_from_target, amf}; the AMF spread flags a coarse median-AMF.
             "reference_mode": result.reference_mode,
+            # NHI flare-hot pixel counts (Phase 9); ride result_json, no migration.
+            "n_hot_target": result.n_hot_target,
+            "n_hot_reference": result.n_hot_reference,
             "reference_scene_ids": [m.scene_id for m in result.reference_members],
             "reference_members": [
                 {

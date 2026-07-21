@@ -107,6 +107,11 @@ def build_channels(target: RetrievalChip, reference: RetrievalChip) -> NDArray[n
         raise ValueError(
             f"target/reference grids differ: {t11.shape} vs {_band(reference, 'B11').shape}"
         )
+    # GUARD: call mbsp with DEFAULT kwargs only (no robust_cut / exclude). This is
+    # the frozen train/serve seam — the model's ChannelStats were computed from this
+    # exact output, so any change to what mbsp produces here would silently break
+    # channel parity. The opt-in robustness (Phase 9) lives in detect.analyze, never
+    # here; test_channels_parity_golden enforces byte-stability.
     t_mbsp = mbsp(t11, t12)
     r_mbsp = mbsp(_band(reference, "B11"), _band(reference, "B12"))
     fields: dict[str, NDArray[np.float64]] = {

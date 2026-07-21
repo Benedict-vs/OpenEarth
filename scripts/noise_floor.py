@@ -10,13 +10,17 @@ the floor is an *upper bound on trustworthiness*, the conservative direction).
 Live EE, run manually with real auth (never in CI):
 
     OPENEARTH_EE_TESTS=1 uv run python scripts/noise_floor.py            # print only
-    OPENEARTH_EE_TESTS=1 uv run python scripts/noise_floor.py --freeze   # write v1 JSON
+    OPENEARTH_EE_TESTS=1 uv run python scripts/noise_floor.py --freeze   # write v2 JSON
 
-``--freeze`` writes ``packages/api/src/openearth_api/data/noise_floor_v1.json``
-(packaged, served by the API without scripts/ at runtime). Schema:
+``--freeze`` writes ``packages/api/src/openearth_api/data/noise_floor_v2.json``
+(packaged, served by the API without scripts/ at runtime). The floor is versioned
+and append-only: Phase 9's ALGO-7 bundle (robust-σ refit + NHI exclusion) shifts
+the retrieved noise Qs, so this rerun writes **v2** beside the untouched
+``noise_floor_v1.json`` (LUT v5, ALGO 6) and the service loader is bumped to v2.
+Schema:
 
     {
-      "version": 1,
+      "version": 2,
       "provenance": {git_hash, lut_version, run_utc, window, n_targets_per_site},
       "detect_params": {k_sigma, min_area_px, mc_seed, mc_n},
       "method_note": "...", "honesty_note": "...",
@@ -25,8 +29,9 @@ Live EE, run manually with real auth (never in CI):
     }
 
 ``floor_kg_h`` per site = median of the *detected* noise Qs; ``global.floor_kg_h``
-= pooled median across all sites' detected noise Qs. Never mutate v1 in place — a
-rerun writes noise_floor_v2.json + a loader constant bump (baseline discipline).
+= pooled median across all sites' detected noise Qs. Never mutate an existing
+version in place — each rerun writes the next ``noise_floor_vN.json`` + a loader
+constant bump (baseline discipline).
 """
 
 from __future__ import annotations
@@ -50,8 +55,16 @@ from openearth.methane.ime import McParams
 from openearth.methane.scenes import S2Scene, list_scenes
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+# Phase 9 ALGO-7 re-freeze: v2 beside the untouched v1 (append-only lineage).
+_FLOOR_VERSION = 2
 _OUT_PATH = (
-    _REPO_ROOT / "packages" / "api" / "src" / "openearth_api" / "data" / "noise_floor_v1.json"
+    _REPO_ROOT
+    / "packages"
+    / "api"
+    / "src"
+    / "openearth_api"
+    / "data"
+    / f"noise_floor_v{_FLOOR_VERSION}.json"
 )
 
 _ANALYSIS_KM = 10.0  # the Lab's default analysis-area scale
@@ -148,7 +161,7 @@ def run_instrument() -> dict[str, object]:
 
     global_floor = round(float(np.median(all_detected)), 2) if all_detected else None
     return {
-        "version": 1,
+        "version": _FLOOR_VERSION,
         "provenance": {
             "git_hash": _git_hash(),
             "lut_version": lut.version,
@@ -190,7 +203,9 @@ def _git_hash() -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--freeze", action="store_true", help="write the packaged v1 floor JSON")
+    parser.add_argument(
+        "--freeze", action="store_true", help=f"write the packaged v{_FLOOR_VERSION} floor JSON"
+    )
     args = parser.parse_args()
 
     floor = run_instrument()
