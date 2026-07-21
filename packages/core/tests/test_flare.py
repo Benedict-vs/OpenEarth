@@ -47,6 +47,24 @@ def test_nhi_reflectance_floor_suppresses_dark_pixels() -> None:
     assert not nhi_hot_mask(bands, "Sentinel-2A", dilate=False).any()
 
 
+def test_nhi_negative_reflectance_is_invalid_never_hot() -> None:
+    # A negative ρ8A (dark-pixel numerical artifact) makes the SWNIR condition
+    # trivially true while ρ12 sits above the floor — the physical-validity guard
+    # (reflectance ≥ 0) must keep such pixels out of the hot set.
+    bands = _uniform((4, 4), r8a=0.3, r11=0.05, r12=0.05)
+    assert not nhi_hot_mask(bands, "Sentinel-2A", dilate=False).any()
+    bands["B8A"][1, 1] = -0.001
+    assert not nhi_hot_mask(bands, "Sentinel-2A", dilate=False).any()
+    # Same for a negative ρ11, which would satisfy the SWIR condition trivially.
+    bands["B11"][2, 2] = -0.001
+    assert not nhi_hot_mask(bands, "Sentinel-2A", dilate=False).any()
+    # A genuine flare (all-positive ρ, ratio over threshold) still fires.
+    e = SOLAR_IRRADIANCE["Sentinel-2A"]
+    bands["B11"][3, 3] = 0.1
+    bands["B12"][3, 3] = 0.1 * (e["B11"] / e["B12"] + 0.5)
+    assert nhi_hot_mask(bands, "Sentinel-2A", dilate=False)[3, 3]
+
+
 def test_nhi_nan_pixels_are_not_hot() -> None:
     bands = _uniform((4, 4), r8a=0.4, r11=0.1, r12=0.9)  # would be hot
     bands["B12"][0, 0] = np.nan

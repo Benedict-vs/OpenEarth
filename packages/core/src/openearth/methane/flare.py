@@ -20,8 +20,11 @@ bands, so the *sign* conditions translate exactly to (E = solar irradiance):
 The reference implementation's *absolute* SWIR radiance floor does not translate
 scale-free; we replace it with a declared reflectance floor (``_HOT_REFLECTANCE_FLOOR``)
 that suppresses dark-pixel ratio noise, and dilate the hot set by one pixel so the
-thermal bleed into neighbours is excluded too. This is OUR documented adaptation of
-NHI to reflectance chips — pure NumPy, mypy strict.
+thermal bleed into neighbours is excluded too. Hotness additionally requires the
+ρ8A/ρ11 entering the sign conditions to be non-negative — reflectance is physically
+non-negative, and negative numerical artifacts (dark pixels under L1C DN offsets,
+simulation noise) would otherwise satisfy the SWNIR condition trivially. This is OUR
+documented adaptation of NHI to reflectance chips — pure NumPy, mypy strict.
 """
 
 from __future__ import annotations
@@ -68,7 +71,12 @@ def _nhi_raw_hot(bands: Mapping[str, NDArray[Any]], spacecraft: str) -> NDArray[
         swir_hot = r12 * e["B12"] > r11 * e["B11"]
         swnir_hot = r11 * e["B11"] > r8a * e["B8A"]
         above_floor = r12 >= _HOT_REFLECTANCE_FLOOR
-    return np.asarray((swir_hot | swnir_hot) & above_floor, dtype=bool)
+        # Physical validity, not a tunable threshold: reflectance is non-negative,
+        # so a negative ρ (dark-pixel numerical artifact — L1C DN offsets, sim
+        # noise) is invalid data and must never satisfy a hotness condition. A
+        # negative ρ8A would otherwise make the SWNIR condition trivially true.
+        valid = (r8a >= 0.0) & (r11 >= 0.0)
+    return np.asarray((swir_hot | swnir_hot) & above_floor & valid, dtype=bool)
 
 
 def nhi_hot_mask(
