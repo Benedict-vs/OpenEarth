@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from openearth.methane.evidence import (
     SURFACE_CORRELATION_CUT,
@@ -44,7 +45,9 @@ def test_surface_correlation_flags_visible_feature() -> None:
     visible[mask] = 0.5
     r = surface_correlation(mask, {"B4": visible, "B3": np.zeros(shape), "B2": np.zeros(shape)})
     assert r > SURFACE_CORRELATION_CUT
-    assert r == 1.0  # perfectly separable indicator vs band
+    # Perfectly separable indicator vs band; float summation order is
+    # platform-dependent, so compare within machine epsilon rather than exactly.
+    assert r == pytest.approx(1.0)
 
 
 def test_surface_correlation_rgb_invisible_plume_is_low() -> None:
