@@ -15,6 +15,7 @@ from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 
 REPO = Path(__file__).resolve().parents[3]
 OUT = Path(__file__).resolve().parent
@@ -84,7 +85,7 @@ for ax in (ax1, ax2):
     despine(ax)
 
 # (a) full curves with an AMF 2→4 envelope per spacecraft
-for m, color, name in ((m_a, BLUE, "Sentinel-2A"), (m_b, ORANGE, "Sentinel-2B")):
+for m, color in ((m_a, BLUE), (m_b, ORANGE)):
     ax1.fill_between(dom, m[0], m[-1], color=color, alpha=0.18, linewidth=0)
     ax1.plot(dom, m_at_amf(m, 3.0), color=color, linewidth=1.4)
 ax1.axhline(0, color=MUTED, linewidth=0.5)
@@ -93,8 +94,15 @@ ax1.set_ylabel(r"band signal $m_{\mathrm{MBSP}}$")
 ax1.set_xlim(-0.5, 6.0)
 ax1.text(3.4, -0.088, "Sentinel-2A", color=BLUE, fontsize=8)
 ax1.text(3.4, -0.028, "Sentinel-2B", color=ORANGE, fontsize=8)
-ax1.text(5.85, 0.008, "AMF 2–4 envelope,\ncentre line AMF 3",
-         fontsize=6.8, color=MUTED, ha="right", va="bottom")
+ax1.text(
+    5.85,
+    0.008,
+    "AMF 2–4 envelope,\ncentre line AMF 3",
+    fontsize=6.8,
+    color=MUTED,
+    ha="right",
+    va="bottom",
+)
 ax1.set_title("(a) LUT v5 forward curves", fontsize=8.5, loc="left")
 
 # (b) zoom with the Varon anchor comparison at AMF≈2.305, ΔΩ = 0.65
@@ -108,12 +116,22 @@ ax2.plot([0.65], [ours_b], "o", color=ORANGE, ms=5, zorder=5)
 ax2.plot([0.65], [-0.029], "o", mfc="none", mec=BLUE, ms=5, mew=1.1, zorder=5)
 ax2.plot([0.65], [-0.022], "o", mfc="none", mec=ORANGE, ms=5, mew=1.1, zorder=5)
 ax2.axvline(0.65, color=MUTED, linewidth=0.5, linestyle=(0, (2, 2)))
-ax2.annotate("this work", xy=(0.68, ours_a), xytext=(0.86, -0.0435),
-             fontsize=7.2, color=INK,
-             arrowprops=dict(arrowstyle="-", linewidth=0.5, color=MUTED))
-ax2.annotate("Varon et al. (2021)", xy=(0.68, -0.0225), xytext=(0.86, -0.012),
-             fontsize=7.2, color=INK,
-             arrowprops=dict(arrowstyle="-", linewidth=0.5, color=MUTED))
+ax2.annotate(
+    "this work",
+    xy=(0.68, ours_a),
+    xytext=(0.86, -0.0435),
+    fontsize=7.2,
+    color=INK,
+    arrowprops=dict(arrowstyle="-", linewidth=0.5, color=MUTED),
+)
+ax2.annotate(
+    "Varon et al. (2021)",
+    xy=(0.68, -0.0225),
+    xytext=(0.86, -0.012),
+    fontsize=7.2,
+    color=INK,
+    arrowprops=dict(arrowstyle="-", linewidth=0.5, color=MUTED),
+)
 ax2.set_xlabel(r"$\Delta\Omega$ (mol m$^{-2}$)")
 ax2.set_xlim(-0.1, 1.5)
 ax2.set_title("(b) anchor geometry (AMF $\\approx$ 2.305)", fontsize=8.5, loc="left")
@@ -123,7 +141,8 @@ plt.close(fig)
 print("fig_lut.pdf", f"anchor ours: S2A {ours_a:.4f}, S2B {ours_b:.4f}")
 
 # ------------------------------------------------- Fig 2: calibration scatter
-cal = json.load(open(REPO / "scripts/data/calibration_baseline_v5.json"))
+with open(REPO / "scripts/data/calibration_baseline_v5.json") as f:
+    cal = json.load(f)
 events = [e for e in cal["events"] if not e["excluded"] and e.get("q_ours_t_h")]
 agg = cal["aggregates"]
 
@@ -140,9 +159,20 @@ ax.text(55, 33, r"$\times/\div\,2$", fontsize=7, color=MUTED, rotation=45, ha="c
 # Single series: the reference-contamination diagnostic is deliberately
 # conservative and fires on 12/13 events, so it cannot discriminate here.
 for e in events:
-    ax.errorbar(e["published_q_t_h"], e["q_ours_t_h"], yerr=e.get("sigma_ours_t_h"),
-                fmt="o", ms=5, mfc=BLUE, mec=BLUE, ecolor=BLUE,
-                elinewidth=0.7, capsize=0, alpha=0.9, zorder=4)
+    ax.errorbar(
+        e["published_q_t_h"],
+        e["q_ours_t_h"],
+        yerr=e.get("sigma_ours_t_h"),
+        fmt="o",
+        ms=5,
+        mfc=BLUE,
+        mec=BLUE,
+        ecolor=BLUE,
+        elinewidth=0.7,
+        capsize=0,
+        alpha=0.9,
+        zorder=4,
+    )
 
 labels = {
     "libya-sirte-2020-01-21": ("libya-sirte", (16, 1.15), "left"),
@@ -153,25 +183,34 @@ labels = {
 for e in events:
     if e["id"] in labels:
         text, (tx, ty), ha = labels[e["id"]]
-        ax.annotate(text, xy=(e["published_q_t_h"], e["q_ours_t_h"]), xytext=(tx, ty),
-                    fontsize=7, color=MUTED, ha=ha,
-                    arrowprops=dict(arrowstyle="-", linewidth=0.45, color=GRID))
+        ax.annotate(
+            text,
+            xy=(e["published_q_t_h"], e["q_ours_t_h"]),
+            xytext=(tx, ty),
+            fontsize=7,
+            color=MUTED,
+            ha=ha,
+            arrowprops=dict(arrowstyle="-", linewidth=0.45, color=GRID),
+        )
 
-ax.set_xscale("log"); ax.set_yscale("log")
-ax.set_xlim(*lims); ax.set_ylim(*lims)
+ax.set_xscale("log")
+ax.set_yscale("log")
+ax.set_xlim(*lims)
+ax.set_ylim(*lims)
 ax.set_aspect("equal")
 ax.set_xlabel("published rate (t h$^{-1}$)")
 ax.set_ylabel("retrieved rate, this work (t h$^{-1}$)")
 despine(ax)
-ax.grid(color=GRID, linewidth=0.4); ax.set_axisbelow(True)
-from matplotlib.lines import Line2D
+ax.grid(color=GRID, linewidth=0.4)
+ax.set_axisbelow(True)
 fig.savefig(OUT / "fig_calibration.pdf")
 plt.close(fig)
 n_cont = sum("possible_reference_contamination" in (e.get("flags") or []) for e in events)
 print("fig_calibration.pdf", f"{len(events)} events plotted, {n_cont} contaminated-flag")
 
 # ---------------------------------------------------- Fig 3: noise floor strip
-nf = json.load(open(REPO / "packages/api/src/openearth_api/data/noise_floor_v1.json"))
+with open(REPO / "packages/api/src/openearth_api/data/noise_floor_v1.json") as f:
+    nf = json.load(f)
 sites = nf["sites"]
 order = sorted(sites, key=lambda s: (sites[s]["floor_kg_h"] is None, sites[s]["floor_kg_h"] or 0))
 pooled = nf["global"]["floor_kg_h"] / 1000.0
@@ -189,8 +228,13 @@ for i, s in enumerate(order):
     ax.text(122, i, rate, fontsize=7.2, color=MUTED, va="center", ha="left")
 
 ax.axvline(pooled, color=ORANGE, linewidth=1.0, linestyle=(0, (4, 2)))
-ax.text(pooled * 1.06, len(order) - 0.42, f"pooled floor {pooled:.1f} t h$^{{-1}}$",
-        fontsize=7.4, color=ORANGE)
+ax.text(
+    pooled * 1.06,
+    len(order) - 0.42,
+    f"pooled floor {pooled:.1f} t h$^{{-1}}$",
+    fontsize=7.4,
+    color=ORANGE,
+)
 ax.set_yticks(range(len(order)))
 ax.set_yticklabels([s.split(",")[0].replace(" (USA)", "") for s in order])
 ax.set_xscale("log")
@@ -199,24 +243,34 @@ ax.set_xlabel("apparent emission rate on plume-free pairs (t h$^{-1}$)")
 ax.text(122, len(order) - 0.05, "detect\nrate", fontsize=7.2, color=MUTED, ha="left", va="bottom")
 despine(ax, keep=("bottom",))
 ax.tick_params(axis="y", length=0)
-ax.grid(axis="x", color=GRID, linewidth=0.4); ax.set_axisbelow(True)
-ax.legend(handles=[
-    Line2D([], [], marker="o", ls="none", ms=3.4, mfc="none", mec=BLUE, label="individual pair"),
-    Line2D([], [], marker="D", ls="none", ms=5.5, color=BLUE, label="site floor (median)"),
-], loc="upper left", bbox_to_anchor=(0.0, 1.17), ncol=2, handletextpad=0.4)
+ax.grid(axis="x", color=GRID, linewidth=0.4)
+ax.set_axisbelow(True)
+ax.legend(
+    handles=[
+        Line2D(
+            [], [], marker="o", ls="none", ms=3.4, mfc="none", mec=BLUE, label="individual pair"
+        ),
+        Line2D([], [], marker="D", ls="none", ms=5.5, color=BLUE, label="site floor (median)"),
+    ],
+    loc="upper left",
+    bbox_to_anchor=(0.0, 1.17),
+    ncol=2,
+    handletextpad=0.4,
+)
 fig.savefig(OUT / "fig_noise_floor.pdf")
 plt.close(fig)
 print("fig_noise_floor.pdf")
 
 # --------------------------------------------------------- Fig 4: ML dumbbells
-ml = json.load(open(REPO / "scripts/data/ml_eval_v2.json"))
+with open(REPO / "scripts/data/ml_eval_v2.json") as f:
+    ml = json.load(f)
 folds = ml["folds"]
 rows = [(f"fold {f['fold']}", f["baseline_k2"]["f1"], f["model"]["f1"]) for f in folds]
 rows.append(("mean", ml["aggregate"]["baseline_k2_f1"], ml["aggregate"]["model_scene_f1"]))
 
 fig, ax = plt.subplots(figsize=(5.2, 2.35), constrained_layout=True)
 ys = np.arange(len(rows))[::-1]
-for y, (name, b, m) in zip(ys, rows):
+for y, (name, b, m) in zip(ys, rows, strict=True):
     bold = name == "mean"
     ax.plot([b, m], [y, y], color=GRID if not bold else MUTED, linewidth=1.1, zorder=2)
     ax.plot([b], [y], "o", ms=6 if bold else 5, color=ORANGE, zorder=4)
@@ -225,18 +279,33 @@ for y, (name, b, m) in zip(ys, rows):
         ax.text(b - 0.018, y, f"{b:.3f}", fontsize=7.4, color=ORANGE, ha="right", va="center")
         ax.text(m + 0.018, y, f"{m:.3f}", fontsize=7.4, color=BLUE, ha="left", va="center")
 ax.set_yticks(ys)
-ax.set_yticklabels([r[0] for r in rows],
-                   fontsize=8, fontweight="normal")
+ax.set_yticklabels([r[0] for r in rows], fontsize=8, fontweight="normal")
 ax.set_xlim(0.25, 0.78)
 ax.set_xlabel("scene-level F1 on held-out site clusters")
 despine(ax, keep=("bottom",))
 ax.tick_params(axis="y", length=0)
-ax.grid(axis="x", color=GRID, linewidth=0.4); ax.set_axisbelow(True)
-ax.legend(handles=[
-    Line2D([], [], marker="o", ls="none", ms=5, color=ORANGE,
-           label=r"physics baseline ($-\Delta R_{\mathrm{MBMP}}$, $k=2$)"),
-    Line2D([], [], marker="o", ls="none", ms=5, color=BLUE, label="U-Net (inner-val threshold)"),
-], loc="upper left", bbox_to_anchor=(0.0, 1.14), ncol=2, handletextpad=0.4)
+ax.grid(axis="x", color=GRID, linewidth=0.4)
+ax.set_axisbelow(True)
+ax.legend(
+    handles=[
+        Line2D(
+            [],
+            [],
+            marker="o",
+            ls="none",
+            ms=5,
+            color=ORANGE,
+            label=r"physics baseline ($-\Delta R_{\mathrm{MBMP}}$, $k=2$)",
+        ),
+        Line2D(
+            [], [], marker="o", ls="none", ms=5, color=BLUE, label="U-Net (inner-val threshold)"
+        ),
+    ],
+    loc="upper left",
+    bbox_to_anchor=(0.0, 1.14),
+    ncol=2,
+    handletextpad=0.4,
+)
 fig.savefig(OUT / "fig_ml_eval.pdf")
 plt.close(fig)
 print("fig_ml_eval.pdf")
