@@ -279,6 +279,30 @@ is a human PATCH only).
   the ΔΩ-domain mask places the plume. This affects the shipping Phase 3 masks as well; it is why
   raw-ΔR masking (which lacks this signal) displaces the mask off-source, and one reason the
   calibration scatter (§8.2) is wide.
+- **Lit flares corrupt the SWIR retrieval; unlit flares are the venting problem** *(Phase 9)*. A
+  working *lit* gas flare combusts most of its methane, so its danger to us is not the residual CH4
+  but the intense SWIR **thermal** emission that corrupts the B11/B12 retrieval — and a lit→unlit
+  **transition** between the target and reference scenes can mimic a plume at the stack. Flares are
+  also worse emitters than assumed (fleet-average destruction efficiency ~91 %, not the nominal
+  98 %, once unlit and malfunctioning flares are counted — Plant et al. 2022, *Science*,
+  doi:10.1126/science.abq0385); the methane escapes mostly from the *unlit* ones (Irakulis-Loitxate
+  et al. 2022, *Environ. Sci. Technol.* 56:2143). We flag lit flares with the **Normalized Hotspot
+  Index** (Marchese et al. 2019, *Remote Sens.* 11:2876), which is defined on
+  TOA **radiance** L; on our reflectance chips L_i = ρ_i·E_i·cos(SZA)/(π d²) shares the cos/πd²
+  factor across bands, so the *sign* conditions translate exactly — `NHI_SWIR > 0 ⇔ ρ12·E12 >
+  ρ11·E11` (ρ12/ρ11 > E11/E12 ≈ 2.881 S2A / 2.816 S2B) and `NHI_SWNIR > 0 ⇔ ρ11·E11 > ρ8A·E8A`. This
+  is **our documented adaptation** of NHI to reflectance chips: we replace the reference
+  implementation's absolute radiance floor with a declared reflectance floor (ρ12 ≥ 0.01) and dilate
+  the hot set 1 px. The hot pixels are dropped from the calibration (`exclude` + robust-σ refit) and
+  NaN-ed before inversion (`flare_lit_target` / `flare_lit_reference`, `n_hot_*`). The audit's
+  reflectance shorthand "(B12−B11)/(B12+B11) > 0" is **wrong** (it fires on ordinary bright soil) and
+  is not implemented.
+- **B11/B12 are spectrally aliased, and ratios amplify it** *(deferred)*. The two SWIR bands overlap,
+  so surface structure leaks into the band ratio the retrieval rests on (Ehret et al. 2022, Fig. 6);
+  a σ ≈ 0.7 px anti-alias pre-blur is a documented mitigation but it passes through the frozen
+  train/serve channel seam (§9.3), so it is **deliberately deferred to an ML-retrain phase** (its own
+  ALGO bump + noise-floor re-freeze). The S2CH4 benchmark (§8.3) is the instrument that will measure
+  it.
 
 ### 7.1 Composite reference — opt-in, default-off (Phase 8)
 
@@ -509,6 +533,62 @@ systematically downwind, so not simple advection). The per-pass inversion is wha
 plume, so the frozen-mask-LUT keeps it while still decoupling the footprint from calibration. The
 remaining Korpezhe MC width is genuine plume-footprint ambiguity for this intermittent,
 different-date-reference event — we report the wide band rather than tuning k to shrink it.
+
+### 8.3 Synthetic-truth benchmark (S2CH4, Phase 9)
+
+The calibration harness (§8.2) measures us against *published* rates — a handful of events, each
+with its own reference-selection and wind error folded in. The **S2CH4 benchmark** is the
+complementary instrument: it measures retrieval + inversion + mask + IME fidelity against
+*per-pixel ground truth*, with those confounders removed. The dataset (Gorroño et al. 2023, *AMT*
+16:89; Harvard Dataverse doi:10.7910/DVN/KRNPEH v2, **CC0**) forward-models WRF-LES methane plumes
+of **known flux** onto three real Sentinel-2A L1C base scenes (Hassi Messaoud, Permian, Korpeje) —
+5 plume shapes × ~90 flux levels (Q0 = plume-free) per site, 1345 files. `scripts/s2ch4_benchmark.py`
+recomposes `detect.py`'s **pure** chain (MBSP + MBMP → reporting-LUT + frozen-mask-LUT inversion →
+`detect_plume` → `emission_over_mask`) on the file-fed arrays; it never calls `analyze` (which is
+EE-bound) but imports the same functions and constants, so the two invert identically. Fixtures for
+three Hassi files are committed; the full ~925 MB download and every `--freeze` are manual (like the
+calibration harness). Offline tests run on the fixtures only.
+
+**Declared conventions** (stamped in the frozen JSON): the MBMP reference is the **same-scene Q0**,
+a *perfect-reference upper bound* — the benchmark does **not** measure reference-selection error
+(that is Phase-10 material, on live pairs). Truth mask = pixels ≥ 5 % of the product's peak truth
+ΔXCH4 (Q-invariant, since the forward model is linear in flux). IME uses the file's **true U10 with
+σ_u10 = 0**, isolating retrieval/mask/IME error from wind error. Two source modes are recorded:
+*hinted* (source_rc at the truth peak — the site-monitoring case) and *blind* (screening). Minimum
+detectable Q := the lowest Q bin with ≥ 50 % detection across the 5 plume shapes.
+
+**v1 (ALGO 6) baseline.** Per-site minimum detectable Q is **~0.5 t/h** at the homogeneous arid
+sites (Hassi, Korpeje) and **~5 t/h** at heterogeneous Permian — the same order as Gorroño's
+published 1–2 / 5–10 t/h (a sanity band, not a gate; ours is optimistic *by construction* — a
+perfect same-scene reference and zero wind error). The retrieval **tracks truth almost perfectly in
+rank** (Spearman ρ = 0.98, MBMP hinted, Hassi) with a **tight scatter** (log-scatter 0.05) around a
+**~38 % low bias** (slope-through-origin 0.62; in-truth-mask ΔXCH4 bias −97 ppb, RMS 131 ppb). This
+is the honest upper-bound picture: the pipeline is precise and monotonic; the residual is a
+systematic column low-bias consistent with the ~25 % Varon-anchor offset (§7). **MC ±1σ coverage of
+truth is 0 % for MBMP** — the systematic bias exceeds the σ budget, so the Monte-Carlo band (which
+propagates masking/retrieval/model noise, not the LUT bias) does not reach truth. A first-class
+honesty finding: our reported σ is *not* a bias bar.
+
+**v2 (ALGO 7 bundle) vs v1 — approximately neutral, as predicted.** The A/B (`s2ch4_benchmark_v2.json`
+vs `…_v1.json`) is the bundle's regression guard, not a win: MBSP slopes and CI coverage improve
+slightly (CI 0.16→0.20); MBMP central bias is stable (slope 0.622→0.625); Permian MBMP log-scatter
+**halves** (0.158→0.081) — the robust cut trades a hair of slope for precision. No systematic
+degradation, so the bundle merges. **NHI fires on 13 pixels** (predicted 0): all at the *single*
+deepest-absorption pixel of plume shape 4 at extreme flux (46–50 t/h), where the WRF-LES forward
+model drives B11 reflectance negative/near-zero and the ratio condition flips — a **simulation
+boundary artifact, not a realistic false positive** (~2 × 10⁻⁶ of pixels). NHI is implemented
+exactly at the Marchese sign rules; a physical ρ ≥ 0 validity guard would drop this to 4 and is
+recorded as a recommendation, not silently added.
+
+**α,β (F6) evidence block.** For every detected MBMP-hinted product we back out the implied effective
+wind U_eff = Q_true · L / (IME · 3600) and fit U_eff = α·U10 + β against the file's true U10. The
+pre-declared decision box adopts a refit **only if** the U10 span ≥ 3 m s⁻¹ **and** the fit CI
+excludes the Varon constants. Outcome: the three sites (× plume shapes) span only **1.12 m s⁻¹**
+(U10 ∈ {2.69, 3.03, 3.75, 3.77, 3.81}) — **insufficient wind diversity**, so the block ships as
+recorded evidence with **no refit** (the fitted slope is a nonsense −0.11, an artifact of a weak
+trend through clustered winds; the span gate is exactly why we do not adopt it). This closes the
+audit's F6 question honestly — *measured*, not deadlocked — and the answer is "not enough wind
+range in this dataset to recalibrate α,β."
 
 ## 9. ML tier — a candidate ranker over the physics pipeline (Phase 5)
 
