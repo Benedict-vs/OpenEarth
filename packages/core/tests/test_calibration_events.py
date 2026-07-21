@@ -12,7 +12,6 @@ import json
 import re
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from openearth.geometry import BBox
@@ -122,54 +121,10 @@ def test_reference_pinned_for_mbmp_when_degenerate(events: list[dict[str, object
             assert e["reference_scene_id"] is not None
 
 
-# ── Stage 1b: aggregate diagnostics (hand-checked on 4 synthetic events) ──
-
-# Chosen so slope, median ratio, and Theil–Sen all resolve to exactly 1.0:
-#   q_pub  = [10, 10, 20, 20]
-#   q_ours = [11,  9, 24, 16]  (ratios 1.1, 0.9, 1.2, 0.8)
-_SYNTH_PUB = np.array([10.0, 10.0, 20.0, 20.0])
-_SYNTH_OURS = np.array([11.0, 9.0, 24.0, 16.0])
-
-
-def test_slope_through_origin() -> None:
-    h = _load_harness()
-    # Σ(qo·qp)/Σ(qp²) = (110+90+480+320)/(100+100+400+400) = 1000/1000 = 1.0
-    assert h.slope_through_origin(_SYNTH_OURS, _SYNTH_PUB) == pytest.approx(1.0)
-    # degenerate: all published zero → NaN, not a crash
-    assert np.isnan(h.slope_through_origin(_SYNTH_OURS, np.zeros(4)))
-
-
-def test_median_ratio() -> None:
-    h = _load_harness()
-    # ratios sorted [0.8, 0.9, 1.1, 1.2] → median = (0.9 + 1.1)/2 = 1.0
-    assert h.median_ratio(_SYNTH_OURS, _SYNTH_PUB) == pytest.approx(1.0)
-
-
-def test_theil_sen_slope() -> None:
-    h = _load_harness()
-    # pairwise slopes over dx≠0 pairs: 1.3, 0.5, 1.5, 0.7 → median = (0.7+1.3)/2 = 1.0
-    assert h.theil_sen_slope(_SYNTH_OURS, _SYNTH_PUB) == pytest.approx(1.0)
-
-
-def test_log_scatter_matches_definition() -> None:
-    h = _load_harness()
-    log_ratio = np.log10(_SYNTH_OURS / _SYNTH_PUB)
-    expected = 1.4826 * np.median(np.abs(log_ratio - np.median(log_ratio)))
-    assert h.log_scatter(_SYNTH_OURS, _SYNTH_PUB) == pytest.approx(expected)
-    # identical retrievals → zero scatter
-    assert h.log_scatter(_SYNTH_PUB, _SYNTH_PUB) == pytest.approx(0.0)
-
-
-def test_spearman_rank_correlation() -> None:
-    h = _load_harness()
-    # Perfectly monotone → ρ = 1; reversed → ρ = −1.
-    asc = np.array([10.0, 20.0, 30.0, 40.0])
-    assert h.spearman(np.array([1.0, 2.0, 3.0, 4.0]), asc)[0] == pytest.approx(1.0)
-    assert h.spearman(np.array([4.0, 3.0, 2.0, 1.0]), asc)[0] == pytest.approx(-1.0)
-    # n < 3 → NaN (ρ undefined), not a crash.
-    rho, pval = h.spearman(np.array([1.0, 2.0]), np.array([1.0, 2.0]))
-    assert np.isnan(rho)
-    assert np.isnan(pval)
+# The aggregate-diagnostic math (slope_through_origin, median_ratio, log_scatter,
+# theil_sen_slope, spearman) moved to openearth.methane.metrics in Phase 9 Stage 1
+# and is unit-tested in test_metrics.py; the harness re-exports them, so the schema
+# tests below still exercise aggregates() end-to-end.
 
 
 # ── Stage 1b: frozen baseline (version-coupled to the packaged LUT) ──

@@ -28,11 +28,15 @@ Reader facts (verified at planning time; see docs/phase9-execution-plan.md):
 from __future__ import annotations
 
 import argparse
+import inspect
+import json
 import math
 import re
+import subprocess
 import sys
+from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import h5py
@@ -40,7 +44,27 @@ import numpy as np
 from numpy.typing import NDArray
 
 from openearth.ee.pixels import _M_PER_DEG, GridSpec
+from openearth.methane.conversion import (
+    delta_omega_to_xch4_ppb,
+    invert_fractional_signal,
+    load_lut,
+    load_mask_lut,
+)
+from openearth.methane.ime import McParams, emission_over_mask, quantify
+from openearth.methane.metrics import (
+    log_scatter,
+    median_ratio,
+    slope_through_origin,
+    spearman,
+    theil_sen_slope,
+)
+from openearth.methane.plume import detect_plume
+from openearth.methane.retrieval import mbsp
+from openearth.methane.wind import WindSample
 from openearth.settings import get_settings
+from openearth_api.cache import ALGO_VERSION
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # All three base scenes are Sentinel-2A (confirmed across all 1345 files); the LUT
 # and AMF are per-spacecraft, so this is pinned, not inferred per file.
@@ -195,9 +219,501 @@ def _iter_product_paths(root: Path, site: str | None) -> list[Path]:
     return paths
 
 
+# ── Scoring conventions (declared constants; see docs + the frozen JSON) ──
+
+# Truth mask = pixels ≥ this fraction of the product's peak truth ΔXCH4. Because
+# the forward model is exactly linear in flux (verified: Q50000 = 10·Q5000
+# pixel-wise), this footprint is IDENTICAL across all Q of a given plume — so it
+# never degenerates at low Q (the plan's STOP condition cannot trigger here).
+TRUTH_MASK_FRACTION = 0.05
+
+# Q recovery / IME uses the file's TRUE 10 m wind with ZERO uncertainty, isolating
+# retrieval+mask+IME error from wind error (the transport wind is known exactly).
+SIGMA_U10 = 0.0
+
+# Cross-instrument comparability with scripts/calibration_harness.py: a mask
+# dominated by out-of-validity columns is outside the forward model's range.
+# (Mirrors the harness's MBSP_VALIDITY_DELTA_OMEGA / _INVALID_FRACTION_MAX; both
+# are script-local diagnostics, not core pipeline constants.)
+MBSP_VALIDITY_DELTA_OMEGA = 3.0  # mol/m²
+INVALID_FRACTION_MAX = 0.20
+
+# Detection-rate-vs-Q bin edges (kg/h); min detectable Q = the lower edge of the
+# lowest bin with ≥ 50 % detection across the 5 plume shapes (declared).
+_Q_BIN_EDGES = (500, 1000, 2000, 3000, 5000, 7500, 10000, 15000, 25000, 50001)
+_MIN_DETECT_RATE = 0.5
+
+# Full MC (seeded, n=500) on every Nth scored product for CI coverage.
+_MC_SUBSET_EVERY = 10
+_MC = McParams(n=500, seed=0)
+
+# Varon et al. 2021 effective-wind constants, for the α,β decision box.
+_VARON_ALPHA, _VARON_BETA = 0.33, 0.45
+_U10_SPAN_MIN_MS = 3.0  # adopt-refit gate: U10 diversity floor
+
+_METHODS = ("mbsp", "mbmp")
+_SOURCE_MODES = ("hinted", "blind")
+
+# The masking k·σ / min-area come from detect_plume's own defaults (never re-typed).
+_K_SIGMA = float(inspect.signature(detect_plume).parameters["k_sigma"].default)
+_MIN_AREA_PX = int(inspect.signature(detect_plume).parameters["min_area_px"].default)
+
+
+@dataclass(frozen=True)
+class ProductScore:
+    """One (product × method × source-mode) scored against truth."""
+
+    site: str
+    plume: int
+    q_true_kg_h: float
+    method: str
+    source_mode: str
+    detected: bool
+    n_px: int
+    iou: float
+    q_est_kg_h: float  # NaN when nothing was detected
+    xch4_bias_ppb: float  # in-truth-mask mean(ours − truth); NaN if truth empty
+    xch4_rms_ppb: float
+    invalid_fraction: float
+    u10_ms: float
+    ime_kg: float
+    l_m: float
+    # MC subset (None unless this product was sampled for the seeded MC):
+    ci_contains_truth: bool | None = None
+    q_mc_kg_h: float | None = None
+    q_mc_sigma_kg_h: float | None = None
+
+
+@dataclass(frozen=True)
+class _Inverted:
+    """A retrieval pass inverted through both LUTs (reporting + frozen mask)."""
+
+    reporting: NDArray[np.float64]  # ΔΩ for columns / IME (mol/m²)
+    mask: NDArray[np.float64]  # ΔΩ for the footprint (frozen mask LUT)
+
+
+def _invert_pass(delta_r: NDArray[np.float64], spacecraft: str, amf: float) -> _Inverted:
+    """Invert one ΔR field the way detect.py does: reporting LUT + frozen mask LUT."""
+    return _Inverted(
+        reporting=invert_fractional_signal(delta_r, load_lut(), spacecraft, amf),
+        mask=invert_fractional_signal(delta_r, load_mask_lut(), spacecraft, amf),
+    )
+
+
+def _truth_mask(truth_xch4: NDArray[np.float64]) -> NDArray[np.bool_]:
+    """Pixels ≥ TRUTH_MASK_FRACTION of the product's peak truth enhancement."""
+    peak = float(np.nanmax(truth_xch4))
+    if peak <= 0.0:
+        return np.zeros(truth_xch4.shape, dtype=bool)
+    return truth_xch4 >= TRUTH_MASK_FRACTION * peak
+
+
+def _iou(a: NDArray[np.bool_], b: NDArray[np.bool_]) -> float:
+    """Intersection-over-union of two boolean masks (0.0 if both empty)."""
+    union = int(np.count_nonzero(a | b))
+    if union == 0:
+        return 0.0
+    return float(np.count_nonzero(a & b)) / union
+
+
+def _invalid_fraction(reporting: NDArray[np.float64], mask: NDArray[np.bool_]) -> float:
+    """Fraction of masked reporting-ΔΩ pixels beyond the forward model's validity."""
+    in_mask = reporting[mask]
+    if in_mask.size == 0:
+        return 0.0
+    return float(np.mean(np.abs(in_mask) >= MBSP_VALIDITY_DELTA_OMEGA))
+
+
+def _xch4_bias_rms(
+    reporting: NDArray[np.float64], truth_xch4: NDArray[np.float64], truth_mask: NDArray[np.bool_]
+) -> tuple[float, float]:
+    """In-truth-mask per-pixel ΔXCH4 bias/RMS (ppb): ours − truth×1e9."""
+    ours = np.asarray(delta_omega_to_xch4_ppb(reporting), dtype=np.float64)
+    truth_ppb = truth_xch4 * 1e9
+    sel = truth_mask & np.isfinite(ours)
+    if not sel.any():
+        return float("nan"), float("nan")
+    resid = ours[sel] - truth_ppb[sel]
+    return float(np.mean(resid)), float(np.sqrt(np.mean(resid**2)))
+
+
+def _score_product(
+    prod: Product,
+    reporting: NDArray[np.float64],
+    mask_field: NDArray[np.float64],
+    method: str,
+    source_mode: str,
+    truth_mask: NDArray[np.bool_],
+    wind: WindSample,
+    run_mc: bool,
+) -> ProductScore:
+    """Score one product×method×source-mode: detect, IoU, IME Q, ΔXCH4 residual."""
+    source_rc = None
+    if source_mode == "hinted":
+        r, c = np.unravel_index(int(np.argmax(prod.truth_xch4)), prod.truth_xch4.shape)
+        source_rc = (int(r), int(c))
+
+    plume = detect_plume(
+        mask_field, prod.grid, k_sigma=_K_SIGMA, min_area_px=_MIN_AREA_PX, source_rc=source_rc
+    )
+    emission = emission_over_mask(reporting, prod.grid, plume.mask, wind, SIGMA_U10)
+    bias, rms = _xch4_bias_rms(reporting, prod.truth_xch4, truth_mask)
+
+    ci_ok: bool | None = None
+    q_mc: float | None = None
+    q_mc_sigma: float | None = None
+    if run_mc:
+        mc_est, _ = quantify(
+            reporting,
+            prod.grid,
+            wind,
+            SIGMA_U10,
+            mask_field=mask_field,
+            k_sigma=_K_SIGMA,
+            min_area_px=_MIN_AREA_PX,
+            source_rc=source_rc,
+            mc=_MC,
+        )
+        if np.isfinite(mc_est.q_kg_h) and np.isfinite(mc_est.q_sigma_kg_h):
+            q_mc = float(mc_est.q_kg_h)
+            q_mc_sigma = float(mc_est.q_sigma_kg_h)
+            ci_ok = bool(abs(prod.name.q_true_kg_h - q_mc) <= q_mc_sigma)
+
+    return ProductScore(
+        site=prod.name.site,
+        plume=prod.name.plume,
+        q_true_kg_h=prod.name.q_true_kg_h,
+        method=method,
+        source_mode=source_mode,
+        detected=plume.n_pixels > 0,
+        n_px=plume.n_pixels,
+        iou=_iou(plume.mask, truth_mask),
+        q_est_kg_h=float(emission.q_kg_h),
+        xch4_bias_ppb=bias,
+        xch4_rms_ppb=rms,
+        invalid_fraction=_invalid_fraction(reporting, plume.mask),
+        u10_ms=prod.u10_ms,
+        ime_kg=float(emission.ime_kg),
+        l_m=float(emission.l_m),
+        ci_contains_truth=ci_ok,
+        q_mc_kg_h=q_mc,
+        q_mc_sigma_kg_h=q_mc_sigma,
+    )
+
+
+def score_all(paths: list[Path]) -> list[ProductScore]:
+    """Score every Q>0 product against its same-plume Q0 (perfect) reference.
+
+    Reads at most two products at a time (a plume's Q0 + one target), so the full
+    1345-file run stays within memory. The MC subset is chosen by a global scored
+    counter so it is deterministic and site-balanced.
+    """
+    by_group: dict[tuple[str, int], list[Path]] = defaultdict(list)
+    for p in paths:
+        name = parse_product_name(p.name)
+        by_group[(name.site, name.plume)].append(p)
+
+    scores: list[ProductScore] = []
+    scored_idx = 0
+    for (site, plume), group in sorted(by_group.items()):
+        q0_path = next((p for p in group if parse_product_name(p.name).q_true_kg_h == 0.0), None)
+        if q0_path is None:
+            print(f"  ! no Q0 reference for {site} plume{plume}; skipping group", file=sys.stderr)
+            continue
+        ref = read_product(q0_path)
+        ref_dr = mbsp(ref.bands["B11"], ref.bands["B12"]).delta_r
+        ref_pass = _invert_pass(ref_dr, SPACECRAFT, ref.amf)
+
+        for path in group:
+            name = parse_product_name(path.name)
+            if name.q_true_kg_h == 0.0:
+                continue
+            prod = read_product(path)
+            t_pass = _invert_pass(
+                mbsp(prod.bands["B11"], prod.bands["B12"]).delta_r, SPACECRAFT, prod.amf
+            )
+            truth_mask = _truth_mask(prod.truth_xch4)
+            wind = WindSample.from_uv(
+                datetime(name.acquired.year, name.acquired.month, name.acquired.day, tzinfo=UTC),
+                u=prod.u10_ms,
+                v=0.0,
+                collection_id="s2ch4_truth_u10",
+            )
+            fields = {
+                "mbsp": (t_pass.reporting, t_pass.mask),
+                "mbmp": (t_pass.reporting - ref_pass.reporting, t_pass.mask - ref_pass.mask),
+            }
+            run_mc = scored_idx % _MC_SUBSET_EVERY == 0
+            for method in _METHODS:
+                reporting, mask_field = fields[method]
+                for mode in _SOURCE_MODES:
+                    scores.append(
+                        _score_product(
+                            prod, reporting, mask_field, method, mode, truth_mask, wind, run_mc
+                        )
+                    )
+            scored_idx += 1
+        print(f"  scored {site} plume{plume} ({len(group) - 1} products)")
+    return scores
+
+
+# ── Aggregation ──
+
+
+def _q_bin_index(q: float) -> int | None:
+    """Index of the Q bin containing *q* (kg/h), or None if outside the range."""
+    for i in range(len(_Q_BIN_EDGES) - 1):
+        if _Q_BIN_EDGES[i] <= q < _Q_BIN_EDGES[i + 1]:
+            return i
+    return None
+
+
+def _detection_curve(rows: list[ProductScore]) -> list[dict[str, object]]:
+    """Per-bin detection rate across the 5 plume shapes."""
+    detected: dict[int, int] = defaultdict(int)
+    total: dict[int, int] = defaultdict(int)
+    for row in rows:
+        i = _q_bin_index(row.q_true_kg_h)
+        if i is None:
+            continue
+        total[i] += 1
+        detected[i] += int(row.detected)
+    curve: list[dict[str, object]] = []
+    for i in range(len(_Q_BIN_EDGES) - 1):
+        n = total.get(i, 0)
+        curve.append(
+            {
+                "q_lo_kg_h": _Q_BIN_EDGES[i],
+                "q_hi_kg_h": _Q_BIN_EDGES[i + 1],
+                "n": n,
+                "detect_rate": round(detected.get(i, 0) / n, 4) if n else None,
+            }
+        )
+    return curve
+
+
+def _min_detectable_q(curve: list[dict[str, object]]) -> int | None:
+    """Lower edge of the lowest bin with detect_rate ≥ _MIN_DETECT_RATE."""
+    for bin_ in curve:
+        rate = bin_["detect_rate"]
+        if isinstance(rate, float) and rate >= _MIN_DETECT_RATE:
+            return int(bin_["q_lo_kg_h"])  # type: ignore[arg-type]
+    return None
+
+
+def _q_recovery(rows: list[ProductScore]) -> dict[str, object]:
+    """Slope/ratio/scatter/Spearman of detected, in-validity q_est vs q_true."""
+    pairs = [
+        (r.q_est_kg_h, r.q_true_kg_h)
+        for r in rows
+        if r.detected
+        and np.isfinite(r.q_est_kg_h)
+        and r.q_est_kg_h > 0.0
+        and r.invalid_fraction <= INVALID_FRACTION_MAX
+    ]
+    if len(pairs) < 3:
+        return {"n": len(pairs)}
+    ours = np.array([p[0] for p in pairs])
+    true = np.array([p[1] for p in pairs])
+    rho, pval = spearman(ours, true)
+    return {
+        "n": len(pairs),
+        "slope_through_origin": round(slope_through_origin(ours, true), 4),
+        "median_ratio": round(median_ratio(ours, true), 4),
+        "log_scatter": round(log_scatter(ours, true), 4),
+        "theil_sen_slope": round(theil_sen_slope(ours, true), 4),
+        "spearman_rho": round(rho, 4),
+        "spearman_p": round(pval, 4),
+    }
+
+
+def _ci_coverage(rows: list[ProductScore]) -> dict[str, object]:
+    """Fraction of MC-subset detections whose ±1σ band contains Q_true."""
+    sampled = [r for r in rows if r.ci_contains_truth is not None]
+    if not sampled:
+        return {"n": 0, "coverage": None}
+    covered = sum(1 for r in sampled if r.ci_contains_truth)
+    return {"n": len(sampled), "coverage": round(covered / len(sampled), 4)}
+
+
+def _median(values: list[float]) -> float | None:
+    finite = [v for v in values if np.isfinite(v)]
+    return round(float(np.median(finite)), 4) if finite else None
+
+
+def _aggregate(scores: list[ProductScore]) -> dict[str, object]:
+    """Aggregates per site × method × source-mode."""
+    grouped: dict[tuple[str, str, str], list[ProductScore]] = defaultdict(list)
+    for s in scores:
+        grouped[(s.site, s.method, s.source_mode)].append(s)
+
+    out: dict[str, object] = {}
+    for site in sorted(SITE_TILES):
+        site_block: dict[str, object] = {}
+        for method in _METHODS:
+            method_block: dict[str, object] = {}
+            for mode in _SOURCE_MODES:
+                rows = grouped.get((site, method, mode), [])
+                if not rows:
+                    continue
+                curve = _detection_curve(rows)
+                detected = [r for r in rows if r.detected]
+                method_block[mode] = {
+                    "n_products": len(rows),
+                    "n_detected": len(detected),
+                    "min_detectable_q_kg_h": _min_detectable_q(curve),
+                    "detection_curve": curve,
+                    "q_recovery": _q_recovery(rows),
+                    "ci_coverage": _ci_coverage(rows),
+                    "median_iou_detected": _median([r.iou for r in detected]),
+                    "median_xch4_bias_ppb": _median([r.xch4_bias_ppb for r in rows]),
+                    "median_xch4_rms_ppb": _median([r.xch4_rms_ppb for r in rows]),
+                }
+            if method_block:
+                site_block[method] = method_block
+        out[site] = site_block
+    return out
+
+
+def _alpha_beta(scores: list[ProductScore]) -> dict[str, object]:
+    """F6 evidence: implied U_eff = Q_true·L/(IME·3600) vs the file's U10.
+
+    Uses the MBMP-hinted detections (the perfect-reference, source-known config —
+    the cleanest emission estimate). Fits U_eff = α·U10 + β and applies the
+    pre-declared decision box: adopt a refit only if the U10 span ≥ 3 m/s AND the
+    fit CI excludes the Varon constants — otherwise recorded evidence only.
+    """
+    pts = [
+        (r.u10_ms, r.q_true_kg_h * r.l_m / (r.ime_kg * 3600.0))
+        for r in scores
+        if r.method == "mbmp"
+        and r.source_mode == "hinted"
+        and r.detected
+        and np.isfinite(r.ime_kg)
+        and r.ime_kg > 0.0
+        and r.invalid_fraction <= INVALID_FRACTION_MAX
+    ]
+    u10_values = sorted({round(u, 3) for u, _ in pts})
+    span = (max(u10_values) - min(u10_values)) if u10_values else 0.0
+
+    fit: dict[str, object] = {"fitted": False}
+    excludes_varon = False
+    if len(pts) >= 3 and span > 1e-6:
+        u = np.array([p[0] for p in pts])
+        ueff = np.array([p[1] for p in pts])
+        (alpha, beta), cov = np.polyfit(u, ueff, 1, cov=True)
+        se_a, se_b = float(np.sqrt(cov[0, 0])), float(np.sqrt(cov[1, 1]))
+        a_ci = (alpha - 1.96 * se_a, alpha + 1.96 * se_a)
+        b_ci = (beta - 1.96 * se_b, beta + 1.96 * se_b)
+        excludes_varon = not (a_ci[0] <= _VARON_ALPHA <= a_ci[1]) or not (
+            b_ci[0] <= _VARON_BETA <= b_ci[1]
+        )
+        fit = {
+            "fitted": True,
+            "alpha_hat": round(float(alpha), 4),
+            "beta_hat": round(float(beta), 4),
+            "alpha_ci95": [round(a_ci[0], 4), round(a_ci[1], 4)],
+            "beta_ci95": [round(b_ci[0], 4), round(b_ci[1], 4)],
+        }
+
+    adopt = span >= _U10_SPAN_MIN_MS and excludes_varon
+    return {
+        "config": "mbmp/hinted",
+        "n_points": len(pts),
+        "u10_values_ms": u10_values,
+        "u10_span_ms": round(span, 4),
+        "varon": {"alpha": _VARON_ALPHA, "beta": _VARON_BETA},
+        "fit": fit,
+        "adopt_refit": adopt,
+        "decision": (
+            "adopt_refit"
+            if adopt
+            else ("insufficient_wind_diversity" if span < _U10_SPAN_MIN_MS else "ci_includes_varon")
+        ),
+    }
+
+
+def _git_hash() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(_REPO_ROOT), "rev-parse", "--short", "HEAD"], text=True
+        ).strip()
+    except Exception:
+        return "unknown"
+
+
+def build_result(scores: list[ProductScore]) -> dict[str, object]:
+    """Assemble the frozen benchmark JSON (provenance + conventions + aggregates)."""
+    return {
+        "schema": 1,
+        "provenance": {
+            "git_hash": _git_hash(),
+            "algo_version": ALGO_VERSION,
+            "lut_version": load_lut().version,
+            "mask_lut_version": load_mask_lut().version,
+            "dataset": {"doi": "10.7910/DVN/KRNPEH", "version": 2, "license": "CC0-1.0"},
+            "run_utc": datetime.now(UTC).isoformat(),
+            "n_products_scored": len({(s.site, s.plume, s.q_true_kg_h) for s in scores}),
+        },
+        "conventions": {
+            "reference": "same-plume Q0 (perfect-reference upper bound; not a "
+            "reference-selection test — that is Phase 10, on live pairs)",
+            "spacecraft": SPACECRAFT,
+            "truth_mask": f"xch4 >= {TRUTH_MASK_FRACTION} * per-product peak xch4 "
+            "(Q-invariant: the forward model is linear in flux)",
+            "detect": {"k_sigma": _K_SIGMA, "min_area_px": _MIN_AREA_PX},
+            "sigma_u10_ms": SIGMA_U10,
+            "invalid_fraction_max": INVALID_FRACTION_MAX,
+            "min_detectable_q": "lower edge of the lowest Q bin with "
+            f">= {_MIN_DETECT_RATE:.0%} detection across the 5 plume shapes",
+            "ci_band": "MC q_median +/- 1 sigma (n=500, seed=0, sigma_u10=0)",
+            "mc_subset": f"every {_MC_SUBSET_EVERY}th scored product",
+        },
+        "sites": _aggregate(scores),
+        "alpha_beta": _alpha_beta(scores),
+    }
+
+
+def _print_summary(result: dict[str, object]) -> None:
+    prov = result["provenance"]  # type: ignore[index]
+    print(
+        f"\nALGO {prov['algo_version']}  LUT v{prov['lut_version']}  "
+        f"git {prov['git_hash']}  ({prov['n_products_scored']} products)"
+    )
+    print(
+        f"{'site':<10}{'method':<7}{'mode':<8}{'minQ(kg/h)':>11}{'slope':>8}{'CIcov':>8}{'IoU':>7}"
+    )
+    print("-" * 60)
+    for site, methods in result["sites"].items():  # type: ignore[union-attr]
+        for method, modes in methods.items():
+            for mode, agg in modes.items():
+                qr = agg["q_recovery"]
+                slope = qr.get("slope_through_origin", float("nan"))
+                cov = agg["ci_coverage"]["coverage"]
+                iou = agg["median_iou_detected"]
+                print(
+                    f"{site:<10}{method:<7}{mode:<8}"
+                    f"{agg['min_detectable_q_kg_h']!s:>11}"
+                    f"{slope if isinstance(slope, float) else float('nan'):>8.3f}"
+                    f"{(cov if cov is not None else float('nan')):>8.2f}"
+                    f"{(iou if iou is not None else float('nan')):>7.2f}"
+                )
+    ab = result["alpha_beta"]  # type: ignore[index]
+    print(
+        f"\nα,β: n={ab['n_points']} U10={ab['u10_values_ms']} span={ab['u10_span_ms']} m/s "
+        f"→ {ab['decision']}"
+    )
+
+
+def _freeze_path(algo_version: int) -> Path:
+    version = {6: 1, 7: 2}.get(algo_version, algo_version)
+    return _REPO_ROOT / "scripts" / "data" / f"s2ch4_benchmark_v{version}.json"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--site", choices=sorted(SITE_TILES), help="restrict to one base scene")
+    parser.add_argument("--freeze", action="store_true", help="write the versioned benchmark JSON")
     parser.add_argument(
         "--data-dir", type=Path, default=None, help="override the settings data_dir"
     )
@@ -210,11 +726,19 @@ def main() -> int:
         return 1
 
     paths = _iter_product_paths(root, args.site)
-    print(f"{len(paths)} products under {root}")
-    for site_key in sorted(SITE_TILES):
-        n = sum(1 for p in paths if f"_T{SITE_TILES[site_key]}_" in p.name)
-        if n:
-            print(f"  {SITE_NAMES[site_key]:<16} ({SITE_TILES[site_key]}): {n} products")
+    print(f"scoring {len(paths)} products under {root}")
+    scores = score_all(paths)
+    result = build_result(scores)
+    _print_summary(result)
+
+    if args.freeze:
+        if args.site is not None:
+            print("\nrefusing to freeze a single-site subset; run all sites", file=sys.stderr)
+            return 1
+        path = _freeze_path(int(ALGO_VERSION))
+        with open(path, "w") as fh:
+            json.dump(result, fh, indent=2)
+        print(f"\nfroze benchmark → {path.relative_to(_REPO_ROOT)}")
     return 0
 
 
