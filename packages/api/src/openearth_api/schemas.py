@@ -732,8 +732,9 @@ class TimelapseRequest(BaseModel):
     # frame count to hit ~this many seconds. Mutually exclusive with an explicit fps.
     duration_s: float | None = Field(default=None, gt=0.0, le=120.0)
     format: Literal["mp4", "gif", "webm"] = "mp4"
-    # Cap raised 1920 → 3840 after the Stage 0 4K spike; the effective dimension is
-    # still native-locked server-side (never up-sampled past the ROI's native GSD).
+    # Cap raised 1920 → 3840 after the Stage 0 4K spike. Upscaling past the ROI's
+    # native GSD is allowed (decision-9 reversal): honesty is the manifest's
+    # native_max_dim readout, not a server-side clamp.
     max_dim: int = Field(default=1080, ge=64, le=3840)
     tween: int = Field(default=0, ge=0, le=4)
     annotations: AnnotationsIn = Field(default_factory=AnnotationsIn)
@@ -793,7 +794,7 @@ class PreflightOut(BaseModel):
     windows: list[PreflightWindowOut]
     frame_count: int  # windows with ≥1 scene somewhere on the ladder
     empty_count: int
-    native_max_dim: int  # the resolution lock — the UI shows this before submit
+    native_max_dim: int  # the sensor limit readout — the UI labels upscaled renders with it
 
 
 class TimelapseCreated(BaseModel):

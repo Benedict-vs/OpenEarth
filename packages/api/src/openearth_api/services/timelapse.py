@@ -196,7 +196,7 @@ async def submit_timelapse(
     Validation order mirrors ``submit_export_geotiff``: catalog resolve
     (404 unknown / 422 builder products), ROI geometry (422), frame windows
     (422 on a bad range / < 2 frames / over budget), then the Phase-10 compile —
-    honesty wall (422 post on non-RGB), draft/native/pacing plan, GIF cap — all
+    honesty wall (422 post on non-RGB), draft/pacing plan, GIF cap — all
     before any Earth Engine work.
     """
     resolve_catalog(req.dataset, req.product)  # 404 unknown / 422 builder product
@@ -306,7 +306,7 @@ def _dataset_has_product(dataset_id: str, key: str) -> bool:
 
 
 def preflight(req: PreflightRequest, cache: diskcache.Cache) -> PreflightOut:
-    """Per-window availability strip (decision 11): scene counts + the native cap.
+    """Per-window availability strip (decision 11): scene counts + the native limit.
 
     Collection aggregates only (``size()`` per window over the source ladder) — no
     pixel stats — so it answers in seconds and is briefly cached. Scene-level cloud

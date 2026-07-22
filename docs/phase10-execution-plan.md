@@ -411,3 +411,27 @@ Legacy byte-equivalence: the golden test still pins the legacy path (explicit vi
 A/B/C/D change only auto-exposed RGB renders, gap-filled renders, and encode bytes (no test
 pins movie bytes). The acceptance set was re-rendered after these fixes — outcomes in the
 Stage 6 notes below.
+
+**Fifth fix found by the re-render itself:** the first fixed-code Aletsch render still clipped
+32 % of the winter scene — alpine snow SR legitimately exceeds the nominal 1.0, and the
+`valid_max` clamp on the minted top re-introduced the clipping the percentiles prevent. The top
+now follows the data; `valid_max` only anchors a 1.5× pathology backstop
+(`HIGHLIGHT_CEILING_FACTOR` — large-area sunglint protection). Winter clipping 32.4 % → 2.4 %.
+
+### Stage 6 notes — acceptance re-render (2026-07-22, live EE, all settings expanded per scene)
+
+All five submitted through `POST /api/timelapse` at max_dim 1080 / mp4 / fps 6 / tween 0 with
+auto vis (the new sequence exposure). Kept in the gallery under "Acceptance v2/v3 · …".
+
+| Scene | Render id | Result |
+|---|---|---|
+| **Richmond Park 2024 monthly · Showcase (CANONICAL)** | `eab92d30…` | 12/12 frames, 842×1080 (native 445 — upscaled), movie **3.22 MB** (was 172 KB pre-CRF-fix). Auto vis (0, 0.108) exposes the park brightly; June frame sharp and punchy. December (1.5 % measured / 98.5 % borrowed) renders as ONE coherent scene — no paste outlines; the thin-cloud measured patches blend softly (seam fix D working). **Zero visible artifacts.** |
+| Po Valley 2023–24 quarterly · Seasonal | `5bb87063…` | 8/8 frames, vis (0, 0.244), no fill needed, crisp field mosaic + river. Clean. |
+| Gigafactory Berlin 2020–22 monthly · Showcase | `c01089c7…` | 36/36 frames; shoulder engaged (knee 0.68 — winter snow windows). Construction crisp, no gap-fill smearing of buildings (max filled_fraction 0.26); dark pine forest is honest content. |
+| Aletsch 2023–24 monthly · Showcase (SNOW) | v2 `eb2eea75…` → **v3 `6d9c9afd…`** | v2 exposed the valid_max-clamp bug (32.4 % winter pixels ≥250). v3 (ceiling backstop): vis (0, 1.42) data-driven, winter clipping **2.4 %** (residual = specular faces), glacier flow texture visible in accumulation zones, summer moraines/ice fully readable. `tone` stays None correctly — the glacier is bright in *every* window (not HDR across time), so one linear range is the no-pumping exposure. |
+| Las Vegas 1984→2024 annual · Landsat | `b0f8cc74…` | 42/42 frames, 8.71 MB, vis (0.025, 0.455). 1984 golden-desert grid → 2024 full build-out; gap-fill covered one thin early-Landsat year (62 % filled, recorded). Known quirk: 365-day interval stepping drifts ~10 days over 41 yr, so the last window clips to Dec 21–31 (honest label; an "annual" calendar step is a possible later nicety). |
+
+Exposure-stat spot checks (luminance, annotation strip excluded): Richmond June p50 112 /
+1.9 % ≥250; Richmond Dec p50 99 / 0 % ≥250; Aletsch v3 Jan p50 147 / 2.39 % ≥250 (v2: 32.4 %);
+Gigafactory p50 28 (dark pine forest, honest); Vegas frames clean. Canonical gate: **PASS** —
+final verdict on the five scenes is Benedict's, from the gallery + the PR evidence.
