@@ -84,6 +84,47 @@ export type Render = components["schemas"]["RenderOut"];
 export type RenderDetail = components["schemas"]["RenderDetailOut"];
 export type StepConfig = components["schemas"]["StepIn"];
 export type AnnotationsConfig = components["schemas"]["AnnotationsIn"];
+export type GradeConfig = components["schemas"]["GradeIn"];
+export type ExtrasConfig = components["schemas"]["ExtrasIn"];
+export type PreflightRequest = components["schemas"]["PreflightRequest"];
+export type Preflight = components["schemas"]["PreflightOut"];
+export type PreflightWindow = components["schemas"]["PreflightWindowOut"];
+
+/**
+ * The parsed `manifest.json` a finished render carries (Phase-10 manifest v2).
+ * The generated `RenderDetail.manifest` is an untyped object; this is the shape
+ * `FrameManifest.to_dict` writes (packages/core/src/openearth/timelapse.py) — the
+ * honesty surfaces (per-frame source / valid / filled) the player + plate read.
+ */
+export interface ManifestFrame {
+  /** Dense movie index of a rendered frame, or null for a skipped window. */
+  index: number | null;
+  start: string;
+  end: string;
+  label: string;
+  status: "rendered" | "empty" | "failed";
+  source: string | null;
+  valid_fraction: number | null;
+  filled_fraction: number | null;
+}
+export interface TimelapseManifest {
+  dataset: string;
+  product: string;
+  width: number;
+  height: number;
+  vis: [number, number];
+  cancelled: boolean;
+  composite: "mean" | "median" | "clearest";
+  post: {
+    gap_fill?: boolean;
+    gap_fill_cap_windows?: number | null;
+    deflicker_strength?: number;
+    grade?: { curve: string; brightness: number; contrast: number; saturation: number } | null;
+    tint_hole_color?: string | null;
+    fallback_source?: string | null;
+  };
+  frames: ManifestFrame[];
+}
 
 /** The Monte-Carlo Q histogram embedded in a detection's `result` blob. */
 export interface MethaneHistogram {

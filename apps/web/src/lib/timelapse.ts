@@ -1,6 +1,14 @@
 /** Pure timelapse helpers: frame-transport math + form → request mapping. */
-import type { RoiIn, TimelapseRequest } from "../api/types";
+import type {
+  ExtrasConfig,
+  GradeConfig,
+  Preflight,
+  PreflightRequest,
+  RoiIn,
+  TimelapseRequest,
+} from "../api/types";
 import type { TimelapseForm } from "../stores/timelapseStore";
+import { activePreset } from "./presets";
 
 // ── Frame transport (drives the rAF player; no DOM here) ──────
 
@@ -34,28 +42,119 @@ export function framesElapsed(elapsedMs: number, fps: number): number {
   return Math.floor(elapsedMs / frameDurationMs(fps));
 }
 
+// ── Pacing (mirrors core.timelapse.plan_fps — decision 8) ─────
+
+const FPS_MIN = 1;
+const FPS_MAX = 30;
+
+function clampFps(fps: number): number {
+  return Math.max(FPS_MIN, Math.min(FPS_MAX, Math.round(fps)));
+}
+
+/**
+ * The single pacing compiler both authoring modes flow through, matching
+ * `plan_fps` server-side: duration-first picks the fps that fits `nWindows`
+ * frames into the target seconds; frame-first uses the chosen fps. Clamped to
+ * [1, 30]. `nWindows` is the total window count (the server plans on windows,
+ * not the post-empty frame count).
+ */
+export function planFps(nWindows: number, form: Pick<TimelapseForm, "authoringMode" | "fps" | "durationS">): number {
+  if (form.authoringMode === "duration" && form.durationS > 0) {
+    return clampFps(nWindows / form.durationS);
+  }
+  return clampFps(form.fps);
+}
+
+export interface PacingSummary {
+  windows: number;
+  frames: number;
+  fps: number;
+  /** Human sentence, e.g. "73 windows → 68 frames @ 12 fps · ~5.7 s". */
+  label: string;
+}
+
+/** The pacing math the UI shows above Render, resolved from a preflight probe. */
+export function pacingSummary(preflight: Preflight, form: TimelapseForm): PacingSummary {
+  const windows = preflight.windows.length;
+  const frames = preflight.frame_count;
+  const fps = planFps(windows, form);
+  const seconds = fps > 0 ? frames / fps : 0;
+  const arrow = windows === frames ? `${frames} frames` : `${windows} windows → ${frames} frames`;
+  return { windows, frames, fps, label: `${arrow} @ ${fps} fps · ~${seconds.toFixed(1)} s` };
+}
+
 // ── Form → API request ────────────────────────────────────────
 
 const GIF_MAX_DIM = 720;
 
-/** Map the studio form + a resolved ROI to the API request shape. */
-export function buildTimelapseRequest(form: TimelapseForm, roi: RoiIn): TimelapseRequest {
-  const maxDim = form.format === "gif" ? Math.min(form.maxDim, GIF_MAX_DIM) : form.maxDim;
+/** Cloud-hole handling → the two API fields (`gap_fill`, `cloud_display`). */
+export function compileCloud(form: TimelapseForm): { gap_fill: boolean; cloud_display: string } {
+  switch (form.cloudMode) {
+    case "fill":
+      return { gap_fill: true, cloud_display: "composite" };
+    case "tint":
+      return { gap_fill: false, cloud_display: `tint:${form.tintColor}` };
+    case "show":
+      return { gap_fill: false, cloud_display: "composite" };
+  }
+}
+
+/** A grade → `GradeIn`, or `null` when it is the identity (natural + defaults). */
+export function compileGrade(form: TimelapseForm): GradeConfig | null {
+  const isIdentity =
+    form.gradeCurve === "natural" &&
+    form.gradeBrightness === 0 &&
+    form.gradeContrast === 0 &&
+    form.gradeSaturation === 1;
+  if (isIdentity) return null;
   return {
+    curve: form.gradeCurve,
+    brightness: form.gradeBrightness,
+    contrast: form.gradeContrast,
+    saturation: form.gradeSaturation,
+  };
+}
+
+function compileExtras(form: TimelapseForm): ExtrasConfig {
+  return {
+    title_card: form.titleCard.trim() || null,
+    end_card: form.endCard.trim() || null,
+    watermark: form.watermark.trim() || null,
+    crops: form.crops,
+  };
+}
+
+function compileStep(form: TimelapseForm) {
+  return {
+    mode: form.stepMode,
+    interval_days: form.intervalDays,
+    window_days: form.stepMode === "interval" ? form.windowDays : null,
+  };
+}
+
+/** Map the studio form + a resolved ROI to the API request shape. */
+export function buildTimelapseRequest(
+  form: TimelapseForm,
+  roi: RoiIn,
+  opts: { draft?: boolean } = {},
+): TimelapseRequest {
+  const maxDim = form.format === "gif" ? Math.min(form.maxDim, GIF_MAX_DIM) : form.maxDim;
+  const cloud = compileCloud(form);
+  const preset = activePreset(form);
+
+  // Everything except the pacing field: frame-first sends `fps`, duration-first
+  // sends `duration_s` and MUST omit `fps` — the API rejects a body carrying both
+  // (its model_fields_set check), so the field is added per-mode below.
+  const common: Omit<TimelapseRequest, "fps"> = {
     title: form.title.trim() || null,
     dataset: form.datasetId,
     product: form.productKey,
     roi,
     dates: { start: form.start, end: form.end },
-    step: {
-      mode: form.stepMode,
-      interval_days: form.intervalDays,
-      window_days: form.stepMode === "interval" ? form.windowDays : null,
-    },
-    fps: form.fps,
-    tween: form.tween,
+    step: compileStep(form),
     format: form.format,
     max_dim: maxDim,
+    tween: form.tween,
     annotations: {
       date_label: form.dateLabel,
       colorbar: form.colorbar,
@@ -64,13 +163,45 @@ export function buildTimelapseRequest(form: TimelapseForm, roi: RoiIn): Timelaps
     },
     vis_min: form.visMin,
     vis_max: form.visMax,
-    // Phase 10 production knobs default to legacy behaviour here; the Studio
-    // rebuild (Stage 5) wires them to the form.
-    composite: "mean",
-    cloud_display: "composite",
-    gap_fill: false,
-    deflicker: false,
-    fallback_source: false,
-    draft: false,
+    // ── Phase 10 production knobs ──
+    preset: preset?.id ?? null,
+    composite: form.composite,
+    cloud_display: cloud.cloud_display,
+    gap_fill: cloud.gap_fill,
+    deflicker: form.deflicker,
+    grade: compileGrade(form),
+    fallback_source: form.fallback,
+    draft: opts.draft ?? false,
+    extras: compileExtras(form),
   };
+
+  if (form.authoringMode === "duration") {
+    return { ...common, duration_s: form.durationS } as TimelapseRequest;
+  }
+  return { ...common, fps: form.fps };
+}
+
+/** The cheap availability probe (decision 11) — collection aggregates only. */
+export function buildPreflightRequest(form: TimelapseForm, roi: RoiIn): PreflightRequest {
+  return {
+    dataset: form.datasetId,
+    product: form.productKey,
+    roi,
+    dates: { start: form.start, end: form.end },
+    step: compileStep(form),
+    composite: form.composite,
+    fallback_source: form.fallback,
+  };
+}
+
+/**
+ * The middle window of a preflight, used to mint a representative preview still.
+ * Returns `null` for an empty probe.
+ */
+export function middleWindow(preflight: Preflight): { start: string; end: string } | null {
+  const withData = preflight.windows.filter((w) => w.scene_count > 0);
+  const pool = withData.length > 0 ? withData : preflight.windows;
+  const w = pool[Math.floor(pool.length / 2)];
+  if (!w) return null;
+  return { start: w.start, end: w.end };
 }
