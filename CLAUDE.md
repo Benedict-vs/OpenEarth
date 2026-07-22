@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # OpenEarth v2
 
-Satellite-based environmental analysis (**Phase 8 complete** — design pass: window/period time model, resilient renders, opt-in composite reference; Phase 7 = science-honesty pass; v1 Streamlit app retired):
+Satellite-based environmental analysis (**Phase 10 complete** — Timelapse Production pass: compositing modes + HLS/Landsat sources, artifact-killer post-processing, the Cut Studio + citable plate; Phase 9 = S2CH4 truth benchmark + ALGO-7 bundle; v1 Streamlit app retired):
 Python core library (`packages/core`) + FastAPI backend (`packages/api`) + React/MapLibre
 frontend (`apps/web`) + an offline ML training package (`packages/ml`), with a physics-honest
 methane detection suite (the Methane Lab), side-by-side Compare, a Timelapse Studio, an
@@ -23,6 +23,7 @@ make api                      # FastAPI dev server only
 make gen                      # regenerate apps/web/openapi.json + src/api/types.gen.ts —
                               #   run after ANY API schema change (CI diff-checks drift)
 pnpm --dir apps/web lint && pnpm --dir apps/web typecheck && pnpm --dir apps/web test -- --run
+pnpm --dir apps/web format:check   # prettier — CI enforces this too; `format` to fix
 OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; never CI)
 docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-safe; docs/deploy.md)
 ```
@@ -85,12 +86,32 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
     is mandatory wherever a layer shows.
   - `geometry.py` — `BBox`/`PolygonROI` validate on construction; pure-python `is_global`,
     aspect math (no EE round-trips).
-  - `timelapse.py` — Phase 4. Pure layer: `frame_windows` (interval/monthly/quarterly stepping)
-    + Pillow annotations (`scale_bar_spec`/`render_colorbar`/`annotate_frame`), offline-tested.
-    EE + encoding layer: `render_frames` (one geometry + one vis range per render, mean composite
-    → `thumb_url` → PNG fetch → burn-in, dense re-index, empty-vs-failed status, atomic manifest)
-    and `encode_movie` (mp4/webm via imageio-ffmpeg, gif via Pillow). Frames fetched with an
-    injectable `urllib` `FetchFn` — no HTTP dep in core.
+  - `timelapse.py` — Phase 4 base + Phase 10 production pass. Pure layer: `frame_windows`
+    (interval/monthly/quarterly stepping) + Pillow annotations (`scale_bar_spec`/
+    `render_colorbar`/`annotate_frame`), offline-tested. EE + encoding layer: `render_frames`
+    (one geometry + ONE exposure per render; per-window `build_composite(mode=mean|median|
+    clearest)` over the source ladder — primary → HLS on empty when enabled — → `thumb_url` →
+    PNG fetch → post-processing → burn-in, dense re-index, empty-vs-failed status, atomic
+    **manifest v2**: per-frame `{source, valid_fraction, filled_fraction}` + `composite`/`post`/
+    `native_max_dim`/`tone`) and `encode_movie` (mp4/webm via imageio-ffmpeg at explicit
+    constant quality `X264_CRF` 18 / `VP9_CRF` 30 — never imageio's implicit quality default —
+    gif via Pillow). Fully-auto RGB vis = sampled sequence exposure (`rgb_range_stats` p1/p99 on
+    ≤5 windows → envelope; HDR sequences get ONE fixed highlight-shoulder LUT recorded as
+    manifest `tone`, so snow keeps texture without exposure pumping). Resolution may upscale
+    past native (decision-9 REVERSED in acceptance): `native_max_dim` is a readout, not a
+    clamp. Frames fetched with an injectable `urllib` `FetchFn` — no HTTP dep in core.
+  - `timelapse_post.py` — Phase 10 pure post layer (NumPy/scipy, zero EE): `forward_fill`
+    (2-window staleness cap) + `blend_fill_seams` (borrowed regions exposure-matched ±15% and
+    feathered toward measured pixels — writes ONLY inside the fill mask, provenance untouched),
+    `deflicker` (luminance anchor ±20%), `grade` (natural/vivid/cinematic + b/c/s),
+    `tint_holes`, and the sequence-exposure math (`resolve_sequence_exposure`/
+    `highlight_shoulder_lut`). Honesty wall enforced in code — every modifier raises
+    `NonDisplayFrameError` on non-RGB products; display frames only, never data values.
+  - `composites.py` — `build_composite(mode=…)`: mean (legacy default, byte-identical alias),
+    median, clearest (S2: qualityMosaic on inverted s2cloudless; HLS/Landsat: masked median).
+    `providers/hls.py` (merged HLSS30+L30, Fmask bits 1|2|3, **pre-scaled floats — never
+    re-scale**) and `providers/landsat.py` (LT05/LE07/LC08/LC09, QA_PIXEL bits 1|3|4, SR scale
+    ×0.0000275−0.2, per-spacecraft RGB mapping, post-2003 L7 composite-only guard).
 - `packages/api/src/openearth_api/` — FastAPI layer (`routers/` thin, `services/` do the work).
   `create_app()` must stay EE-free AND DB-free at creation time — `scripts/export_openapi.py`
   and web CI rely on it; the DB engine + EE init happen in the lifespan. EE-touching routes
@@ -150,7 +171,14 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
     manifest — the runner keeps it as a "partial" row (status `cancelled` + `frame_count`, no enum
     change/migration) with a movie when ≥2 frames. `TimelapseRequest.tween` (0–4) cross-fades at
     encode time (`encode_movie(tween=…)`, fps scaled by tween+1); the GIF cap is post-expansion.
-    Web "Stop render" hits the existing `DELETE /jobs/{job_id}`.
+    Web "Stop render" hits the existing `DELETE /jobs/{job_id}`. Phase 10 schema v2 (all
+    defaulted legacy): `preset` (a provenance label — the client expands it), `composite`,
+    `cloud_display` (`composite|raw|tint:#hex`), `gap_fill`, `deflicker`, `grade`,
+    `fallback_source`, `draft` (480p mp4 proof → "Render final"), `extras` (title/end cards,
+    watermark, 1:1/9:16 crop re-encodes), `duration_s` XOR `fps` (one `plan_fps` compiler),
+    `max_dim ≤ 3840` (UPSCALING ALLOWED — the native limit is manifest/UI honesty, not a
+    clamp); `POST /timelapse/preflight` = per-window scene counts over the ladder + the native
+    limit, briefly cached; still endpoint + `download?variant` serve extras.
 - `packages/ml/` (dist `openearth-ml`) — **offline** U-Net training/eval/export; **torch + smp live
   here only, never in core/api** (`test_no_ml_deps.py` enforces it). `data.py` (npz chip dataset,
   GroupKFold by **site-cluster** — sites <5 km single-linkage-merged, `assert_no_fold_overlap` guard,
@@ -170,7 +198,11 @@ docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-sa
   Views: `App.tsx` renders the switch, but view state lives in `uiStore` (Phase 8) so a feature
   can `navigate(view)` without prop-drilling. Views: Explore, Compare (`@maplibre/maplibre-gl-compare`,
   two per-instance maps), Methane Lab (EMIT plume overlay + match chip; compare products get a
-  reference-window picker in the LayerPanel), Timelapse Studio, Embeddings Explorer (own map;
+  reference-window picker in the LayerPanel), Timelapse Studio (Phase 10 "Cut" editing suite:
+  program monitor + preflight availability filmstrip + preset cards (Showcase/Survey/Every
+  pass/Seasonal — full recipes expanded client-side in `lib/presets.ts`) + grade inspector +
+  per-frame QC badges reading manifest v2; finished renders export the citable **plate** PNG
+  client-side (`lib/plate.ts`) from manifest data only), Embeddings Explorer (own map;
   similarity/change/cluster; CC-BY footer), Settings. Explore's **wind particle layer**
   (`src/map/wind/`) is a vendored webgl-wind MapLibre custom layer (ISC; GPU state texture,
   streaks projected through the map matrix) fed by `/wind/field` — no deck.gl, no API change.

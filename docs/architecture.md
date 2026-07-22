@@ -151,6 +151,46 @@ Compare + Timelapse, then the v1 Streamlit app retired (parity reached — see
   **Compare** (`features/compare/` — two per-instance maps joined by
   `@maplibre/maplibre-gl-compare`, linked/independent modes; `MapContext` is per-instance).
 
+## Built in Phase 10
+
+The Timelapse Production pass (Phases 5–9 are documented in `docs/roadmap.md` as-built notes and
+`docs/methane_methods.md`; this pass reworked the timelapse stack end to end — plan + decision
+log in `docs/phase10-execution-plan.md`).
+
+- **Compositing + sources** — `composites.build_composite(mode="mean"|"median"|"clearest")`
+  (mean stays the byte-identical legacy default; clearest = per-pixel least-cloudy via
+  s2cloudless `qualityMosaic` on S2, masked median elsewhere). Two real providers:
+  `providers/hls.py` (HLSS30+HLSL30 merged, Fmask bits 1|2|3, GEE assets are pre-scaled floats —
+  never re-scale) and `providers/landsat.py` (LT05/LE07/LC08/LC09 to 1984, QA_PIXEL bits 1|3|4,
+  SR scale ×0.0000275 − 0.2, per-spacecraft RGB mapping, post-2003 L7 restricted to ≥3-scene
+  composites). Explore/Compare inherit both sources through the catalog.
+- **Pure post-processing** (`openearth/timelapse_post.py`, NumPy/scipy, zero EE — the alpha
+  channel IS the mask): `forward_fill` (2-window staleness cap) + `blend_fill_seams` (borrowed
+  regions exposure-matched ±15 % and feathered toward measured pixels — in-mask writes only, so
+  `filled_fraction`/provenance stay exact), `deflicker` (luminance anchor, ±20 % clamp),
+  `grade` (three declared curves + b/c/s sliders), `tint_holes` (Survey), and the sequence
+  exposure (`resolve_sequence_exposure` + `highlight_shoulder_lut` — sampled p1/p99 envelope,
+  one fixed C¹ highlight shoulder for HDR sequences so snow keeps texture without pumping).
+  The physics-honesty wall is code: every modifier raises `NonDisplayFrameError` off RGB.
+- **Render pipeline v2** — `render_frames` runs the per-window source ladder (primary → HLS on
+  empty when enabled), resolves ONE exposure for the whole render, post-processes in window
+  order, and writes manifest v2: per-frame `{source, valid_fraction, filled_fraction}` plus
+  `composite`/`post`/`native_max_dim`/`tone`. Resolution may exceed the sensor's native limit
+  (the Stage-6 acceptance review REVERSED the native lock): honesty is the recorded
+  `native_max_dim`, surfaced as "render N px · native M px". `encode_movie` uses explicit
+  constant quality (x264 CRF 18, vp9 CRF 30) instead of imageio-ffmpeg's implicit default.
+- **API v2** — `TimelapseRequest` gains preset label, composite, cloud_display, gap_fill,
+  deflicker, grade, fallback_source, draft (480p proof → "Render final"), extras (cards,
+  watermark, 1:1/9:16 crops), `duration_s` XOR `fps` (one `plan_fps` compiler), `max_dim ≤
+  3840 — every field defaulted to legacy behaviour (golden byte-equivalence test). `POST
+  /timelapse/preflight` returns per-window scene counts over the ladder + the native limit.
+- **The Cut Studio + plate** (`apps/web/features/timelapse/`) — editing-suite authoring
+  (program monitor, preflight availability filmstrip, preset cards as full client-expanded
+  recipes, grade inspector, per-frame QC badges reading manifest v2) and an opt-in **plate**
+  export: a finished render composites its hero still + a provenance data sheet (sources,
+  measured/borrowed/blank, coordinates, native px) into one downloadable PNG, client-side,
+  from manifest data only.
+
 ## Earth Engine ground rules (design defensively)
 
 | Mechanic | Assumption | Defense |

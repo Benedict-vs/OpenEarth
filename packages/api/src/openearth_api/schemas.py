@@ -8,10 +8,11 @@ for geometric validation.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from openearth.geometry import BBox, PolygonROI
 
@@ -684,8 +685,41 @@ class AnnotationsIn(BaseModel):
     attribution: str | None = None
 
 
+class GradeIn(BaseModel):
+    """A colour grade (decision 5): a declared tone curve + composable sliders."""
+
+    curve: Literal["natural", "vivid", "cinematic"] = "natural"
+    brightness: float = Field(default=0.0, ge=-1.0, le=1.0)
+    contrast: float = Field(default=0.0, ge=-1.0, le=1.0)
+    saturation: float = Field(default=1.0, ge=0.0, le=2.0)
+
+
+class ExtrasIn(BaseModel):
+    """Share extras, re-encoded from the kept frames (never a re-render)."""
+
+    title_card: str | None = Field(default=None, max_length=120)
+    end_card: str | None = Field(default=None, max_length=120)
+    watermark: str | None = Field(default=None, max_length=60)
+    crops: list[Literal["1:1", "9:16"]] = Field(default_factory=list)
+
+    @field_validator("crops")
+    @classmethod
+    def _dedupe_crops(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value))  # keep order, drop duplicates
+
+
+# "composite" (show the composited/gap-filled pixel), "raw" (leave holes
+# transparent), or "tint:#RRGGBB" (Survey — paint remaining holes).
+_CLOUD_DISPLAY_RE = re.compile(r"^(composite|raw|tint:#[0-9a-fA-F]{6})$")
+
+
 class TimelapseRequest(BaseModel):
-    """A timelapse render request. ``roi`` is required — no global timelapse."""
+    """A timelapse render request. ``roi`` is required — no global timelapse.
+
+    Every Phase-10 field defaults to the legacy behaviour (mean composite, no
+    post-processing, no fallback, 1080 longest edge), so an old client renders
+    byte-equivalent output.
+    """
 
     title: str | None = Field(default=None, max_length=200)
     dataset: str
@@ -694,15 +728,76 @@ class TimelapseRequest(BaseModel):
     dates: DateRangeIn
     step: StepIn = Field(default_factory=StepIn)
     fps: int = Field(default=6, ge=1, le=30)
+    # Duration-first authoring (decision 8): when set, the fps is derived from the
+    # frame count to hit ~this many seconds. Mutually exclusive with an explicit fps.
+    duration_s: float | None = Field(default=None, gt=0.0, le=120.0)
     format: Literal["mp4", "gif", "webm"] = "mp4"
-    max_dim: int = Field(default=1080, ge=64, le=1920)
-    # Frame-to-frame smoothing: insert this many cross-faded frames between each
-    # pair at encode time (a display effect, not more data). The GIF frame cap is
-    # enforced *after* expansion at submit time.
+    # Cap raised 1920 → 3840 after the Stage 0 4K spike. Upscaling past the ROI's
+    # native GSD is allowed (decision-9 reversal): honesty is the manifest's
+    # native_max_dim readout, not a server-side clamp.
+    max_dim: int = Field(default=1080, ge=64, le=3840)
     tween: int = Field(default=0, ge=0, le=4)
     annotations: AnnotationsIn = Field(default_factory=AnnotationsIn)
     vis_min: float | None = None
     vis_max: float | None = None
+    # ── Phase 10 production knobs ──
+    preset: str | None = Field(default=None, max_length=60)
+    composite: Literal["mean", "median", "clearest"] = "mean"
+    cloud_display: str = "composite"
+    gap_fill: bool = False
+    deflicker: bool = False
+    grade: GradeIn | None = None
+    fallback_source: bool = False
+    draft: bool = False
+    extras: ExtrasIn = Field(default_factory=ExtrasIn)
+
+    @field_validator("cloud_display")
+    @classmethod
+    def _valid_cloud_display(cls, value: str) -> str:
+        if not _CLOUD_DISPLAY_RE.match(value):
+            raise ValueError('cloud_display must be "composite", "raw", or "tint:#RRGGBB".')
+        return value
+
+    @model_validator(mode="after")
+    def _duration_xor_fps(self) -> TimelapseRequest:
+        if self.duration_s is not None and "fps" in self.model_fields_set:
+            raise ValueError(
+                "Set either fps (frame-first) or duration_s (duration-first), not both."
+            )
+        return self
+
+
+class PreflightRequest(BaseModel):
+    """A cheap availability probe (decision 11) — collection aggregates only."""
+
+    dataset: str
+    product: str
+    roi: RoiIn
+    dates: DateRangeIn
+    step: StepIn = Field(default_factory=StepIn)
+    composite: Literal["mean", "median", "clearest"] = "mean"
+    fallback_source: bool = False
+
+
+class PreflightWindowOut(BaseModel):
+    start: date
+    end: date
+    label: str
+    scene_count: int
+    mean_cloud: float | None = None  # scene-level cloud %, where the source reports it
+    source: str  # which ladder source supplied the count (primary or fallback)
+    # Data-quality warning for the window (currently only Landsat SLC-off wedge
+    # gaps: thin post-2003 windows whose only scenes are gap-striped Landsat-7).
+    advisory: str | None = None
+
+
+class PreflightOut(BaseModel):
+    """Per-window availability + the native-resolution ceiling for the ROI."""
+
+    windows: list[PreflightWindowOut]
+    frame_count: int  # windows with ≥1 scene somewhere on the ladder
+    empty_count: int
+    native_max_dim: int  # the sensor limit readout — the UI labels upscaled renders with it
 
 
 class TimelapseCreated(BaseModel):
@@ -717,7 +812,7 @@ class RenderUpdateIn(BaseModel):
 
 
 class RenderOut(BaseModel):
-    """Gallery row: SQL-only, no manifest parse."""
+    """Gallery row: SQL row + a couple of fields surfaced from ``params_json``."""
 
     id: str
     title: str
@@ -730,6 +825,11 @@ class RenderOut(BaseModel):
     movie_bytes: int | None
     created_at: str
     updated_at: str
+    # Phase 10 — read from params_json (no migration): draft chip + preset name +
+    # the crop variants that were also encoded (for the gallery download menu).
+    draft: bool = False
+    preset: str | None = None
+    crops: list[str] = Field(default_factory=list)
 
 
 class RenderDetailOut(RenderOut):

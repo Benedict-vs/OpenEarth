@@ -30,7 +30,11 @@ display_unit = "m"
 def test_list_catalog_builtins(client: TestClient) -> None:
     body = client.get("/api/catalog").json()
     ids = {ds["id"] for ds in body}
-    assert ids == {"s5p", "s2", "s1", "emit"}
+    assert ids == {"s5p", "s2", "s1", "emit", "hls", "landsat"}
+    # Phase 10 optical sources are browsable in Explore/Compare like any builtin.
+    hls = next(ds for ds in body if ds["id"] == "hls")
+    assert hls["is_custom"] is False
+    assert {p["key"] for p in hls["products"]} == {"RGB", "NDVI", "NDWI"}
     s2 = next(ds for ds in body if ds["id"] == "s2")
     assert s2["is_custom"] is False
     ndvi = next(p for p in s2["products"] if p["key"] == "NDVI")

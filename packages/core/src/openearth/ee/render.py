@@ -97,6 +97,44 @@ def compute_vis_range(
     return (clamped_min, clamped_max)
 
 
+def rgb_range_stats(
+    image: ee.Image,
+    spec: ProductSpec,
+    roi: ROI | None = None,
+    *,
+    scale_m: int = 100,
+) -> tuple[float, float] | None:
+    """Robust display percentiles of one RGB composite: ``(p1, p99)`` across bands.
+
+    The timelapse sequence-exposure resolver samples this on a few windows to
+    expose for the typical scene while keeping true highlights (snow) inside the
+    minted range. Returns ``None`` when stats are unavailable (empty window).
+    """
+    if not spec.is_rgb or not spec.bands:
+        return None
+    reducer = ee.Reducer.percentile([1, 99])
+    kwargs: dict[str, Any] = {
+        "reducer": reducer,
+        "scale": scale_m,
+        "bestEffort": True,
+        "maxPixels": 1e8,
+    }
+    if roi is not None:
+        kwargs["geometry"] = roi.to_ee_geometry()
+
+    stats = ee_call(image.select(spec.bands).reduceRegion(**kwargs).getInfo) or {}
+    los: list[float] = []
+    his: list[float] = []
+    for band in spec.bands:
+        p_lo = stats.get(f"{band}_p1")
+        p_hi = stats.get(f"{band}_p99")
+        if p_lo is None or p_hi is None:
+            return None
+        los.append(float(p_lo))
+        his.append(float(p_hi))
+    return (min(los), max(his))
+
+
 def compute_anomaly_vis_range(
     image: ee.Image,
     band: str = "CH4_ANOMALY",

@@ -10,6 +10,8 @@ import ee
 from openearth.catalog import ProductSpec, resolve_product
 from openearth.ee.client import ee_call
 from openearth.providers.generic import get_generic_collection
+from openearth.providers.hls import get_hls_collection
+from openearth.providers.landsat import get_landsat_collection
 from openearth.providers.s1 import get_s1_collection
 from openearth.providers.s2 import get_s2_collection
 from openearth.providers.s5p import get_trace_gas_collection
@@ -56,6 +58,10 @@ def get_collection(
         return get_s2_collection(data_key, roi, start_date, end_date)
     if dataset_id == "s5p":
         return get_trace_gas_collection(data_key, roi, start_date, end_date)
+    if dataset_id == "hls":
+        return get_hls_collection(data_key, roi, start_date, end_date)
+    if dataset_id == "landsat":
+        return get_landsat_collection(data_key, roi, start_date, end_date)
     return get_generic_collection(dataset_id, data_key, roi, start_date, end_date)
 
 
