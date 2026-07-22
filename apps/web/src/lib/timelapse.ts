@@ -64,5 +64,13 @@ export function buildTimelapseRequest(form: TimelapseForm, roi: RoiIn): Timelaps
     },
     vis_min: form.visMin,
     vis_max: form.visMax,
+    // Phase 10 production knobs default to legacy behaviour here; the Studio
+    // rebuild (Stage 5) wires them to the form.
+    composite: "mean",
+    cloud_display: "composite",
+    gap_fill: false,
+    deflicker: false,
+    fallback_source: false,
+    draft: false,
   };
 }

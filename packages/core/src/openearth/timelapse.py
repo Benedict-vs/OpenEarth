@@ -1033,14 +1033,198 @@ def _encode_video(plan: list[BlendStep], dest: Path, *, fmt: MovieFormat, fps: i
         raise JobError(f"Movie encoding failed ({codec}): {exc}") from exc
 
 
+# ── Phase 10 Stage 3: pacing, native-locked resolution, encode extras ──
+
+# The 4K cap adopted after the Stage 0 spike proved getThumbURL serves 3840×2160.
+MAX_DIM_4K = 3840
+# Draft mode (decision 10): a fast, small preview at this longest edge.
+DRAFT_MAX_DIM = 480
+# The strength used when deflicker is toggled on as a boolean (API surfaces a
+# switch, core takes a 0–1 strength).
+DEFAULT_DEFLICKER_STRENGTH = 0.6
+# Frames a title/end card is held for is derived from fps; this is the floor.
+MIN_CARD_HOLD_FRAMES = 1
+
+# Native ground sample distance per source (m) — the resolution lock (decision 9):
+# a frame is never up-sampled past its sensor's native GSD.
+NATIVE_GSD_M: dict[str, float] = {
+    "s2": 10.0,
+    "hls": 30.0,
+    "landsat": 30.0,
+    "s1": 10.0,
+    "s5p": 1113.0,
+    "emit": 60.0,
+}
+DEFAULT_GSD_M = 30.0
+
+CropRatio = Literal["1:1", "9:16"]
+CROP_RATIOS: dict[CropRatio, tuple[int, int]] = {"1:1": (1, 1), "9:16": (9, 16)}
+
+
+def native_pixels(bbox: BBox, gsd_m: float) -> int:
+    """Longest-edge native pixel count for *bbox* at *gsd_m* (cosine-corrected width)."""
+    center_lat, _ = bbox.center
+    width_m = abs(bbox.width_deg) * _M_PER_DEG * math.cos(math.radians(center_lat))
+    height_m = abs(bbox.height_deg) * _M_PER_DEG
+    return max(2, int(max(width_m, height_m) / max(gsd_m, 1e-6)))
+
+
+def native_max_dim(bbox: BBox, dataset: str) -> int:
+    """The resolution lock: the largest honest longest-edge for *dataset* over *bbox*."""
+    return native_pixels(bbox, NATIVE_GSD_M.get(dataset, DEFAULT_GSD_M))
+
+
+def plan_fps(n_frames: int, *, duration_s: float | None = None, fps: int | None = None) -> int:
+    """Compile the two authoring modes to one fps (decision 8).
+
+    Duration-first (``duration_s``) picks the fps that fits *n_frames* into the
+    target seconds; frame-first uses *fps* directly. Result is clamped to [1, 30].
+    """
+    if duration_s is not None and duration_s > 0:
+        return max(1, min(30, round(n_frames / duration_s)))
+    return fps if fps is not None else 6
+
+
+def center_crop_to_ratio(img: Image.Image, ratio_w: int, ratio_h: int) -> Image.Image:
+    """Center-crop *img* to the *ratio_w*:*ratio_h* aspect, rounded to even dims."""
+    w, h = img.size
+    target = ratio_w / ratio_h
+    if w / h > target:  # too wide — trim width
+        new_w, new_h = round(h * target), h
+    else:  # too tall — trim height
+        new_w, new_h = w, round(w / target)
+    left, top = (w - new_w) // 2, (h - new_h) // 2
+    crop = img.crop((left, top, left + new_w, top + new_h))
+    cw, ch = crop.size
+    return crop.crop((0, 0, cw - cw % 2, ch - ch % 2))
+
+
+def make_card(text: str, size: tuple[int, int], *, subtitle: str | None = None) -> Image.Image:
+    """A declared title/end card: word-wrapped centred text on a near-black field."""
+    w, h = size
+    card = Image.new("RGB", (w, h), (12, 14, 18))
+    draw = ImageDraw.Draw(card)
+    title_size = max(16, round(h * 0.09))
+    font = ImageFont.load_default(size=title_size)
+    lines = _wrap_text(draw, text, font, int(w * 0.86))
+    line_h = title_size + max(4, round(title_size * 0.25))
+    block_h = line_h * len(lines)
+    y = (h - block_h) // 2
+    for line in lines:
+        tw = draw.textlength(line, font=font)
+        draw.text(((w - tw) / 2, y), line, fill=(238, 240, 244), font=font)
+        y += line_h
+    if subtitle:
+        sub_size = max(11, round(title_size * 0.5))
+        sub_font = ImageFont.load_default(size=sub_size)
+        sw = draw.textlength(subtitle, font=sub_font)
+        draw.text(((w - sw) / 2, y + line_h // 2), subtitle, fill=(150, 156, 168), font=sub_font)
+    return card
+
+
+def _wrap_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    max_width: int,
+) -> list[str]:
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        trial = f"{current} {word}".strip()
+        if draw.textlength(trial, font=font) <= max_width or not current:
+            current = trial
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def watermark_frame(img: Image.Image, text: str) -> Image.Image:
+    """Composite a small semi-transparent *text* watermark at the bottom-right."""
+    base = img.convert("RGBA")
+    w, h = base.size
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    size = max(10, round(h * 0.03))
+    font = ImageFont.load_default(size=size)
+    tw = draw.textlength(text, font=font)
+    pad = max(6, round(size * 0.6))
+    x, y = w - tw - pad, h - size - pad
+    draw.text((x + 1, y + 1), text, fill=(0, 0, 0, 140), font=font)  # shadow
+    draw.text((x, y), text, fill=(255, 255, 255, 190), font=font)
+    return Image.alpha_composite(base, overlay).convert("RGB")
+
+
+def compose_extra_frames(
+    frame_paths: list[Path],
+    work_dir: Path,
+    *,
+    crop: CropRatio | None = None,
+    watermark: str | None = None,
+    title_card: str | None = None,
+    end_card: str | None = None,
+    card_hold: int = MIN_CARD_HOLD_FRAMES,
+) -> list[Path]:
+    """Materialise an extras frame sequence (cards + crop + watermark) in *work_dir*.
+
+    Re-encodes from the kept frames only (never re-renders): optional intro/end
+    cards bookend a per-frame transform of center-crop then watermark. Returns the
+    new frame paths in order; the caller encodes them and removes *work_dir*.
+    """
+    work_dir.mkdir(parents=True, exist_ok=True)
+    ratio = CROP_RATIOS[crop] if crop is not None else None
+
+    def _transform(img: Image.Image) -> Image.Image:
+        out = center_crop_to_ratio(img, *ratio) if ratio is not None else img.convert("RGB")
+        return watermark_frame(out, watermark) if watermark else out.convert("RGB")
+
+    with Image.open(frame_paths[0]) as first:
+        size = _transform(first.convert("RGB")).size
+
+    out: list[Path] = []
+    counter = 0
+
+    def _emit(image: Image.Image) -> None:
+        nonlocal counter
+        if image.size != size:
+            image = image.resize(size)
+        path = work_dir / f"x_{counter:05d}.png"
+        image.convert("RGB").save(path, format="PNG")
+        out.append(path)
+        counter += 1
+
+    if title_card:
+        card = make_card(title_card, size)
+        for _ in range(max(MIN_CARD_HOLD_FRAMES, card_hold)):
+            _emit(card)
+    for fp in frame_paths:
+        with Image.open(fp) as im:
+            _emit(_transform(im.convert("RGB")))
+    if end_card:
+        card = make_card(end_card, size)
+        for _ in range(max(MIN_CARD_HOLD_FRAMES, card_hold)):
+            _emit(card)
+    return out
+
+
 __all__ = [
+    "CROP_RATIOS",
+    "DEFAULT_DEFLICKER_STRENGTH",
+    "DRAFT_MAX_DIM",
     "EARLY_ABORT_PROBE",
     "FRAME_FETCH_WORKERS",
+    "MAX_DIM_4K",
     "MAX_DIM_GIF",
     "MAX_DIM_VIDEO",
     "MAX_FRAMES",
+    "NATIVE_GSD_M",
     "AnnotationOptions",
     "BlendStep",
+    "CropRatio",
     "FetchFn",
     "FrameManifest",
     "FrameResult",
@@ -1050,10 +1234,17 @@ __all__ = [
     "PostOptions",
     "StepMode",
     "annotate_frame",
+    "center_crop_to_ratio",
+    "compose_extra_frames",
     "encode_movie",
     "expand_frames",
     "frame_windows",
+    "make_card",
+    "native_max_dim",
+    "native_pixels",
+    "plan_fps",
     "render_colorbar",
     "render_frames",
     "scale_bar_spec",
+    "watermark_frame",
 ]

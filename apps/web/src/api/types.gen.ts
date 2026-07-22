@@ -708,6 +708,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/timelapse/preflight": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Preflight */
+    post: operations["preflight_api_timelapse_preflight_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/timelapse/{render_id}": {
     parameters: {
       query?: never;
@@ -753,6 +770,23 @@ export interface paths {
     };
     /** Get Frame */
     get: operations["get_frame_api_timelapse__render_id__frames__index__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/timelapse/{render_id}/still/{index}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Still */
+    get: operations["get_still_api_timelapse__render_id__still__index__get"];
     put?: never;
     post?: never;
     delete?: never;
@@ -1343,6 +1377,47 @@ export interface components {
       /** Timestamp Ms */
       timestamp_ms?: number | null;
     };
+    /**
+     * ExtrasIn
+     * @description Share extras, re-encoded from the kept frames (never a re-render).
+     */
+    ExtrasIn: {
+      /** Crops */
+      crops?: ("1:1" | "9:16")[];
+      /** End Card */
+      end_card?: string | null;
+      /** Title Card */
+      title_card?: string | null;
+      /** Watermark */
+      watermark?: string | null;
+    };
+    /**
+     * GradeIn
+     * @description A colour grade (decision 5): a declared tone curve + composable sliders.
+     */
+    GradeIn: {
+      /**
+       * Brightness
+       * @default 0
+       */
+      brightness: number;
+      /**
+       * Contrast
+       * @default 0
+       */
+      contrast: number;
+      /**
+       * Curve
+       * @default natural
+       * @enum {string}
+       */
+      curve: "natural" | "vivid" | "cinematic";
+      /**
+       * Saturation
+       * @default 1
+       */
+      saturation: number;
+    };
     /** HTTPValidationError */
     HTTPValidationError: {
       /** Detail */
@@ -1520,6 +1595,66 @@ export interface components {
        */
       kind: "polygon";
     };
+    /**
+     * PreflightOut
+     * @description Per-window availability + the native-resolution ceiling for the ROI.
+     */
+    PreflightOut: {
+      /** Empty Count */
+      empty_count: number;
+      /** Frame Count */
+      frame_count: number;
+      /** Native Max Dim */
+      native_max_dim: number;
+      /** Windows */
+      windows: components["schemas"]["PreflightWindowOut"][];
+    };
+    /**
+     * PreflightRequest
+     * @description A cheap availability probe (decision 11) — collection aggregates only.
+     */
+    PreflightRequest: {
+      /**
+       * Composite
+       * @default mean
+       * @enum {string}
+       */
+      composite: "mean" | "median" | "clearest";
+      /** Dataset */
+      dataset: string;
+      dates: components["schemas"]["DateRangeIn"];
+      /**
+       * Fallback Source
+       * @default false
+       */
+      fallback_source: boolean;
+      /** Product */
+      product: string;
+      /** Roi */
+      roi: components["schemas"]["BBoxIn"] | components["schemas"]["PolygonIn"];
+      step?: components["schemas"]["StepIn"];
+    };
+    /** PreflightWindowOut */
+    PreflightWindowOut: {
+      /**
+       * End
+       * Format: date
+       */
+      end: string;
+      /** Label */
+      label: string;
+      /** Mean Cloud */
+      mean_cloud?: number | null;
+      /** Scene Count */
+      scene_count: number;
+      /** Source */
+      source: string;
+      /**
+       * Start
+       * Format: date
+       */
+      start: string;
+    };
     /** ProductOut */
     ProductOut: {
       /** Description */
@@ -1580,8 +1715,15 @@ export interface components {
     RenderDetailOut: {
       /** Created At */
       created_at: string;
+      /** Crops */
+      crops?: string[];
       /** Dataset */
       dataset: string;
+      /**
+       * Draft
+       * @default false
+       */
+      draft: boolean;
       /**
        * Format
        * @enum {string}
@@ -1603,6 +1745,8 @@ export interface components {
       params: {
         [key: string]: unknown;
       };
+      /** Preset */
+      preset?: string | null;
       /** Product */
       product: string;
       /** Roi */
@@ -1619,13 +1763,20 @@ export interface components {
     };
     /**
      * RenderOut
-     * @description Gallery row: SQL-only, no manifest parse.
+     * @description Gallery row: SQL row + a couple of fields surfaced from ``params_json``.
      */
     RenderOut: {
       /** Created At */
       created_at: string;
+      /** Crops */
+      crops?: string[];
       /** Dataset */
       dataset: string;
+      /**
+       * Draft
+       * @default false
+       */
+      draft: boolean;
       /**
        * Format
        * @enum {string}
@@ -1639,6 +1790,8 @@ export interface components {
       id: string;
       /** Movie Bytes */
       movie_bytes: number | null;
+      /** Preset */
+      preset?: string | null;
       /** Product */
       product: string;
       /**
@@ -1918,12 +2071,45 @@ export interface components {
     /**
      * TimelapseRequest
      * @description A timelapse render request. ``roi`` is required — no global timelapse.
+     *
+     *     Every Phase-10 field defaults to the legacy behaviour (mean composite, no
+     *     post-processing, no fallback, 1080 longest edge), so an old client renders
+     *     byte-equivalent output.
      */
     TimelapseRequest: {
       annotations?: components["schemas"]["AnnotationsIn"];
+      /**
+       * Cloud Display
+       * @default composite
+       */
+      cloud_display: string;
+      /**
+       * Composite
+       * @default mean
+       * @enum {string}
+       */
+      composite: "mean" | "median" | "clearest";
       /** Dataset */
       dataset: string;
       dates: components["schemas"]["DateRangeIn"];
+      /**
+       * Deflicker
+       * @default false
+       */
+      deflicker: boolean;
+      /**
+       * Draft
+       * @default false
+       */
+      draft: boolean;
+      /** Duration S */
+      duration_s?: number | null;
+      extras?: components["schemas"]["ExtrasIn"];
+      /**
+       * Fallback Source
+       * @default false
+       */
+      fallback_source: boolean;
       /**
        * Format
        * @default mp4
@@ -1936,10 +2122,18 @@ export interface components {
        */
       fps: number;
       /**
+       * Gap Fill
+       * @default false
+       */
+      gap_fill: boolean;
+      grade?: components["schemas"]["GradeIn"] | null;
+      /**
        * Max Dim
        * @default 1080
        */
       max_dim: number;
+      /** Preset */
+      preset?: string | null;
       /** Product */
       product: string;
       /** Roi */
@@ -3626,6 +3820,39 @@ export interface operations {
       };
     };
   };
+  preflight_api_timelapse_preflight_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PreflightRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PreflightOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   get_render_api_timelapse__render_id__get: {
     parameters: {
       query?: never;
@@ -3723,7 +3950,9 @@ export interface operations {
   };
   download_movie_api_timelapse__render_id__download_get: {
     parameters: {
-      query?: never;
+      query?: {
+        variant?: string | null;
+      };
       header?: never;
       path: {
         render_id: string;
@@ -3756,6 +3985,39 @@ export interface operations {
     };
   };
   get_frame_api_timelapse__render_id__frames__index__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        render_id: string;
+        index: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+          "image/png": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_still_api_timelapse__render_id__still__index__get: {
     parameters: {
       query?: never;
       header?: never;
