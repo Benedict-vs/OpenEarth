@@ -31,18 +31,23 @@ from PIL import Image, ImageDraw, ImageFont
 
 from openearth.catalog import get_dataset
 from openearth.composites import CompositeMode, build_composite
-from openearth.ee.render import compute_vis_range, geo_dimensions, thumb_url
+from openearth.ee.render import compute_vis_range, geo_dimensions, rgb_range_stats, thumb_url
 from openearth.errors import EmptyCollectionError, JobError, classify_ee_error
 from openearth.geometry import BBox
 from openearth.timelapse_post import (
     FILL_CAP_WINDOWS,
+    VIS_SAMPLE_WINDOWS,
     ForwardFiller,
     GradeOptions,
     NonDisplayFrameError,
     apply_gain,
+    apply_lut,
     deflicker_gains,
     frame_luminance,
     grade,
+    highlight_shoulder_lut,
+    resolve_sequence_exposure,
+    shoulder_knee_out,
     tint_holes,
     valid_fraction,
 )
@@ -505,6 +510,10 @@ class FrameManifest:
     # may exceed it since the decision-9 reversal (upscaling allowed); recording
     # it here keeps the "render 1080 px · native 445 px" honesty readout possible.
     native_max_dim: int | None = None
+    # The fixed highlight-shoulder tone curve applied to every frame of an HDR
+    # RGB sequence (fix C), e.g. {"knee_in": 0.34, "knee_out": 0.85}; None when
+    # the render is plain linear. Display-only; ``vis`` is the true minted range.
+    tone: dict[str, Any] | None = None
 
     @property
     def frame_paths(self) -> list[Path]:
@@ -552,6 +561,7 @@ class FrameManifest:
             "composite": self.composite,
             "post": self.post,
             "native_max_dim": self.native_max_dim,
+            "tone": self.tone,
             "frames": frames,
         }
 
@@ -592,6 +602,37 @@ def _frame_dimensions(bbox: BBox, max_dim: int, even_dims: bool) -> tuple[int, i
     return (max(2, w), max(2, h))
 
 
+def _sample_rgb_exposure(
+    dataset: str,
+    product: str,
+    spec: ProductSpec,
+    roi: ROI,
+    windows: list[FrameWindow],
+    composite_mode: CompositeMode,
+) -> tuple[float, float, float | None] | None:
+    """Sample RGB percentiles on evenly spaced windows → one sequence exposure.
+
+    Up to :data:`VIS_SAMPLE_WINDOWS` windows (first/last always included) each
+    contribute robust ``(p1, p99)`` stats; a window that is empty or errors just
+    contributes nothing (resilience — a broken probe must not kill the render).
+    ``None`` when no window had stats.
+    """
+    n = len(windows)
+    k = min(VIS_SAMPLE_WINDOWS, n)
+    indices = sorted({round(i * (n - 1) / (k - 1)) for i in range(k)}) if k > 1 else [0]
+    ranges: list[tuple[float, float] | None] = []
+    for idx in indices:
+        window = windows[idx]
+        try:
+            image = build_composite(
+                product, roi, window.start, window.end, source=dataset, mode=composite_mode
+            )
+            ranges.append(rgb_range_stats(image, spec, roi))
+        except Exception:  # a failed probe window is "no stats", never fatal
+            ranges.append(None)
+    return resolve_sequence_exposure(ranges, valid_min=spec.valid_min, valid_max=spec.valid_max)
+
+
 def _resolve_vis_range(
     dataset: str,
     product: str,
@@ -601,15 +642,28 @@ def _resolve_vis_range(
     vis_min: float | None,
     vis_max: float | None,
     composite_mode: CompositeMode,
-) -> tuple[float, float]:
+) -> tuple[float, float, float | None]:
     """One vis range for the whole render (no per-frame auto-scale flicker).
 
-    Uses the request overrides where given, else ``compute_vis_range`` on the
-    middle window's composite — computed once and reused for every frame and
-    the colorbar.
+    Returns ``(lo, hi, knee_in)``. Request overrides win verbatim. Fully-auto
+    RGB gets the sampled sequence exposure (fix C): an envelope range over
+    sampled windows, plus a highlight-shoulder knee when the sequence is HDR
+    (snow scenes) — ``knee_in`` is ``None`` for a plain linear range. Non-RGB
+    keeps the ``compute_vis_range`` middle-window path. Computed once and
+    reused for every frame and the colorbar.
     """
     if vis_min is not None and vis_max is not None:
-        return (vis_min, vis_max)
+        return (vis_min, vis_max, None)
+
+    if spec.is_rgb:
+        if vis_min is None and vis_max is None:
+            sampled = _sample_rgb_exposure(dataset, product, spec, roi, windows, composite_mode)
+            if sampled is not None:
+                return sampled
+        # Partial override / no stats: catalog defaults fill the missing side.
+        lo = vis_min if vis_min is not None else spec.vis_min
+        hi = vis_max if vis_max is not None else spec.vis_max
+        return (lo, hi, None)
 
     mid = windows[len(windows) // 2]
     mid_image = build_composite(
@@ -624,7 +678,7 @@ def _resolve_vis_range(
             raise
     lo = vis_min if vis_min is not None else computed[0]
     hi = vis_max if vis_max is not None else computed[1]
-    return (lo, hi)
+    return (lo, hi, None)
 
 
 def _cleanup_staging(out_dir: Path) -> None:
@@ -692,6 +746,10 @@ def render_frames(
     """Render one PNG per *window* into *out_dir* and write ``manifest.json``.
 
     All frames share one geometry (even dimensions for video) and one vis range.
+    Fully-auto RGB renders resolve that range by sampling a few windows (fix C);
+    an HDR sequence (e.g. seasonal snow) additionally mints with the extended
+    range and passes every frame through one fixed highlight-shoulder LUT
+    (recorded as manifest ``tone``) so highlights keep texture without pumping.
     Per window: build the ``composite_mode`` composite (mean/median/clearest) over
     the per-window source ladder (primary → *fallback_source* on empty), mint the
     thumb through ``ee_call``, fetch the PNG, apply the requested *post*-processing
@@ -737,9 +795,12 @@ def render_frames(
     bbox = roi if isinstance(roi, BBox) else roi.bounds
     width, height = _frame_dimensions(bbox, max_dim, even_dims)
     dims_arg = f"{width}x{height}"
-    vmin, vmax = _resolve_vis_range(
+    vmin, vmax, knee_in = _resolve_vis_range(
         dataset, product, spec, roi, windows, vis_min, vis_max, composite_mode
     )
+    # Fix C: an HDR RGB sequence mints with the extended range and every frame
+    # passes through the same fixed shoulder LUT — no per-frame adaptation.
+    tone_lut = highlight_shoulder_lut(knee_in) if knee_in is not None else None
 
     colorbar: Image.Image | None = None
     if annotations.colorbar and not product_is_rgb:
@@ -750,7 +811,7 @@ def render_frames(
     attribution = annotations.attribution or dataset_spec.attribution
 
     ladder = _resolve_ladder(dataset, product, spec, fallback_source)
-    defer = post.modifies_pixels()  # need the raw frame before annotation
+    defer = post.modifies_pixels() or tone_lut is not None  # raw frame before annotation
     second_pass = post.deflicker_strength > 0.0  # deflicker needs the whole sequence
 
     def _annotate(img: Image.Image, window: FrameWindow) -> Image.Image:
@@ -799,6 +860,10 @@ def render_frames(
         except Exception as exc:  # empty → skip; anything else → failed (not raised)
             status: FrameStatus = "empty" if _is_empty_error(exc) else "failed"
             return _WorkOut(window, status, None, None, None)
+        if tone_lut is not None:
+            base = Image.fromarray(
+                apply_lut(np.asarray(base), tone_lut, product_is_rgb=product_is_rgb)
+            )
         vf = valid_fraction(np.asarray(base))
         if defer:
             base.save(staging, format="PNG")  # raw RGBA — annotate after post-processing
@@ -913,6 +978,9 @@ def render_frames(
         composite=composite_mode,
         post=post_manifest,
         native_max_dim=native_max_dim,
+        tone=None
+        if knee_in is None
+        else {"knee_in": round(knee_in, 4), "knee_out": round(shoulder_knee_out(knee_in), 4)},
     )
     _write_manifest(out_dir / "manifest.json", manifest)
     return manifest

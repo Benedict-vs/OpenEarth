@@ -31,6 +31,25 @@ FILL_CAP_WINDOWS = 2  # a hole inherits a valid pixel at most this many windows 
 MAX_DEFLICKER_GAIN = 0.20  # ± clamp on the per-frame luminance gain
 DEFLICKER_REFERENCE_WINDOW = 5  # centred rolling-median window (frames) for the anchor
 
+# ── Sequence exposure (acceptance-pass fix C: snow/highlight blowout) ──
+# Windows sampled (evenly spaced, first/last always included) to estimate one
+# fixed exposure for the whole render.
+VIS_SAMPLE_WINDOWS = 5
+# The sequence is "HDR" — worth a highlight shoulder — when its brightest sampled
+# window exceeds the typical window's highlight by more than this ratio.
+HIGHLIGHT_TRIGGER_RATIO = 1.25
+# Small span headroom on the sampled percentiles so the p1/p99 tails aren't
+# clipped exactly at the range edges.
+HIGHLIGHT_HEADROOM = 0.05
+# Where the shoulder knee may land in display space at most: the typical scene
+# keeps up to the bottom 85 % of the tonal range linearly.
+SHOULDER_KNEE_OUT = 0.85
+# The shoulder's initial slope may exceed its average slope by at most this
+# ratio (C¹ continuity at the knee fixes the initial slope to the linear
+# section's). Beyond it the roll-off saturates almost immediately and bright
+# snow would still render as flat white — the knee-out adapts down instead.
+SHOULDER_MAX_SLOPE_RATIO = 3.0
+
 GradeCurve = Literal["natural", "vivid", "cinematic"]
 
 # Rec. 601 luma weights — the deflicker anchor and the saturation pivot.
@@ -211,6 +230,108 @@ def deflicker(
     return [
         apply_gain(f, g, product_is_rgb=product_is_rgb) for f, g in zip(frames, gains, strict=True)
     ]
+
+
+# ── Sequence exposure: envelope range + filmic highlight shoulder (fix C) ──
+
+
+def resolve_sequence_exposure(
+    window_ranges: Sequence[tuple[float, float] | None],
+    *,
+    valid_min: float,
+    valid_max: float,
+) -> tuple[float, float, float | None] | None:
+    """One fixed display exposure for a whole RGB sequence from sampled window stats.
+
+    *window_ranges* holds per-sampled-window robust percentiles ``(p_lo, p_hi)``
+    (``None`` for windows without stats). The exposure anchors midtones to the
+    **typical** window (the 25th percentile of the window highlights, so a few
+    snowy/bright windows cannot darken the whole sequence) while the minted range
+    extends to the sequence's true highlight extreme — winter snow stays inside
+    the range instead of clipping to flat white.
+
+    Returns ``(lo, hi, knee_in)``: the linear vis range to mint every frame with,
+    plus the normalized shoulder knee when the sequence is HDR
+    (``hi_ext > HIGHLIGHT_TRIGGER_RATIO × hi_typ``), else ``None`` for a plain
+    linear range. Returns ``None`` when no window had stats (caller falls back to
+    the catalog range). Pure math — one result reused for every frame, so the
+    exposure cannot pump.
+    """
+    ranges = [r for r in window_ranges if r is not None]
+    if not ranges:
+        return None
+    los = sorted(r[0] for r in ranges)
+    his = sorted(r[1] for r in ranges)
+    hi_typ = float(np.percentile(his, 25))
+    hi_ext = his[-1]
+    span = hi_ext - los[0]
+    if span <= 0:
+        return None
+    lo = max(los[0] - span * HIGHLIGHT_HEADROOM, valid_min)
+    hi = min(hi_ext + span * HIGHLIGHT_HEADROOM, valid_max)
+    if hi <= lo:
+        return None
+    if hi_ext <= HIGHLIGHT_TRIGGER_RATIO * hi_typ:
+        return (lo, hi, None)
+    knee_in = (hi_typ - lo) / (hi - lo)
+    # Degenerate knees fall back to linear: a knee below 0.1 would blow up the
+    # midtone slope; one at/above the knee-out has no shoulder room left.
+    if not 0.1 <= knee_in < SHOULDER_KNEE_OUT:
+        return (lo, hi, None)
+    return (lo, hi, knee_in)
+
+
+def shoulder_knee_out(knee_in: float) -> float:
+    """The display position the knee maps to, adapted so highlights keep texture.
+
+    C¹ continuity makes the shoulder's initial slope equal the linear section's
+    ``knee_out/knee_in``; bounding that at :data:`SHOULDER_MAX_SLOPE_RATIO` times
+    the shoulder's *average* slope ``(1−knee_out)/(1−knee_in)`` gives
+    ``knee_out ≤ r·k/(1 + (r−1)·k)`` — capped at :data:`SHOULDER_KNEE_OUT`.
+    Without the bound a steep midtone slope saturates the roll-off almost
+    immediately and snow still clips to flat white.
+    """
+    r = SHOULDER_MAX_SLOPE_RATIO
+    return min(SHOULDER_KNEE_OUT, r * knee_in / (1.0 + (r - 1.0) * knee_in))
+
+
+def highlight_shoulder_lut(knee_in: float, knee_out: float | None = None) -> NDArray[np.uint8]:
+    """A fixed filmic highlight shoulder LUT: linear to the knee, smooth roll-off above.
+
+    Normalized minted values ``t ≤ knee_in`` map linearly to ``[0, knee_out]``
+    (midtones keep their contrast); above the knee a C¹-continuous shoulder
+    ``knee_out + (1 − knee_out)·(1 − (1 − u)^p)`` compresses the highlights into
+    the remaining headroom, reaching 1.0 exactly at ``t = 1``. ``p`` is chosen so
+    the slope is continuous at the knee (``p > 1`` whenever ``knee_in < knee_out``,
+    so the curve is monotone); *knee_out* defaults to :func:`shoulder_knee_out`,
+    which bounds ``p`` so the highlights keep real gradation. The LUT is fixed
+    for a whole render.
+    """
+    if knee_out is None:
+        knee_out = shoulder_knee_out(knee_in)
+    if not 0.0 < knee_in < knee_out < 1.0:
+        raise ValueError(f"need 0 < knee_in < knee_out < 1; got {knee_in}, {knee_out}")
+    t = np.linspace(0.0, 1.0, 256)
+    y = np.empty_like(t)
+    below = t <= knee_in
+    y[below] = t[below] * (knee_out / knee_in)
+    u = (t[~below] - knee_in) / (1.0 - knee_in)
+    p = knee_out * (1.0 - knee_in) / (knee_in * (1.0 - knee_out))
+    y[~below] = knee_out + (1.0 - knee_out) * (1.0 - (1.0 - u) ** p)
+    return np.round(np.clip(y, 0.0, 1.0) * 255.0).astype(np.uint8)
+
+
+def apply_lut(
+    frame: NDArray[np.uint8], lut: NDArray[np.uint8], *, product_is_rgb: bool
+) -> NDArray[np.uint8]:
+    """Apply a fixed 256-entry tone LUT to a display frame's RGB (alpha untouched)."""
+    _require_display(product_is_rgb)
+    frame = _as_rgba(frame)
+    if lut.shape != (256,):
+        raise ValueError(f"expected a 256-entry LUT; got shape {lut.shape}")
+    out = frame.copy()
+    out[..., :3] = lut[frame[..., :3]]
+    return out
 
 
 # ── Grade: three declared curves + three sliders (decision 5) ─────

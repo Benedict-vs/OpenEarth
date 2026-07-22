@@ -13,16 +13,22 @@ import pytest
 from openearth.timelapse_post import (
     CURVES,
     FILL_CAP_WINDOWS,
+    HIGHLIGHT_TRIGGER_RATIO,
     MAX_DEFLICKER_GAIN,
+    SHOULDER_KNEE_OUT,
     ForwardFiller,
     GradeOptions,
     NonDisplayFrameError,
     apply_gain,
+    apply_lut,
     deflicker,
     deflicker_gains,
     forward_fill,
     frame_luminance,
     grade,
+    highlight_shoulder_lut,
+    resolve_sequence_exposure,
+    shoulder_knee_out,
     tint_holes,
     valid_fraction,
 )
@@ -141,6 +147,130 @@ def test_deflicker_whole_sequence_no_op_at_zero_strength() -> None:
     out = deflicker(seq, strength=0.0, product_is_rgb=True)
     for a, b in zip(seq, out, strict=True):
         np.testing.assert_array_equal(a, b)
+
+
+# ── Sequence exposure + highlight shoulder (acceptance fix C) ────
+
+
+def test_exposure_uniform_sequence_is_linear() -> None:
+    # Five similar windows (Richmond Park): plain linear envelope, no shoulder.
+    ranges = [(0.01, 0.30), (0.02, 0.32), (0.01, 0.29), (0.02, 0.31), (0.01, 0.30)]
+    out = resolve_sequence_exposure(ranges, valid_min=0.0, valid_max=1.0)
+    assert out is not None
+    lo, hi, knee = out
+    assert knee is None
+    assert lo == 0.0  # p1 floor minus span headroom clamps at the physical floor
+    assert hi == pytest.approx(0.32 + 0.31 * 0.05)  # headroom over the brightest p99
+
+
+def test_exposure_snow_sequence_gets_a_shoulder() -> None:
+    # Aletsch: summer windows peak ~0.3, winter snow ~0.8 → HDR → knee anchored
+    # to the *typical* (25th-percentile) highlight, extended range to the snow.
+    ranges = [(0.01, 0.80), (0.02, 0.30), (0.01, 0.78), (0.02, 0.32), (0.01, 0.85)]
+    out = resolve_sequence_exposure(ranges, valid_min=0.0, valid_max=1.0)
+    assert out is not None
+    lo, hi, knee = out
+    assert knee is not None
+    assert hi > 0.85  # snow inside the minted range (plus headroom)
+    # The knee sits where the typical window's highlight lands in the range.
+    hi_typ = float(np.percentile([0.80, 0.30, 0.78, 0.32, 0.85], 25))
+    assert knee == pytest.approx((hi_typ - lo) / (hi - lo))
+    assert 0.1 <= knee < SHOULDER_KNEE_OUT
+
+
+def test_exposure_one_bright_window_does_not_darken_the_sequence() -> None:
+    # A single snowy window among normal ones must not become the linear top:
+    # the trigger fires and midtones stay anchored to the typical highlight.
+    ranges = [(0.0, 0.30)] * 4 + [(0.0, 0.90)]
+    out = resolve_sequence_exposure(ranges, valid_min=0.0, valid_max=1.0)
+    assert out is not None
+    _, hi, knee = out
+    assert knee is not None  # 0.9 > 1.25 × 0.3
+    assert hi >= 0.90
+    lut = highlight_shoulder_lut(knee)
+    # A typical-window highlight (data 0.30 → t = knee) lands at the adaptive
+    # knee-out — far brighter than the naive linear envelope would put it.
+    expected = shoulder_knee_out(knee) * 255
+    assert lut[round(knee * 255)] == pytest.approx(expected, abs=2.0)
+    assert expected / 255 > knee  # brighter than plain linear
+
+
+def test_exposure_ignores_empty_windows_and_none_when_all_empty() -> None:
+    assert resolve_sequence_exposure([None, None], valid_min=0.0, valid_max=1.0) is None
+    out = resolve_sequence_exposure([None, (0.0, 0.3), None], valid_min=0.0, valid_max=1.0)
+    assert out is not None
+    assert out[2] is None  # single window → nothing to compare → linear
+
+
+def test_exposure_clamps_to_valid_range() -> None:
+    ranges = [(-0.10, 0.95), (0.0, 0.98)]
+    out = resolve_sequence_exposure(ranges, valid_min=0.0, valid_max=1.0)
+    assert out is not None
+    lo, hi, _ = out
+    assert lo == 0.0  # negative reflectance tail clamped
+    assert hi == 1.0  # headroom clamped to the physical ceiling
+
+
+def test_exposure_trigger_ratio_boundary() -> None:
+    # Exactly at the trigger: no shoulder. Just past it: shoulder engages.
+    # (Three identical typical windows pin the 25th percentile at 1.0.)
+    at = [(0.0, 1.0)] * 3 + [(0.0, HIGHLIGHT_TRIGGER_RATIO)]
+    past = [(0.0, 1.0)] * 3 + [(0.0, HIGHLIGHT_TRIGGER_RATIO + 0.1)]
+    out_at = resolve_sequence_exposure(at, valid_min=0.0, valid_max=2.0)
+    out_past = resolve_sequence_exposure(past, valid_min=0.0, valid_max=2.0)
+    assert out_at is not None
+    assert out_at[2] is None
+    assert out_past is not None
+    assert out_past[2] is not None
+
+
+def test_shoulder_lut_is_monotone_with_exact_endpoints() -> None:
+    lut = highlight_shoulder_lut(0.35)
+    assert lut.shape == (256,)
+    assert lut[0] == 0
+    assert lut[255] == 255
+    assert np.all(np.diff(lut.astype(np.int16)) >= 0)
+
+
+def test_shoulder_lut_linear_below_knee_compressed_above() -> None:
+    knee = 0.4
+    q = shoulder_knee_out(knee)  # 3·0.4/1.8 = 2/3 (the slope-ratio bound binds)
+    assert q == pytest.approx(2 / 3)
+    lut = highlight_shoulder_lut(knee)
+    # Below the knee the slope is knee_out/knee_in > 1 (midtones keep contrast)…
+    assert lut[round(0.2 * 255)] == pytest.approx(0.2 * (q / knee) * 255, abs=1.5)
+    # …the knee itself maps to the knee-out…
+    assert lut[round(knee * 255)] == pytest.approx(q * 255, abs=2.0)
+    # …and the shoulder keeps real gradation: mid-shoulder is clearly below 255.
+    assert lut[round(0.7 * 255)] < 250
+    assert lut[round(0.7 * 255)] > lut[round(knee * 255)]
+
+
+def test_shoulder_knee_out_caps_at_max() -> None:
+    # A high knee doesn't need the slope bound — the 0.85 ceiling applies.
+    assert shoulder_knee_out(0.75) == pytest.approx(SHOULDER_KNEE_OUT)
+    # A low knee is bound by the slope ratio, keeping shoulder texture.
+    assert shoulder_knee_out(0.2) == pytest.approx(0.6 / 1.4)
+
+
+def test_shoulder_lut_rejects_bad_knees() -> None:
+    for bad in (0.0, 0.9, 1.0):
+        with pytest.raises(ValueError, match="knee"):
+            highlight_shoulder_lut(bad)
+    with pytest.raises(ValueError, match="knee"):
+        highlight_shoulder_lut(0.5, knee_out=0.4)  # knee_out must exceed knee_in
+
+
+def test_apply_lut_touches_rgb_only_and_guards_display() -> None:
+    lut = highlight_shoulder_lut(0.35)
+    frame = _px(100, 150, 200, 42)
+    out = apply_lut(frame, lut, product_is_rgb=True)
+    assert out[0, 0, 3] == 42  # alpha untouched
+    assert list(out[0, 0, :3]) == [lut[100], lut[150], lut[200]]
+    with pytest.raises(NonDisplayFrameError):
+        apply_lut(frame, lut, product_is_rgb=False)
+    with pytest.raises(ValueError, match="256"):
+        apply_lut(frame, lut[:100], product_is_rgb=True)
 
 
 # ── Grade (decision 5) ───────────────────────────────────────────

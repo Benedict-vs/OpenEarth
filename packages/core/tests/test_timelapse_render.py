@@ -522,6 +522,102 @@ def test_source_ladder_steps_down_to_fallback_on_empty(
     assert sources == ["s2", "hls", "s2"]  # window 1 stepped down to HLS
 
 
+# ── Fix C: sequence exposure + highlight shoulder ────────────────
+
+
+def test_auto_vis_rgb_hdr_sequence_mints_wide_and_applies_the_shoulder(
+    fake_ee: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A snow-bright window widens the minted range; every frame passes through
+    ONE fixed shoulder LUT, recorded as manifest ``tone`` (vis stays the truth)."""
+    windows = _windows(5)
+    snowy = windows[0].start.isoformat()
+
+    def fake_stats(image: object, spec: object, roi: object) -> tuple[float, float]:
+        _, start = image  # type: ignore[misc]
+        hi = 0.9 if start.isoformat() == snowy else 0.3  # type: ignore[union-attr]
+        return (0.0, hi)
+
+    monkeypatch.setattr(tl, "rgb_range_stats", fake_stats)
+
+    manifest = render_frames(
+        "s2",
+        "RGB",
+        BBOX,
+        windows,
+        out_dir=tmp_path,
+        # Large enough that the probe pixel sits above the annotation strip.
+        max_dim=200,
+        even_dims=True,
+        vis_min=None,
+        vis_max=None,
+        annotations=AnnotationOptions(date_label=False, colorbar=False, scale_bar=False),
+        fetch=lambda url: _png_bytes(16, 16, (128, 128, 128)),
+    )
+    m = json.loads((tmp_path / "manifest.json").read_text())
+    # Minted range = envelope with headroom (0 … 0.9 + 5 % span), the honest vis.
+    assert m["vis"][0] == 0.0
+    assert m["vis"][1] == pytest.approx(0.945)
+    assert m["tone"] is not None
+    knee_in = m["tone"]["knee_in"]
+    assert 0.1 <= knee_in < m["tone"]["knee_out"] < 1.0
+    # The frame pixels went through exactly that LUT (same value on every frame).
+    from openearth.timelapse_post import highlight_shoulder_lut
+
+    expected = int(highlight_shoulder_lut(knee_in)[128])
+    with Image.open(manifest.frame_paths[0]) as im:
+        assert im.getpixel((2, 2))[0] == pytest.approx(expected, abs=2)
+    with Image.open(manifest.frame_paths[4]) as im:
+        assert im.getpixel((2, 2))[0] == pytest.approx(expected, abs=2)
+
+
+def test_auto_vis_rgb_uniform_sequence_is_linear_no_tone(
+    fake_ee: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tl, "rgb_range_stats", lambda image, spec, roi: (0.01, 0.30))
+    render_frames(
+        "s2",
+        "RGB",
+        BBOX,
+        _windows(3),
+        out_dir=tmp_path,
+        max_dim=16,
+        even_dims=True,
+        vis_min=None,
+        vis_max=None,
+        annotations=AnnotationOptions(),
+        fetch=lambda url: _png_bytes(16, 16, (90, 90, 90)),
+    )
+    m = json.loads((tmp_path / "manifest.json").read_text())
+    assert m["tone"] is None
+    assert m["vis"][1] == pytest.approx(0.30 + 0.29 * 0.05)
+
+
+def test_explicit_vis_never_samples_exposure(
+    fake_ee: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(image: object, spec: object, roi: object) -> tuple[float, float]:
+        raise AssertionError("explicit vis must not trigger exposure sampling")
+
+    monkeypatch.setattr(tl, "rgb_range_stats", boom)
+    render_frames(
+        "s2",
+        "RGB",
+        BBOX,
+        _windows(2),
+        out_dir=tmp_path,
+        max_dim=16,
+        even_dims=True,
+        vis_min=0.0,
+        vis_max=0.3,
+        annotations=AnnotationOptions(),
+        fetch=lambda url: _png_bytes(16, 16, (10, 20, 30)),
+    )
+    m = json.loads((tmp_path / "manifest.json").read_text())
+    assert m["vis"] == [0.0, 0.3]
+    assert m["tone"] is None
+
+
 def test_render_refuses_post_processing_on_non_rgb_product(fake_ee: None, tmp_path: Path) -> None:
     with pytest.raises(NonDisplayFrameError):
         render_frames(
