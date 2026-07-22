@@ -241,15 +241,46 @@ against fake EE.
 
 **Exit:** direction chosen and recorded; Stage 5 builds exactly that.
 
+### Stage 4 decision — recorded 2026-07-22 (Benedict's pick)
+
+Three clickable directions were delivered (`docs/phase10-studio-directions.html`, also a private
+Artifact): **A · Console** (app-native devtool wizard), **B · Cut** (editing suite: program-
+monitor hero, grade inspector, filmstrip-timeline availability strip with a source-ladder track),
+**C · Atlas** (each timelapse a published map plate with a legend-as-data-sheet).
+
+**Pick: B · Cut for authoring + Atlas's citable plate as an opt-in export ("Cut + plate").**
+
+- **Authoring is Cut, unchanged** — the program monitor + grade inspector + filmstrip timeline
+  (per-window scene density + source ladder + per-frame valid/filled/source, all scrubbable).
+- **The plate is an optional add-on at render-complete**, not a second authoring mode. A finished
+  render gets an **Export plate** action that composites the hero still + a provenance data sheet
+  (source ladder per window, measured/filled/blank %, coordinates, scale, attribution, the recipe)
+  into one downloadable card. It sits alongside the existing extras (stills, 1:1/9:16 crops, title
+  card, watermark); the movie stays the primary output.
+- **No new "truth":** the plate only packages provenance the pipeline already records (the Stage 2
+  manifest per-frame source/valid_fraction/filled_fraction). Public hosted share links stay parked
+  (GEE terms) — the plate is a self-contained downloadable, not a hosted URL.
+- **Stage 5 consequence:** build the Cut Studio shell, and add one new **plate export** render path
+  (still + data-sheet composite → PNG) reachable from the finished-render view. Console's numbered-
+  wizard clarity informs the entry flow; Atlas's visual language is scoped to the plate only.
+
 ## Stage 5 — `web:` the Studio rebuild + player/gallery
 
-- Wizard flow per the chosen direction; preset cards (Showcase/Survey/Every pass/Seasonal
-  pulse) carrying their policy explanations; availability strip from preflight; single-frame
-  preview; draft/final buttons; authoring-mode toggle with the pacing math readout; Advanced
-  panel exposing every knob (composite, cloud display + tint color, gap-fill, deflicker,
-  grade suite, fallback, resolution with native-limit readout, tween, fps, format, extras).
+- **Direction: "Cut + plate" (Stage 4 decision).** Cut editing-suite shell for authoring — a
+  program-monitor hero, a grade inspector, and a filmstrip-timeline availability strip carrying
+  the source-ladder + per-frame QC; the preset cards + pacing readout + Advanced panel live in
+  Cut's layout (Console's numbered-wizard clarity informs the entry order).
+- Preset cards (Showcase/Survey/Every pass/Seasonal pulse) carrying their policy explanations;
+  availability strip from preflight; single-frame preview; draft/final buttons; authoring-mode
+  toggle with the pacing math readout; Advanced panel exposing every knob (composite, cloud
+  display + tint color, gap-fill, deflicker, grade suite, fallback, resolution with native-limit
+  readout, tween, fps, format, extras).
 - Player: QC badges per frame (valid/filled/source) on the scrubber; gallery: draft chip,
   "Render final", extras downloads, existing partial/rename/delete kept.
+- **Plate export (the citable add-on):** a finished render gets an **Export plate** action that
+  composites the hero still + provenance data sheet (source ladder, measured/filled/blank %,
+  coords, scale, attribution, recipe) into one downloadable PNG — Atlas visual language, scoped
+  to the plate. New render path (still + data-sheet composite); opt-in, alongside the movie/extras.
 - Every substage: Playwright screenshot loop vs the mockup + stated criteria;
   `web-design-guidelines` audit + fresh-context `/code-review` before the stage commit.
 
