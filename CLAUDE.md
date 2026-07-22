@@ -23,6 +23,7 @@ make api                      # FastAPI dev server only
 make gen                      # regenerate apps/web/openapi.json + src/api/types.gen.ts —
                               #   run after ANY API schema change (CI diff-checks drift)
 pnpm --dir apps/web lint && pnpm --dir apps/web typecheck && pnpm --dir apps/web test -- --run
+pnpm --dir apps/web format:check   # prettier — CI enforces this too; `format` to fix
 OPENEARTH_EE_TESTS=1 uv run pytest -m ee   # live EE tests (real auth only; never CI)
 docker compose up --build     # full stack → :8080 (uv api + nginx web, SSE-safe; docs/deploy.md)
 ```
