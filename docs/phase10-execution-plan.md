@@ -369,3 +369,45 @@ property. Applying that scale would wash every HLS frame to black.
   per-sensor NIR (L30 B5 / S30 B8A) to a canonical name before merging S30+L30 so
   NDVI/NDWI band math is source-uniform. Landsat C2 L2 (Stage 1) is the separate
   case that DOES need the `×0.0000275 − 0.2` SR scale (verified in the plan header).
+
+---
+
+## Acceptance-pass fixes (2026-07-22, after the first Stage 6 round)
+
+The first acceptance round surfaced four issues Benedict judged against the old renders; all
+four landed as separate commits before the re-render (decision letters from the handover):
+
+- **A — native lock reversed** (see the annotation at decision 9). `_compile_plan` no longer
+  clamps to `native_max_dim`; the manifest records `native_max_dim`, the Studio slider runs to
+  3840 with a "native N px, upscaled" readout, and the plate prints both numbers.
+- **B — encode quality.** `encode_movie` had inherited imageio-ffmpeg's implicit `quality=5`
+  (x264 CRF 25 / vp9 `-qscale 16`) — a 12-frame 1080p mp4 came out 172 KB and visibly soft.
+  Now explicit constant quality: `X264_CRF = 18`, `VP9_CRF = 30` (+ `-b:v 0`), `quality=None`.
+- **C — sequence exposure (the Aletsch snow blowout).** RGB renders minted with the catalog's
+  fixed range (0–0.3 for S2), clipping ρ≈0.6–0.9 snow to flat white. Fully-auto RGB renders now
+  sample robust p1/p99 stats on ≤ `VIS_SAMPLE_WINDOWS` (5) evenly spaced windows
+  (`rgb_range_stats`): the minted range extends to the sequence's true highlight, midtones
+  anchor to the *typical* window's highlight (25th percentile of window p99s), and an HDR
+  sequence (`hi_ext > 1.25 × hi_typ`) passes every frame through ONE fixed C¹ highlight-shoulder
+  LUT whose knee-out adapts (`shoulder slope ≤ 3× its average`) so snow keeps real gradation.
+  One curve per render — no per-frame adaptation, so no pumping (the fix's hard constraint).
+  Recorded as manifest `tone`; `vis` stays the true minted range. Explicit vis overrides bypass
+  everything; non-RGB keeps the `compute_vis_range` path. (Side note recorded: `clearest` is a
+  single-observation mosaic and slightly noisier than `mean` — accepted, it is what kills cloud
+  smear; no change.)
+- **D — gap-fill seam blending.** `forward_fill` pasted borrowed pixels with a hard edge (a
+  different date's exposure → visible outline, e.g. Richmond Dec 2024 at 1.5 % measured).
+  `blend_fill_seams` now (1) exposure-matches the borrowed region per channel against thin
+  rings either side of the seam (median ratio, clamped ±15 %) and (2) feathers borrowed pixels
+  toward their nearest measured pixel over a resolution-scaled width (3–24 px). **Both write
+  only inside the fill mask** — measured pixels stay bit-identical and `filled_fraction` / the
+  per-pixel provenance are untouched (the honesty wall's rule that a borrowed pixel is never
+  passed off as measured is preserved; the blend only changes how borrowed pixels *look*).
+  Laplacian/multiband blending and histogram matching were considered and rejected (halo risk /
+  hue shifts, heavy machinery for what is physically an exposure offset). Manifest `post` gains
+  `seam_blend`.
+
+Legacy byte-equivalence: the golden test still pins the legacy path (explicit vis, no post) —
+A/B/C/D change only auto-exposed RGB renders, gap-filled renders, and encode bytes (no test
+pins movie bytes). The acceptance set was re-rendered after these fixes — outcomes in the
+Stage 6 notes below.

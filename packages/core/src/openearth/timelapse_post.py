@@ -54,6 +54,13 @@ HIGHLIGHT_TRIGGER_RATIO = 1.25
 # Small span headroom on the sampled percentiles so the p1/p99 tails aren't
 # clipped exactly at the range edges.
 HIGHLIGHT_HEADROOM = 0.05
+# Backstop ceiling on the minted top as a multiple of the catalog's nominal
+# valid_max. Surface reflectance legitimately overshoots its nominal [0, 1] on
+# bright targets (alpine snow reached SR > 1 and a hard valid_max clamp clipped
+# a third of the winter scene — the first Aletsch acceptance round); the p99
+# percentile is the robustness mechanism, this factor only stops pathologies
+# (e.g. large-area sunglint) from crushing the whole sequence's exposure.
+HIGHLIGHT_CEILING_FACTOR = 1.5
 # Where the shoulder knee may land in display space at most: the typical scene
 # keeps up to the bottom 85 % of the tonal range linearly.
 SHOULDER_KNEE_OUT = 0.85
@@ -360,7 +367,9 @@ def resolve_sequence_exposure(
     if span <= 0:
         return None
     lo = max(los[0] - span * HIGHLIGHT_HEADROOM, valid_min)
-    hi = min(hi_ext + span * HIGHLIGHT_HEADROOM, valid_max)
+    # The top follows the data (SR overshoots its nominal ceiling on snow);
+    # valid_max only anchors the pathology backstop, it is not a hard clamp.
+    hi = min(hi_ext + span * HIGHLIGHT_HEADROOM, valid_max * HIGHLIGHT_CEILING_FACTOR)
     if hi <= lo:
         return None
     if hi_ext <= HIGHLIGHT_TRIGGER_RATIO * hi_typ:

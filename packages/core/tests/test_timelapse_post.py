@@ -274,13 +274,19 @@ def test_exposure_ignores_empty_windows_and_none_when_all_empty() -> None:
     assert out[2] is None  # single window → nothing to compare → linear
 
 
-def test_exposure_clamps_to_valid_range() -> None:
+def test_exposure_clamps_lo_and_backstops_hi() -> None:
     ranges = [(-0.10, 0.95), (0.0, 0.98)]
     out = resolve_sequence_exposure(ranges, valid_min=0.0, valid_max=1.0)
     assert out is not None
     lo, hi, _ = out
-    assert lo == 0.0  # negative reflectance tail clamped
-    assert hi == 1.0  # headroom clamped to the physical ceiling
+    assert lo == 0.0  # negative reflectance tail clamped at the floor
+    # The top follows the data + headroom — NOT clamped at the nominal valid_max
+    # (SR legitimately exceeds 1.0 on snow; a hard clamp re-clipped Aletsch).
+    assert hi == pytest.approx(0.98 + 1.08 * 0.05)
+    # Only the pathology backstop (1.5 × valid_max) caps a runaway top.
+    glint = resolve_sequence_exposure([(0.0, 2.0)], valid_min=0.0, valid_max=1.0)
+    assert glint is not None
+    assert glint[1] == pytest.approx(1.5)
 
 
 def test_exposure_trigger_ratio_boundary() -> None:

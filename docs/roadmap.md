@@ -202,18 +202,48 @@ perfect-reference upper bound — same-scene Q0). (2) ALGO 7 bundle: NHI flare m
 translated to reflectance chips), robust-σ + median-centered mbsp refit, NHI exclusion, Ehret
 dimming-sign / RGB-surface-correlation / chip-validity flags — all opt-in, build_channels
 byte-identical (parity golden). (3) A/B v1→v2 approximately neutral (MBSP slopes/CI up, MBMP central
-bias stable, Permian log-scatter halved); NHI fires on 13 sim-artifact pixels (plume-4 extreme-flux
-negative-reflectance cores), 0 realistic false positives. Calibration re-frozen v5.1 (median_ratio
+bias stable, Permian log-scatter halved); NHI fires on 4 pixels after the ρ≥0 validity guard
+adopted in review (13 pre-guard sim-artifact fires were negative-reflectance cores making the
+sign conditions trivially true), 0 realistic false positives. Calibration re-frozen v5.1 (median_ratio
 0.996→1.034), noise floor v2 (global 24.6→22.0 t/h, floors drop where σ was flare-inflated),
 2-event gate green. α,β (F6): U10 span 1.12 m/s < 3 → insufficient_wind_diversity (evidence recorded,
 no refit — the pre-declared expected outcome). D12 stays parked (no exclusion shift). The instrument
 is now the tool that will measure Phase-10 candidates. Branch v2/phase9-benchmark-bundle.*
 
-Leftover handoffs (deliberately not in scope): a physical ρ≥0 NHI validity guard (would drop the
-13 sim-artifact fires to 4 — physically correct but outside the plan's NHI spec, flagged for review);
-the σ=0.7 anti-alias pre-blur (passes through the channels seam → co-lands with an ML retrain + its
-own ALGO bump + noise_floor v3; the benchmark is the tool that will measure it); **D10** Ehret
-regression background; **D11** ML-tier fate; **D12** unchanged.
+Leftover handoffs (deliberately not in scope): the σ=0.7 anti-alias pre-blur (passes through the
+channels seam → co-lands with an ML retrain + its own ALGO bump + noise_floor v3; the benchmark is
+the tool that will measure it); **D10** Ehret regression background; **D11** ML-tier fate;
+**D12** unchanged. (The ρ≥0 NHI validity guard was resolved in the pre-merge review: adopted,
+instruments re-frozen — baseline v5.1 bit-identical, one floor-v2 winter pair ~0.7 %.)
+
+## Phase 10 — Timelapse Production: broadcast-quality output from an honest pipeline (L) ✅
+
+Rebuild the timelapse stack to a professional production standard — outputs a person would pay
+for — without ever lying about data (plan + decision log: `docs/phase10-execution-plan.md`).
+*Exit: the five acceptance scenes render clean — canonical gate: Richmond Park, 1 year, RGB,
+zero visible artifacts — and every quality claim is demonstrated on real renders.* ✅
+*As-built: (0) live spikes — 4K `getThumbURL` works → `max_dim` cap 3840; GEE HLS is pre-scaled
+float reflectance (re-scaling would black every frame). (1) `build_composite(mean|median|
+clearest)` (mean = byte-identical legacy alias; clearest = s2cloudless `qualityMosaic` on S2,
+masked median elsewhere) + real `providers/hls.py` (S30+L30 merged, Fmask 1|2|3) and
+`providers/landsat.py` (LT05→LC09 to 1984, QA_PIXEL 1|3|4, SR ×0.0000275−0.2, per-spacecraft
+RGB, L7 SLC-off guard). (2) `timelapse_post.py` artifact killers, pure NumPy on the frame alpha
+channel: forward-fill (2-window staleness cap), deflicker (luminance anchor ±20 %), grade suite,
+Survey tint; manifest v2 per-frame {source, valid_fraction, filled_fraction}; per-window source
+ladder (primary → HLS); honesty wall enforced in code (`NonDisplayFrameError` off RGB); legacy
+path pinned by golden byte hashes. (3) `TimelapseRequest` v2 all-defaulted-legacy (preset label,
+composite, cloud_display, gap_fill, deflicker, grade, fallback, draft, extras, duration_s XOR
+fps), `POST /timelapse/preflight`, extras encode (cards/watermark/1:1/9:16), still +
+download?variant. (4) design pick "Cut + plate" (docs/phase10-studio-directions.html). (5) the
+Cut Studio (program monitor, availability filmstrip, preset cards as full client-expanded
+recipes, grade inspector, QC badges) + client-side citable plate PNG from manifest data only.
+(6) acceptance round 1 → four fixes Benedict directed: native lock REVERSED (upscaling allowed;
+native_max_dim became a manifest/UI readout — decision 9 annotation), explicit encode quality
+(x264 CRF 18 / vp9 30 over imageio's implicit CRF-25 default), sampled sequence exposure with a
+fixed filmic highlight shoulder (Aletsch snow keeps texture, no pumping; manifest `tone`), and
+gap-fill seam blending (boundary exposure match ±15 % + one-sided feather, in-mask writes only —
+provenance exact). Acceptance set re-rendered clean; Richmond Park = the canonical gate. Branch
+v2/phase10-timelapse-production.*
 
 ## Backlog (deliberately out of scope until their phase)
 
