@@ -26,13 +26,26 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from openearth.catalog import get_dataset
-from openearth.composites import build_mean_composite
+from openearth.composites import CompositeMode, build_composite
 from openearth.ee.render import compute_vis_range, geo_dimensions, thumb_url
 from openearth.errors import EmptyCollectionError, JobError, classify_ee_error
 from openearth.geometry import BBox
+from openearth.timelapse_post import (
+    FILL_CAP_WINDOWS,
+    ForwardFiller,
+    GradeOptions,
+    NonDisplayFrameError,
+    apply_gain,
+    deflicker_gains,
+    frame_luminance,
+    grade,
+    tint_holes,
+    valid_fraction,
+)
 
 if TYPE_CHECKING:
     from openearth.catalog.models import ProductSpec
@@ -411,12 +424,64 @@ class AnnotationOptions:
 
 
 @dataclass(frozen=True)
+class PostOptions:
+    """Display-frame post-processing knobs (Phase 10 — all default to off/legacy).
+
+    ``gap_fill`` forward-fills holes ≤ :data:`FILL_CAP_WINDOWS` old; ``deflicker_strength``
+    ∈ [0, 1] (0 = off) matches per-frame luminance to a rolling anchor; ``grade`` is a
+    colour grade; ``tint_hole_color`` paints any remaining holes for Survey honesty.
+    Every one touches RGB *display* frames only — the honesty wall (hard rule 1).
+    """
+
+    gap_fill: bool = False
+    deflicker_strength: float = 0.0
+    grade: GradeOptions | None = None
+    tint_hole_color: tuple[int, int, int] | None = None
+
+    def modifies_pixels(self) -> bool:
+        """True when any knob would alter or annotate pixels before the burn-in."""
+        return (
+            self.gap_fill
+            or self.deflicker_strength > 0.0
+            or (self.grade is not None and not self.grade.is_identity())
+            or self.tint_hole_color is not None
+        )
+
+    def to_manifest(self) -> dict[str, Any]:
+        grade = self.grade
+        return {
+            "gap_fill": self.gap_fill,
+            "gap_fill_cap_windows": FILL_CAP_WINDOWS if self.gap_fill else None,
+            "deflicker_strength": self.deflicker_strength,
+            "grade": None
+            if grade is None
+            else {
+                "curve": grade.curve,
+                "brightness": grade.brightness,
+                "contrast": grade.contrast,
+                "saturation": grade.saturation,
+            },
+            "tint_hole_color": None
+            if self.tint_hole_color is None
+            else "#{:02x}{:02x}{:02x}".format(*self.tint_hole_color),
+        }
+
+
+@dataclass(frozen=True)
 class FrameResult:
-    """The outcome for one window: a rendered PNG on disk, empty, or failed."""
+    """The outcome for one window: a rendered PNG on disk, empty, or failed.
+
+    ``source`` is the dataset the frame actually came from (the primary, or a
+    fallback when the source ladder stepped down); ``valid_fraction`` /
+    ``filled_fraction`` are the per-frame honesty surfaces (hard rule 3).
+    """
 
     window: FrameWindow
     status: FrameStatus
     path: Path | None
+    source: str | None = None
+    valid_fraction: float | None = None
+    filled_fraction: float | None = None
 
 
 @dataclass(frozen=True)
@@ -432,6 +497,10 @@ class FrameManifest:
     # True when the render was stopped mid-way but had ≥1 rendered frame to keep
     # (a "partial" render); False for a normal complete render.
     cancelled: bool = False
+    # Phase 10 manifest v2 (additive — v1 readers ignore these): the compositing
+    # reducer and the post-processing settings that produced this render.
+    composite: CompositeMode = "mean"
+    post: dict[str, Any] = field(default_factory=dict)
 
     @property
     def frame_paths(self) -> list[Path]:
@@ -463,6 +532,10 @@ class FrameManifest:
                     "end": r.window.end.isoformat(),
                     "label": r.window.label,
                     "status": r.status,
+                    # Honesty surfaces (hard rule 3) — present for every frame.
+                    "source": r.source,
+                    "valid_fraction": r.valid_fraction,
+                    "filled_fraction": r.filled_fraction,
                 }
             )
         return {
@@ -472,6 +545,8 @@ class FrameManifest:
             "height": self.height,
             "vis": [self.vis[0], self.vis[1]],
             "cancelled": self.cancelled,
+            "composite": self.composite,
+            "post": self.post,
             "frames": frames,
         }
 
@@ -520,6 +595,7 @@ def _resolve_vis_range(
     windows: list[FrameWindow],
     vis_min: float | None,
     vis_max: float | None,
+    composite_mode: CompositeMode,
 ) -> tuple[float, float]:
     """One vis range for the whole render (no per-frame auto-scale flicker).
 
@@ -531,7 +607,9 @@ def _resolve_vis_range(
         return (vis_min, vis_max)
 
     mid = windows[len(windows) // 2]
-    mid_image = build_mean_composite(product, roi, mid.start, mid.end, source=dataset)
+    mid_image = build_composite(
+        product, roi, mid.start, mid.end, source=dataset, mode=composite_mode
+    )
     try:
         computed = compute_vis_range(mid_image, spec, roi)
     except Exception as exc:  # empty mid window falls back to catalog defaults
@@ -545,8 +623,44 @@ def _resolve_vis_range(
 
 
 def _cleanup_staging(out_dir: Path) -> None:
-    for staging in out_dir.glob(".staging_*.png"):
-        staging.unlink(missing_ok=True)
+    for pattern in (".staging_*.png", ".filled_*.png"):
+        for staging in out_dir.glob(pattern):
+            staging.unlink(missing_ok=True)
+
+
+@dataclass(frozen=True)
+class _WorkOut:
+    """The concurrent fetch stage's result for one window (pre-finalisation)."""
+
+    window: FrameWindow
+    status: FrameStatus
+    staging: Path | None  # annotated frame (legacy) or raw RGBA (post-processing path)
+    source: str | None
+    valid_fraction: float | None
+
+
+def _load_rgba(path: Path) -> np.ndarray:
+    with Image.open(path) as im:
+        return np.array(im.convert("RGBA"))
+
+
+def _save_rgba(arr: np.ndarray, path: Path) -> None:
+    Image.fromarray(arr).save(path, format="PNG")  # (H, W, 4) uint8 → RGBA
+
+
+def _resolve_ladder(
+    dataset: str, product: str, spec: ProductSpec, fallback_source: str | None
+) -> list[tuple[str, ProductSpec]]:
+    """Primary source, then the fallback dataset when it carries the same product."""
+    ladder: list[tuple[str, ProductSpec]] = [(dataset, spec)]
+    if fallback_source is not None and fallback_source != dataset:
+        try:
+            fb_spec = get_dataset(fallback_source).get(product)
+        except KeyError:
+            return ladder  # fallback source lacks this product → no step-down
+        if fb_spec.is_rgb == spec.is_rgb:
+            ladder.append((fallback_source, fb_spec))
+    return ladder
 
 
 def render_frames(
@@ -561,6 +675,9 @@ def render_frames(
     vis_min: float | None,
     vis_max: float | None,
     annotations: AnnotationOptions,
+    composite_mode: CompositeMode = "mean",
+    post: PostOptions | None = None,
+    fallback_source: str | None = None,
     fetch: FetchFn = _fetch_bytes,
     on_progress: Callable[[int, int], None] | None = None,
     on_frame: Callable[[int | None, FrameStatus, int], None] | None = None,
@@ -569,77 +686,123 @@ def render_frames(
     """Render one PNG per *window* into *out_dir* and write ``manifest.json``.
 
     All frames share one geometry (even dimensions for video) and one vis range.
-    Per window: build the mean composite, mint the thumb through ``ee_call``,
-    fetch the PNG, then burn in the annotations. Empty composites are recorded
-    as ``empty`` and skipped; a non-PNG/failed fetch is recorded as ``failed``.
-    Rendered frames are re-indexed densely *as they complete* (``frame_0000.png``
-    = first rendered) so the movie has no holes and the API can serve each frame
-    live. ``on_progress(done, total)`` fires per completed window (generic bar);
-    ``on_frame(dense_index_or_None, status, total)`` fires per completed window
-    with its assigned movie index (``None`` when skipped) for live previews.
+    Per window: build the ``composite_mode`` composite (mean/median/clearest) over
+    the per-window source ladder (primary → *fallback_source* on empty), mint the
+    thumb through ``ee_call``, fetch the PNG, apply the requested *post*-processing
+    (gap-fill → deflicker → grade → hole tint — all display-only, RGB frames only),
+    then burn in the annotations. Empty composites are recorded ``empty`` and
+    skipped; a non-PNG/failed fetch is recorded ``failed``. Rendered frames are
+    re-indexed densely (``frame_0000.png`` = first rendered).
 
-    Resilience: a window whose mint/fetch fails is recorded ``failed`` (not
-    raised) so one bad frame can't kill the render; the dead-pipeline breaker
-    aborts only when EE is failing *consistently* (see :data:`EARLY_ABORT_PROBE`).
-    On cancel, frames rendered so far are **kept**: the manifest is written with
-    ``cancelled=True`` and returned (a partial render). Raises :class:`JobError`
-    only when *nothing* rendered — ``"cancelled"`` if the stop came before any
-    frame, else the all-empty/failed message.
+    ``on_progress(done, total)`` fires per completed window; ``on_frame(dense_index
+    _or_None, status, total)`` fires per completed window with its movie index
+    (``None`` when skipped) for live previews. The manifest records per-frame
+    ``source``/``valid_fraction``/``filled_fraction`` and the ``composite``/``post``
+    settings (hard rule 3) whatever mode runs.
+
+    Back-compat (hard rule 2): with the defaults (mean, no post, no fallback) the
+    frame builder annotates in the concurrent stage and the consumer ``os.replace``s
+    each frame exactly as before — byte-identical output. Post-processing only
+    engages the deferred-annotation path when a knob is actually set.
+
+    Resilience: a window whose mint/fetch fails is recorded ``failed`` (not raised);
+    the dead-pipeline breaker aborts only when EE is failing *consistently* (see
+    :data:`EARLY_ABORT_PROBE`). On cancel, frames rendered so far are kept
+    (``cancelled=True``); deflicker's finalisation pass still runs over them. Raises
+    :class:`JobError` only when *nothing* rendered.
     """
     if not windows:
         raise JobError("Timelapse render needs at least one window.")
 
+    post = post or PostOptions()
     out_dir.mkdir(parents=True, exist_ok=True)
     dataset_spec = get_dataset(dataset)
     spec = dataset_spec.get(product)
-    bbox = roi if isinstance(roi, BBox) else roi.bounds
+    product_is_rgb = spec.is_rgb
 
+    # Honesty wall (hard rule 1): the artifact killers touch display frames only.
+    if post.modifies_pixels() and not product_is_rgb:
+        raise NonDisplayFrameError(
+            f"Post-processing was requested on non-RGB product {dataset}/{product}; "
+            "gap-fill / deflicker / grade / tint are display-only."
+        )
+
+    bbox = roi if isinstance(roi, BBox) else roi.bounds
     width, height = _frame_dimensions(bbox, max_dim, even_dims)
     dims_arg = f"{width}x{height}"
-    vmin, vmax = _resolve_vis_range(dataset, product, spec, roi, windows, vis_min, vis_max)
+    vmin, vmax = _resolve_vis_range(
+        dataset, product, spec, roi, windows, vis_min, vis_max, composite_mode
+    )
 
     colorbar: Image.Image | None = None
-    if annotations.colorbar and not spec.is_rgb:
+    if annotations.colorbar and not product_is_rgb:
         cb_w = max(120, min(width // 4, 320))
         cb_h = max(18, round(height * 0.028))
         colorbar = render_colorbar(spec.palette, vmin, vmax, width=cb_w, height=cb_h)
     scale_bar = scale_bar_spec(bbox, width) if annotations.scale_bar else None
     attribution = annotations.attribution or dataset_spec.attribution
 
-    def _work(window: FrameWindow) -> FrameResult:
+    ladder = _resolve_ladder(dataset, product, spec, fallback_source)
+    defer = post.modifies_pixels()  # need the raw frame before annotation
+    second_pass = post.deflicker_strength > 0.0  # deflicker needs the whole sequence
+
+    def _annotate(img: Image.Image, window: FrameWindow) -> Image.Image:
+        label = window.label if annotations.date_label else ""
+        return annotate_frame(
+            img, label=label, attribution=attribution, colorbar=colorbar, scale_bar=scale_bar
+        )
+
+    def _fetch_display(window: FrameWindow) -> tuple[Image.Image, str]:
+        """Fetch the raw display frame over the source ladder; raise on empty/fail."""
+        for src, src_spec in ladder:
+            try:
+                image = build_composite(
+                    product, roi, window.start, window.end, source=src, mode=composite_mode
+                )
+                url = thumb_url(
+                    image, src_spec, roi, vis_min=vmin, vis_max=vmax, dimensions=dims_arg
+                )
+            except Exception as exc:
+                if _is_empty_error(exc):
+                    continue  # step down the ladder; empty-everywhere raises below
+                raise
+            data = fetch(url)
+            if not data.startswith(_PNG_MAGIC):
+                raise ValueError("EE returned a non-PNG payload")
+            with Image.open(io.BytesIO(data)) as opened:
+                base = opened.convert("RGBA")
+            if base.size != (width, height):
+                base = base.resize((width, height))
+            return base, src
+        raise EmptyCollectionError("no imagery for this window across the source ladder")
+
+    def _finalize_and_save(arr: np.ndarray, window: FrameWindow, dest: Path) -> None:
+        """grade → tint holes → annotate → save the final RGB frame."""
+        if post.grade is not None and not post.grade.is_identity():
+            arr = grade(arr, post.grade, product_is_rgb=product_is_rgb)
+        if post.tint_hole_color is not None:
+            arr = tint_holes(arr, post.tint_hole_color, product_is_rgb=product_is_rgb)
+        annotated = _annotate(Image.fromarray(arr), window)  # (H, W, 4) uint8 → RGBA
+        annotated.convert("RGB").save(dest, format="PNG")
+
+    def _work(window: FrameWindow) -> _WorkOut:
         staging = out_dir / f".staging_{window.index:04d}.png"
         try:
-            image = build_mean_composite(product, roi, window.start, window.end, source=dataset)
-            url = thumb_url(image, spec, roi, vis_min=vmin, vis_max=vmax, dimensions=dims_arg)
-        except Exception as exc:  # empty → skip; any other mint failure → recorded, not raised
-            if _is_empty_error(exc):
-                return FrameResult(window, "empty", None)
-            # ee_call already retried; a window that still fails is data, not a
-            # crash — one bad frame must not kill the whole render (the breaker
-            # below catches a *consistently* failing pipeline).
-            return FrameResult(window, "failed", None)
-        try:
-            data = fetch(url)
-        except Exception:  # fetch failures are recorded, not raised
-            return FrameResult(window, "failed", None)
-        if not data.startswith(_PNG_MAGIC):
-            return FrameResult(window, "failed", None)
+            base, source = _fetch_display(window)
+        except Exception as exc:  # empty → skip; anything else → failed (not raised)
+            status: FrameStatus = "empty" if _is_empty_error(exc) else "failed"
+            return _WorkOut(window, status, None, None, None)
+        vf = valid_fraction(np.asarray(base))
+        if defer:
+            base.save(staging, format="PNG")  # raw RGBA — annotate after post-processing
+        else:
+            _annotate(base, window).convert("RGB").save(staging, format="PNG")  # legacy path
+        return _WorkOut(window, "rendered", staging, source, vf)
 
-        with Image.open(io.BytesIO(data)) as opened:
-            base = opened.convert("RGBA")
-        if base.size != (width, height):
-            # EE should honour the explicit WxH; resize the base (never the
-            # annotated frame) as a safety net so every frame matches the movie.
-            base = base.resize((width, height))
-        label = window.label if annotations.date_label else ""
-        annotated = annotate_frame(
-            base, label=label, attribution=attribution, colorbar=colorbar, scale_bar=scale_bar
-        )
-        annotated.convert("RGB").save(staging, format="PNG")
-        return FrameResult(window, "rendered", staging)
+    filler = ForwardFiller(product_is_rgb=product_is_rgb) if post.gap_fill else None
+    lumis: list[float | None] = []
+    pending_second: list[tuple[Path, FrameWindow, int]] = []
 
-    # Frames run concurrently but results are consumed in window order, so each
-    # rendered frame's dense index is settled the moment it lands — no post-pass.
     results: list[FrameResult] = []
     total = len(windows)
     dense = 0
@@ -653,25 +816,55 @@ def render_frames(
                     pending.cancel()
                 cancelled = True
                 break  # salvage what rendered so far (after the pool drains)
-            r = fut.result()
+            out = fut.result()
             index: int | None = None
-            if r.status == "rendered" and r.path is not None:
+            if out.status == "rendered" and out.staging is not None:
                 final = out_dir / f"frame_{dense:04d}.png"
-                os.replace(r.path, final)
-                results.append(FrameResult(r.window, "rendered", final))
+                filled_fraction = 0.0
+                if not defer:
+                    os.replace(out.staging, final)  # already annotated — legacy path
+                else:
+                    arr = _load_rgba(out.staging)
+                    out.staging.unlink(missing_ok=True)
+                    if filler is not None:
+                        arr, fill = filler.push(arr)  # forward-fill in window order
+                        filled_fraction = fill.filled_fraction
+                    if second_pass:
+                        filled_staging = out_dir / f".filled_{dense:04d}.png"
+                        _save_rgba(arr, filled_staging)
+                        lumis.append(frame_luminance(arr))
+                        pending_second.append((filled_staging, out.window, dense))
+                    else:
+                        _finalize_and_save(arr, out.window, final)
+                results.append(
+                    FrameResult(
+                        out.window,
+                        "rendered",
+                        final,
+                        out.source,
+                        out.valid_fraction,
+                        filled_fraction,
+                    )
+                )
                 index = dense
                 dense += 1
             else:
-                results.append(FrameResult(r.window, r.status, None))
-                if r.status == "failed":
+                results.append(
+                    FrameResult(
+                        out.window,
+                        out.status,
+                        None,
+                        out.source,
+                        out.valid_fraction,
+                        0.0 if out.status == "empty" else None,
+                    )
+                )
+                if out.status == "failed":
                     failed += 1
             if on_frame is not None:
-                on_frame(index, r.status, total)
+                on_frame(index, out.status, total)
             if on_progress is not None:
                 on_progress(i + 1, total)
-            # Dead-pipeline breaker: after the first EARLY_ABORT_PROBE completed
-            # windows, if nothing rendered but something failed, EE is broken —
-            # cancel the rest and abort before the render burns more quota.
             if len(results) == EARLY_ABORT_PROBE and dense == 0 and failed >= 1:
                 for pending in futures[i + 1 :]:
                     pending.cancel()
@@ -681,21 +874,37 @@ def render_frames(
                     "windows with no usable frame."
                 )
 
-    # The pool has drained (running mints finished writing their staging files);
-    # sweep any stragglers before finalising.
+    # Deflicker finalisation: with all frames staged, compute the gains against the
+    # rolling luminance anchor and burn the final frames (runs over the salvaged
+    # frames too on cancel).
+    if pending_second:
+        gains = deflicker_gains(lumis, strength=post.deflicker_strength)
+        for k, (filled_staging, win, dense_idx) in enumerate(pending_second):
+            arr = apply_gain(_load_rgba(filled_staging), gains[k], product_is_rgb=product_is_rgb)
+            _finalize_and_save(arr, win, out_dir / f"frame_{dense_idx:04d}.png")
+            filled_staging.unlink(missing_ok=True)
+
     _cleanup_staging(out_dir)
 
     if dense == 0:
-        # Cancel before any frame rendered → nothing to salvage; else the whole
-        # render was empty/failed.
         raise JobError(
             "cancelled"
             if cancelled
             else "Timelapse produced no usable frames (all windows empty or failed)."
         )
 
+    post_manifest = post.to_manifest()
+    post_manifest["fallback_source"] = fallback_source
     manifest = FrameManifest(
-        dataset, product, width, height, (vmin, vmax), results, cancelled=cancelled
+        dataset,
+        product,
+        width,
+        height,
+        (vmin, vmax),
+        results,
+        cancelled=cancelled,
+        composite=composite_mode,
+        post=post_manifest,
     )
     _write_manifest(out_dir / "manifest.json", manifest)
     return manifest
@@ -838,6 +1047,7 @@ __all__ = [
     "FrameStatus",
     "FrameWindow",
     "MovieFormat",
+    "PostOptions",
     "StepMode",
     "annotate_frame",
     "encode_movie",

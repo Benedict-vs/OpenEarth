@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 from datetime import date
@@ -16,11 +17,13 @@ from openearth.geometry import BBox
 from openearth.timelapse import (
     AnnotationOptions,
     FrameWindow,
+    PostOptions,
     _frame_dimensions,
     encode_movie,
     expand_frames,
     render_frames,
 )
+from openearth.timelapse_post import GradeOptions, NonDisplayFrameError
 
 BBOX = BBox(0.0, 0.0, 1.0, 1.0)
 
@@ -28,6 +31,12 @@ BBOX = BBox(0.0, 0.0, 1.0, 1.0)
 def _png_bytes(w: int, h: int, color: tuple[int, int, int]) -> bytes:
     buf = io.BytesIO()
     Image.new("RGB", (w, h), color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _rgba_png_bytes(w: int, h: int, color: tuple[int, int, int, int]) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGBA", (w, h), color).save(buf, format="PNG")
     return buf.getvalue()
 
 
@@ -47,14 +56,16 @@ def fake_ee(monkeypatch: pytest.MonkeyPatch) -> None:
     fetch can return distinct (or failing) bytes per frame.
     """
 
-    def fake_build(product: str, roi: object, start: date, end: date, source: str) -> object:
+    def fake_build(
+        product: str, roi: object, start: date, end: date, source: str, mode: str = "mean"
+    ) -> object:
         return ("IMG", start)
 
     def fake_thumb(image: object, spec: object, roi: object, **kw: object) -> str:
         _, start = image  # type: ignore[misc]
         return f"http://fake/{start.isoformat()}"  # type: ignore[union-attr]
 
-    monkeypatch.setattr(tl, "build_mean_composite", fake_build)
+    monkeypatch.setattr(tl, "build_composite", fake_build)
     monkeypatch.setattr(tl, "thumb_url", fake_thumb)
 
 
@@ -355,6 +366,188 @@ def test_all_empty_windows_do_not_trip_the_breaker(
             on_progress=lambda done, total: progress.append(done),
         )
     assert len(progress) == 20  # every window consumed — no early abort on empties
+
+
+# ── Phase 10: back-compat (hard rule 2) + manifest v2 honesty surfaces ──
+
+
+def test_legacy_defaults_render_byte_identical_output(fake_ee: None, tmp_path: Path) -> None:
+    """A legacy request (mean, no post, no fallback) must reproduce the exact frame
+    bytes captured from the pre-Phase-10 render_frames — pinned golden hashes."""
+    windows = _windows(4)
+
+    def fetch(url: str) -> bytes:
+        day = int(url.rsplit("-", 1)[1])
+        return _png_bytes(40, 30, (day * 20 % 256, 60, 90))
+
+    manifest = render_frames(
+        "s2",
+        "RGB",
+        BBOX,
+        windows,
+        out_dir=tmp_path,
+        max_dim=40,
+        even_dims=True,
+        vis_min=0.0,
+        vis_max=0.3,
+        annotations=AnnotationOptions(),
+        fetch=fetch,
+    )
+    golden = [
+        "6ee1e6416410add50ce8c11b",
+        "2bbb65f58819561893758978",
+        "4b79f1c3044f2bfb5544f1c3",
+        "7535b88e8cc13bc69fc1a21c",
+    ]
+    got = [hashlib.sha256(p.read_bytes()).hexdigest()[:24] for p in manifest.frame_paths]
+    assert got == golden
+    assert (manifest.width, manifest.height) == (40, 40)
+
+
+def test_manifest_v2_records_honesty_surfaces_even_for_legacy(
+    fake_ee: None, tmp_path: Path
+) -> None:
+    render_frames(
+        "s2",
+        "RGB",
+        BBOX,
+        _windows(3),
+        out_dir=tmp_path,
+        max_dim=24,
+        even_dims=True,
+        vis_min=0.0,
+        vis_max=0.3,
+        annotations=AnnotationOptions(),
+        fetch=lambda url: _png_bytes(24, 24, (10, 20, 30)),
+    )
+    m = json.loads((tmp_path / "manifest.json").read_text())
+    assert m["composite"] == "mean"
+    assert m["post"]["gap_fill"] is False
+    assert m["post"]["fallback_source"] is None
+    for f in m["frames"]:
+        assert f["source"] == "s2"
+        assert f["valid_fraction"] == 1.0  # opaque frames
+        assert f["filled_fraction"] == 0.0
+
+
+def test_gap_fill_fills_a_transparent_window(fake_ee: None, tmp_path: Path) -> None:
+    windows = _windows(3)
+    hole_start = windows[1].start.isoformat()
+
+    def fetch(url: str) -> bytes:
+        start = url.rsplit("/", 1)[1]
+        if start == hole_start:
+            return _rgba_png_bytes(16, 16, (0, 0, 0, 0))  # a fully transparent window
+        return _rgba_png_bytes(16, 16, (200, 40, 40, 255))
+
+    manifest = render_frames(
+        "s2",
+        "RGB",
+        BBOX,
+        windows,
+        out_dir=tmp_path,
+        max_dim=16,
+        even_dims=True,
+        vis_min=0.0,
+        vis_max=0.3,
+        annotations=AnnotationOptions(),
+        post=PostOptions(gap_fill=True),
+        fetch=fetch,
+    )
+    # All three render; the hole window is forward-filled from window 0.
+    assert manifest.rendered_count == 3
+    fills = [r.filled_fraction for r in manifest.results]
+    assert fills[0] == 0.0
+    assert fills[1] == 1.0  # the transparent window fully inherited window 0
+    assert fills[2] == 0.0
+    assert manifest.results[1].valid_fraction == 0.0  # pre-fill honesty surface
+
+
+def test_source_ladder_steps_down_to_fallback_on_empty(
+    fake_ee: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    windows = _windows(3)
+    empty_start = windows[1].start
+
+    def build(
+        product: str, roi: object, start: date, end: date, source: str, mode: str = "mean"
+    ) -> object:
+        if source == "s2" and start == empty_start:
+            raise EmptyCollectionError("s2 empty here")
+        return ("IMG", start, source)
+
+    def thumb(image: object, spec: object, roi: object, **kw: object) -> str:
+        _, start, source = image  # type: ignore[misc]
+        return f"http://fake/{source}/{start.isoformat()}"  # type: ignore[union-attr]
+
+    monkeypatch.setattr(tl, "build_composite", build)
+    monkeypatch.setattr(tl, "thumb_url", thumb)
+
+    manifest = render_frames(
+        "s2",
+        "RGB",
+        BBOX,
+        windows,
+        out_dir=tmp_path,
+        max_dim=16,
+        even_dims=True,
+        vis_min=0.0,
+        vis_max=0.3,
+        annotations=AnnotationOptions(),
+        fallback_source="hls",
+        fetch=lambda url: _png_bytes(16, 16, (1, 2, 3)),
+    )
+    sources = [r.source for r in manifest.results]
+    assert sources == ["s2", "hls", "s2"]  # window 1 stepped down to HLS
+
+
+def test_render_refuses_post_processing_on_non_rgb_product(fake_ee: None, tmp_path: Path) -> None:
+    with pytest.raises(NonDisplayFrameError):
+        render_frames(
+            "s5p",
+            "NO2",
+            BBOX,
+            _windows(2),
+            out_dir=tmp_path,
+            max_dim=16,
+            even_dims=True,
+            vis_min=0.0,
+            vis_max=0.0003,
+            annotations=AnnotationOptions(),
+            post=PostOptions(gap_fill=True),
+            fetch=lambda url: _png_bytes(8, 8, (0, 0, 0)),
+        )
+
+
+def test_deflicker_second_pass_finalizes_all_frames(fake_ee: None, tmp_path: Path) -> None:
+    windows = _windows(4)
+
+    def fetch(url: str) -> bytes:
+        day = int(url.rsplit("-", 1)[1])
+        return _png_bytes(20, 20, (day * 40 % 256, 100, 100))
+
+    manifest = render_frames(
+        "s2",
+        "RGB",
+        BBOX,
+        windows,
+        out_dir=tmp_path,
+        max_dim=20,
+        even_dims=True,
+        vis_min=0.0,
+        vis_max=0.3,
+        annotations=AnnotationOptions(),
+        post=PostOptions(deflicker_strength=1.0, grade=GradeOptions(curve="vivid")),
+        fetch=fetch,
+    )
+    assert manifest.rendered_count == 4
+    for p in manifest.frame_paths:
+        assert p.exists()
+    assert list(tmp_path.glob(".filled_*")) == []  # second-pass staging swept
+    assert list(tmp_path.glob(".staging_*")) == []
+    m = json.loads((tmp_path / "manifest.json").read_text())
+    assert m["post"]["deflicker_strength"] == 1.0
+    assert m["post"]["grade"]["curve"] == "vivid"
 
 
 # ── encode_movie ─────────────────────────────────────────────────
