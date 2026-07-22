@@ -62,7 +62,7 @@ export function TimelapsePage() {
     [form.roiSource, currentRoi, aois, roiPresets],
   );
 
-  // Availability probe drives the timeline, the frame count, and the native cap.
+  // Availability probe drives the timeline, the frame count, and the native-limit readout.
   const preflightReq = useMemo(
     () => (roi && productKey ? buildPreflightRequest({ ...form, productKey }, roi) : null),
     [form, productKey, roi],
@@ -110,7 +110,9 @@ export function TimelapsePage() {
       dates: previewWindow,
       composite: "mean",
       half_window_days: 3,
-      width: Math.min(1024, nativeMaxDim ?? 1024),
+      // Upscaling is allowed since the native-lock reversal; the preview matches
+      // the final render's look rather than stopping at the sensor limit.
+      width: 1024,
       auto_range: form.visMin == null && form.visMax == null,
       viz_overrides: { vis_min: form.visMin, vis_max: form.visMax },
     };

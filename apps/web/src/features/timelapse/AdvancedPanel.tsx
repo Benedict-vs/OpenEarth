@@ -21,8 +21,8 @@ export function AdvancedPanel({
   const form = useTimelapseStore((s) => s.form);
   const setForm = useTimelapseStore((s) => s.setForm);
 
-  const dimMax = Math.min(MAX_DIM_CAP, nativeMaxDim ?? MAX_DIM_CAP);
-  const effectiveDim = Math.min(form.maxDim, dimMax);
+  const effectiveDim = Math.min(form.maxDim, MAX_DIM_CAP);
+  const upscaled = nativeMaxDim != null && effectiveDim > nativeMaxDim;
   const toggleCrop = (crop: CropRatio) =>
     setForm({ crops: form.crops.includes(crop) ? form.crops.filter((c) => c !== crop) : [...form.crops, crop] });
 
@@ -108,15 +108,15 @@ export function AdvancedPanel({
           label="Resolution"
           value={effectiveDim}
           min={240}
-          max={dimMax}
+          max={MAX_DIM_CAP}
           step={40}
-          display={`${effectiveDim} px${nativeMaxDim ? " · native lock" : ""}`}
+          display={`${effectiveDim} px${upscaled ? ` · native ${nativeMaxDim} px, upscaled` : ""}`}
           onChange={(maxDim) => setForm({ maxDim })}
         />
         {nativeMaxDim ? (
           <p className="cut-note muted">
-            Native limit for this region: {nativeMaxDim} px — frames are never enlarged past what the
-            sensor measured.
+            The sensor measured this region at {nativeMaxDim} px. Larger renders upscale the same
+            data for a sharper display — the render records both numbers.
           </p>
         ) : null}
 

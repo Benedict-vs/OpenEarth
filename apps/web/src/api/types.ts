@@ -117,11 +117,19 @@ export interface TimelapseManifest {
   post: {
     gap_fill?: boolean;
     gap_fill_cap_windows?: number | null;
+    /** Borrowed regions are exposure-matched + feathered (in-mask only). */
+    seam_blend?: boolean;
     deflicker_strength?: number;
     grade?: { curve: string; brightness: number; contrast: number; saturation: number } | null;
     tint_hole_color?: string | null;
     fallback_source?: string | null;
   };
+  /** The region's native sensor limit (longest edge, px) at render time — the
+   *  upscale-honesty readout. Absent/null on legacy manifests. */
+  native_max_dim?: number | null;
+  /** The fixed highlight-shoulder curve applied to an HDR RGB sequence;
+   *  null/absent for plain linear renders. `vis` is the true minted range. */
+  tone?: { knee_in: number; knee_out: number } | null;
   frames: ManifestFrame[];
 }
 

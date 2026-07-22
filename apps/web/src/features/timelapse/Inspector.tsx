@@ -280,7 +280,11 @@ export function Inspector(props: Props) {
           <FrameDataRow k="Fallback" v={form.fallback ? "HLS 30 m on empty" : "Off"} highlight={form.fallback} />
           <FrameDataRow
             k="Resolution"
-            v={props.nativeMaxDim ? `${Math.min(form.maxDim, props.nativeMaxDim)} px · native` : `${form.maxDim} px`}
+            v={
+              props.nativeMaxDim && form.maxDim > props.nativeMaxDim
+                ? `${form.maxDim} px · native ${props.nativeMaxDim}`
+                : `${form.maxDim} px`
+            }
           />
         </Section>
       </div>

@@ -29,6 +29,7 @@ function detail(): RenderDetail {
       cancelled: false,
       composite: "clearest",
       post: { gap_fill: true },
+      native_max_dim: 445,
       frames: [
         { index: 0, start: "2024-01-01", end: "2024-01-31", label: "Jan", status: "rendered", source: "s2", valid_fraction: 1, filled_fraction: 0 },
         { index: 1, start: "2024-02-01", end: "2024-02-29", label: "Feb", status: "rendered", source: "hls", valid_fraction: 0.8, filled_fraction: 0.1 },
@@ -57,6 +58,14 @@ describe("plateInputFromDetail", () => {
     expect(input!.blankCount).toBe(1);
     expect(input!.fallbackCount).toBe(1); // one frame stepped to hls
     expect(input!.start).toBe("2024-01-01");
+    expect(input!.nativeMaxDim).toBe(445); // the upscale-honesty readout
+  });
+
+  it("tolerates legacy manifests without native_max_dim", () => {
+    const d = detail();
+    delete (d.manifest as Record<string, unknown>)["native_max_dim"];
+    const input = plateInputFromDetail(d, 0, "/still/0");
+    expect(input!.nativeMaxDim).toBeNull();
   });
 
   it("returns null when the render has no manifest", () => {

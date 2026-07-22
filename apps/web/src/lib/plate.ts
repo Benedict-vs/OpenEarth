@@ -22,6 +22,8 @@ export interface PlateInput {
   composite: string;
   width: number;
   height: number;
+  /** The region's native sensor limit (px) when the manifest recorded it. */
+  nativeMaxDim: number | null;
   frameLabel: string;
   frameNumber: number; // 1-based
   frameCount: number;
@@ -70,6 +72,7 @@ export function plateInputFromDetail(
     composite: m.composite,
     width: m.width,
     height: m.height,
+    nativeMaxDim: m.native_max_dim ?? null,
     frameLabel: qc?.label ?? "",
     frameNumber: frameIndex + 1,
     frameCount: cov.rendered,
@@ -182,7 +185,13 @@ export async function buildPlate(input: PlateInput): Promise<Blob> {
     ["Measured", fmtPct(input.measured), undefined],
     ["Borrowed ≤ 2w", fmtPct(input.borrowed), SURVEY],
     ["Blank", fmtPct(blank), undefined],
-    ["Resolution", `${input.width}×${input.height} px`, undefined],
+    [
+      "Resolution",
+      input.nativeMaxDim != null && Math.max(input.width, input.height) > input.nativeMaxDim
+        ? `${input.width}×${input.height} px · native ${input.nativeMaxDim}`
+        : `${input.width}×${input.height} px`,
+      undefined,
+    ],
   ];
   for (const [k, v, c] of rows) y = dataRow(ctx, dsX, y, dsW, k, v, c);
 
