@@ -275,8 +275,8 @@ export function Inspector(props: Props) {
         {/* ── Frame data (honesty recap of the current recipe) ── */}
         <Section title="Frame data" hint="honesty">
           <FrameDataRow k="Composite" v={form.composite} highlight />
-          <FrameDataRow k="Cloud gaps" v={cloudLabel(form.cloudMode)} />
-          <FrameDataRow k="Deflicker" v={form.deflicker ? "Anchored ±20%" : "Off"} />
+          <FrameDataRow k="Cloud gaps" v={productIsRgb ? cloudLabel(form.cloudMode) : "Gaps shown"} />
+          <FrameDataRow k="Deflicker" v={productIsRgb && form.deflicker ? "Anchored ±20%" : "Off"} />
           <FrameDataRow k="Fallback" v={form.fallback ? "HLS 30 m on empty" : "Off"} highlight={form.fallback} />
           <FrameDataRow
             k="Resolution"

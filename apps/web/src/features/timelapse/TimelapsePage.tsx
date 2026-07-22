@@ -45,7 +45,9 @@ export function TimelapsePage() {
   const [preview, setPreview] = useState<{ url: string; caption: string } | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const previewUrlRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
 
   const dataset = catalog?.find((d) => d.id === form.datasetId) ?? catalog?.[0] ?? null;
   const products = useMemo(
@@ -78,7 +80,13 @@ export function TimelapsePage() {
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     previewUrlRef.current = null;
   };
-  useEffect(() => revokePreview, []); // revoke the last object URL on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      revokePreview(); // revoke the last object URL on unmount
+    };
+  }, []);
 
   const clearMonitor = () => {
     setActiveRenderId(null);
@@ -108,6 +116,7 @@ export function TimelapsePage() {
     };
     try {
       const blob = await fetchPreview(body);
+      if (!mountedRef.current) return; // unmounted mid-fetch — don't mint a leaked URL
       revokePreview();
       const url = URL.createObjectURL(blob);
       previewUrlRef.current = url;
@@ -146,19 +155,26 @@ export function TimelapsePage() {
   };
 
   const submit = async (draft: boolean) => {
-    if (!roi || !productKey || !dataset) return;
+    if (!roi || !productKey || !dataset || submitting) return;
     setError(null);
+    setSubmitting(true); // synchronous — closes the double-click window before the POST
     try {
-      await runJob(buildTimelapseRequest({ ...form, datasetId: dataset.id, productKey }, roi, { draft }));
+      await runJob(
+        buildTimelapseRequest({ ...form, datasetId: dataset.id, productKey }, roi, { draft, productIsRgb }),
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : String(err));
       setRun(null);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   // Re-render a draft at its intended full settings (draft off).
   const renderFinal = async (renderId: string) => {
+    if (submitting) return;
     setError(null);
+    setSubmitting(true);
     try {
       const detail = await apiGet<RenderDetail>(`/api/timelapse/${renderId}`);
       const body = { ...(detail.params as unknown as TimelapseRequest), draft: false };
@@ -167,6 +183,8 @@ export function TimelapsePage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : String(err));
       setRun(null);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -242,21 +260,40 @@ export function TimelapsePage() {
         roi={roi}
         nativeMaxDim={nativeMaxDim}
         pacing={pacing}
-        running={running}
+        running={running || submitting}
         onRender={submit}
         submitError={error}
       />
 
       <section className="cut-dock">
-        <div className="cut-dock-tabs" role="tablist">
-          <button role="tab" aria-selected={dockTab === "availability"} className={dockTab === "availability" ? "sel" : ""} onClick={() => setDockTab("availability")}>
+        <div className="cut-dock-tabs" role="tablist" aria-label="Dock">
+          <button
+            role="tab"
+            id="dock-tab-availability"
+            aria-controls="dock-panel"
+            aria-selected={dockTab === "availability"}
+            className={dockTab === "availability" ? "sel" : ""}
+            onClick={() => setDockTab("availability")}
+          >
             Availability
           </button>
-          <button role="tab" aria-selected={dockTab === "renders"} className={dockTab === "renders" ? "sel" : ""} onClick={() => setDockTab("renders")}>
+          <button
+            role="tab"
+            id="dock-tab-renders"
+            aria-controls="dock-panel"
+            aria-selected={dockTab === "renders"}
+            className={dockTab === "renders" ? "sel" : ""}
+            onClick={() => setDockTab("renders")}
+          >
             Renders
           </button>
         </div>
-        <div className="cut-dock-body">
+        <div
+          className="cut-dock-body"
+          role="tabpanel"
+          id="dock-panel"
+          aria-labelledby={dockTab === "availability" ? "dock-tab-availability" : "dock-tab-renders"}
+        >
           {dockTab === "availability" ? (
             <AvailabilityTimeline
               preflight={preflight}

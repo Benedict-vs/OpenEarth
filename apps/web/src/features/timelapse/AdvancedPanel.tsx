@@ -61,7 +61,7 @@ export function AdvancedPanel({
             options={[
               { value: "fill", label: "Fill", title: "Forward-fill from a clear day within 2 windows" },
               { value: "tint", label: "Tint", title: "Flag remaining holes with a colour (Survey)" },
-              { value: "show", label: "Show", title: "Leave holes transparent" },
+              { value: "show", label: "Show", title: "Show the composite as-is; unfilled holes stay transparent" },
             ]}
           />
         </label>

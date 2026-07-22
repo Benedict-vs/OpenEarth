@@ -88,7 +88,6 @@ export type GradeConfig = components["schemas"]["GradeIn"];
 export type ExtrasConfig = components["schemas"]["ExtrasIn"];
 export type PreflightRequest = components["schemas"]["PreflightRequest"];
 export type Preflight = components["schemas"]["PreflightOut"];
-export type PreflightWindow = components["schemas"]["PreflightWindowOut"];
 
 /**
  * The parsed `manifest.json` a finished render carries (Phase-10 manifest v2).

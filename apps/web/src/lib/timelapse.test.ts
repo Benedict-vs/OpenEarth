@@ -97,6 +97,20 @@ describe("buildTimelapseRequest", () => {
     expect(req.grade?.curve).toBe("cinematic");
   });
 
+  it("sanitizes display-only knobs for scientific products (honesty wall)", () => {
+    const showcase = PRESETS.find((p) => p.id === "showcase")!;
+    const form = { ...defaultForm(), ...showcase.patch }; // gap-fill + deflicker + cinematic grade
+    const req = buildTimelapseRequest(form, roi, { productIsRgb: false });
+    expect(req.gap_fill).toBe(false);
+    expect(req.deflicker).toBe(false);
+    expect(req.grade).toBeNull();
+    expect(req.cloud_display).toBe("composite");
+    expect(req.preset).toBeNull(); // a pixel-modifying preset label is dropped too
+    // composite + fallback are EE-side, not display-only — they pass through.
+    expect(req.composite).toBe("clearest");
+    expect(req.fallback_source).toBe(true);
+  });
+
   it("duration-first omits fps and sends duration_s (XOR)", () => {
     const req = buildTimelapseRequest({ ...defaultForm(), authoringMode: "duration", durationS: 10 }, roi);
     expect("fps" in req).toBe(false);

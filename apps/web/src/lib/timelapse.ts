@@ -8,7 +8,7 @@ import type {
   TimelapseRequest,
 } from "../api/types";
 import type { TimelapseForm } from "../stores/timelapseStore";
-import { activePreset } from "./presets";
+import { activePreset, presetModifiesPixels } from "./presets";
 
 // ── Frame transport (drives the rAF player; no DOM here) ──────
 
@@ -136,11 +136,20 @@ function compileStep(form: TimelapseForm) {
 export function buildTimelapseRequest(
   form: TimelapseForm,
   roi: RoiIn,
-  opts: { draft?: boolean } = {},
+  opts: { draft?: boolean; productIsRgb?: boolean } = {},
 ): TimelapseRequest {
   const maxDim = form.format === "gif" ? Math.min(form.maxDim, GIF_MAX_DIM) : form.maxDim;
-  const cloud = compileCloud(form);
+  // The honesty wall: display-only knobs (fill/tint, deflicker, non-natural grade)
+  // are refused on scientific products server-side. Sanitize them at this single
+  // choke point so stale form state — e.g. an RGB preset left on after switching to
+  // a scientific product — can never reach the API and 422. The UI's disabling of
+  // these controls backstops this; it does not replace it.
+  const displayOk = opts.productIsRgb ?? true;
+  const cloud = displayOk ? compileCloud(form) : { gap_fill: false, cloud_display: "composite" };
+  const deflicker = displayOk && form.deflicker;
+  const grade = displayOk ? compileGrade(form) : null;
   const preset = activePreset(form);
+  const presetId = displayOk || (preset !== null && !presetModifiesPixels(preset)) ? (preset?.id ?? null) : null;
 
   // Everything except the pacing field: frame-first sends `fps`, duration-first
   // sends `duration_s` and MUST omit `fps` — the API rejects a body carrying both
@@ -164,12 +173,12 @@ export function buildTimelapseRequest(
     vis_min: form.visMin,
     vis_max: form.visMax,
     // ── Phase 10 production knobs ──
-    preset: preset?.id ?? null,
+    preset: presetId,
     composite: form.composite,
     cloud_display: cloud.cloud_display,
     gap_fill: cloud.gap_fill,
-    deflicker: form.deflicker,
-    grade: compileGrade(form),
+    deflicker,
+    grade,
     fallback_source: form.fallback,
     draft: opts.draft ?? false,
     extras: compileExtras(form),

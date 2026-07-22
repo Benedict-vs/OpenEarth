@@ -54,10 +54,18 @@ export function ProgramMonitor({
   const [fps, setFps] = useState(6);
   const [loop, setLoop] = useState(true);
 
+  // Key the frame list on primitives, not the `player` object identity: the
+  // parent passes a fresh `player={...}` literal on every render, so depending on
+  // it would reset the transport (index → 0, full re-preload) whenever an
+  // unrelated state change re-renders the page mid-playback.
+  const playerRenderId = player?.renderId;
+  const playerFrameCount = player?.frameCount;
   const frames = useMemo(
     () =>
-      player ? Array.from({ length: player.frameCount }, (_, i) => frameUrl(player.renderId, i)) : [],
-    [player],
+      playerRenderId && playerFrameCount
+        ? Array.from({ length: playerFrameCount }, (_, i) => frameUrl(playerRenderId, i))
+        : [],
+    [playerRenderId, playerFrameCount],
   );
 
   const draw = useCallback((_index: number, img: HTMLImageElement) => {
