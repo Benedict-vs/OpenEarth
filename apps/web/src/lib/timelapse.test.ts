@@ -112,7 +112,10 @@ describe("buildTimelapseRequest", () => {
   });
 
   it("duration-first omits fps and sends duration_s (XOR)", () => {
-    const req = buildTimelapseRequest({ ...defaultForm(), authoringMode: "duration", durationS: 10 }, roi);
+    const req = buildTimelapseRequest(
+      { ...defaultForm(), authoringMode: "duration", durationS: 10 },
+      roi,
+    );
     expect("fps" in req).toBe(false);
     expect(req.duration_s).toBe(10);
   });
@@ -184,9 +187,30 @@ describe("pacing (mirrors plan_fps)", () => {
       empty_count: 0,
       native_max_dim: 445,
       windows: [
-        { start: "2024-01-01", end: "2024-01-31", label: "Jan", scene_count: 2, mean_cloud: null, source: "s2" },
-        { start: "2024-02-01", end: "2024-02-28", label: "Feb", scene_count: 4, mean_cloud: null, source: "s2" },
-        { start: "2024-03-01", end: "2024-03-31", label: "Mar", scene_count: 1, mean_cloud: null, source: "s2" },
+        {
+          start: "2024-01-01",
+          end: "2024-01-31",
+          label: "Jan",
+          scene_count: 2,
+          mean_cloud: null,
+          source: "s2",
+        },
+        {
+          start: "2024-02-01",
+          end: "2024-02-28",
+          label: "Feb",
+          scene_count: 4,
+          mean_cloud: null,
+          source: "s2",
+        },
+        {
+          start: "2024-03-01",
+          end: "2024-03-31",
+          label: "Mar",
+          scene_count: 1,
+          mean_cloud: null,
+          source: "s2",
+        },
       ],
     };
     expect(middleWindow(preflight)).toEqual({ start: "2024-02-01", end: "2024-02-28" });

@@ -116,7 +116,11 @@ export function ProgramMonitor({
             </div>
             <span className="cut-tc mono">{errored ? "error" : `${pctDone}%`}</span>
             {run.status === "running" && onStopRun ? (
-              <button className="mini" title="Stop render — completed frames are kept" onClick={onStopRun}>
+              <button
+                className="mini"
+                title="Stop render — completed frames are kept"
+                onClick={onStopRun}
+              >
                 Stop
               </button>
             ) : null}
@@ -147,18 +151,29 @@ export function ProgramMonitor({
               <span className={`cut-badge src-${kind}`} title="Where this frame's pixels came from">
                 SRC <b>{(qc.source ?? "—").toUpperCase()}</b>
               </span>
-              <span className="cut-badge" title="Share of the frame that is measured satellite pixels">
+              <span
+                className="cut-badge"
+                title="Share of the frame that is measured satellite pixels"
+              >
                 MEASURED <b>{pct(qc.valid)}</b>
               </span>
               {qc.filled != null && qc.filled > 0 ? (
-                <span className="cut-badge fill" title="Share borrowed from a clear day within 2 windows">
+                <span
+                  className="cut-badge fill"
+                  title="Share borrowed from a clear day within 2 windows"
+                >
                   BORROWED <b>{pct(qc.filled)}</b>
                 </span>
               ) : null}
             </div>
           ) : null}
           <div className="cut-transport">
-            <button className="cut-play" onClick={t.toggle} disabled={!t.ready} aria-label={t.playing ? "Pause" : "Play"}>
+            <button
+              className="cut-play"
+              onClick={t.toggle}
+              disabled={!t.ready}
+              aria-label={t.playing ? "Pause" : "Play"}
+            >
               {t.playing ? "❚❚" : "▶"}
             </button>
             <input
@@ -180,10 +195,17 @@ export function ProgramMonitor({
         <div className="cut-monitor-opts">
           <label className="cut-opt">
             fps <b className="mono">{fps}</b>
-            <input type="range" min={1} max={30} value={fps} onChange={(e) => setFps(Number(e.target.value))} />
+            <input
+              type="range"
+              min={1}
+              max={30}
+              value={fps}
+              onChange={(e) => setFps(Number(e.target.value))}
+            />
           </label>
           <label className="cut-opt check">
-            <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} /> Loop
+            <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />{" "}
+            Loop
           </label>
           <div className="cut-monitor-actions">
             {onExportPlate ? (
@@ -196,7 +218,12 @@ export function ProgramMonitor({
                 {plateBusy ? "Composing…" : "◫ Plate"}
               </button>
             ) : null}
-            <a className="mini" href={downloadUrl(player.renderId)} download title="Download the encoded movie">
+            <a
+              className="mini"
+              href={downloadUrl(player.renderId)}
+              download
+              title="Download the encoded movie"
+            >
               ↓ Movie
             </a>
           </div>
@@ -242,7 +269,9 @@ export function ProgramMonitor({
             </button>
           ) : null}
           {!canPreview ? (
-            <p className="cut-idle-note muted">Pick a region — availability loads, then a preview can be minted.</p>
+            <p className="cut-idle-note muted">
+              Pick a region — availability loads, then a preview can be minted.
+            </p>
           ) : null}
           {previewError ? <p className="error-text">{previewError}</p> : null}
         </div>

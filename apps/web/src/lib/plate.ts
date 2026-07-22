@@ -43,7 +43,10 @@ function roiCenter(roi: RoiIn): { lat: number; lon: number } {
   const ring = roi.coordinates as [number, number][];
   const lons = ring.map(([lon]) => lon);
   const lats = ring.map(([, lat]) => lat);
-  return { lat: (Math.min(...lats) + Math.max(...lats)) / 2, lon: (Math.min(...lons) + Math.max(...lons)) / 2 };
+  return {
+    lat: (Math.min(...lats) + Math.max(...lats)) / 2,
+    lon: (Math.min(...lons) + Math.max(...lons)) / 2,
+  };
 }
 
 /** Pure extraction of everything the plate needs from a finished render. */
@@ -140,14 +143,32 @@ export async function buildPlate(input: PlateInput): Promise<Blob> {
   for (let y = 48; y < H; y += 48) line(ctx, 0, y, W, y);
 
   // ── Cartouche ──
-  text(ctx, input.title || `${input.dataset} · ${input.product}`, PAD, 78, { font: `600 34px ${SERIF}`, color: INK });
-  text(ctx, `${fmtCoord(input.centerLat, input.centerLon)} — ${input.start} to ${input.end}`, PAD, 108, {
-    font: `13px ${MONO}`,
-    color: MUTED,
+  text(ctx, input.title || `${input.dataset} · ${input.product}`, PAD, 78, {
+    font: `600 34px ${SERIF}`,
+    color: INK,
   });
-  const stamp = ["OPENEARTH ATLAS", `${input.dataset.toUpperCase()} · ${input.product.toUpperCase()}`, `PLATE ${input.frameNumber} OF ${input.frameCount}`];
+  text(
+    ctx,
+    `${fmtCoord(input.centerLat, input.centerLon)} — ${input.start} to ${input.end}`,
+    PAD,
+    108,
+    {
+      font: `13px ${MONO}`,
+      color: MUTED,
+    },
+  );
+  const stamp = [
+    "OPENEARTH ATLAS",
+    `${input.dataset.toUpperCase()} · ${input.product.toUpperCase()}`,
+    `PLATE ${input.frameNumber} OF ${input.frameCount}`,
+  ];
   stamp.forEach((s, i) =>
-    text(ctx, s, W - PAD, 66 + i * 18, { font: `11px ${SANS}`, color: BRASS, align: "right", letter: 1.5 }),
+    text(ctx, s, W - PAD, 66 + i * 18, {
+      font: `11px ${SANS}`,
+      color: BRASS,
+      align: "right",
+      letter: 1.5,
+    }),
   );
   rule(ctx, PAD, 132, W - PAD);
 
@@ -166,11 +187,17 @@ export async function buildPlate(input: PlateInput): Promise<Blob> {
     font: `12px ${SERIF}`,
     color: INK,
   });
-  text(ctx, `frame ${input.frameNumber} / ${input.frameCount}`, figX + figW - inset, figY + figH - 12, {
-    font: `11px ${MONO}`,
-    color: MUTED,
-    align: "right",
-  });
+  text(
+    ctx,
+    `frame ${input.frameNumber} / ${input.frameCount}`,
+    figX + figW - inset,
+    figY + figH - 12,
+    {
+      font: `11px ${MONO}`,
+      color: MUTED,
+      align: "right",
+    },
+  );
 
   // ── Data sheet ──
   const dsX = figX + figW + 40;
@@ -178,7 +205,8 @@ export async function buildPlate(input: PlateInput): Promise<Blob> {
   let y = figY + 6;
   text(ctx, "DATA SHEET · THIS PLATE", dsX, y, { font: `11px ${SANS}`, color: MUTED, letter: 1.6 });
   y += 20;
-  const blank = input.measured == null ? null : Math.max(0, 1 - input.measured - (input.borrowed ?? 0));
+  const blank =
+    input.measured == null ? null : Math.max(0, 1 - input.measured - (input.borrowed ?? 0));
   const rows: Array<[string, string, string | undefined]> = [
     ["Source", (input.source ?? "—").toUpperCase(), undefined],
     ["Composite", input.composite, undefined],
@@ -200,7 +228,11 @@ export async function buildPlate(input: PlateInput): Promise<Blob> {
   y += 20;
   const cov: Array<[string, string, string | undefined]> = [
     ["Frames with data", `${input.renderedCount} / ${input.windowCount}`, undefined],
-    ["Stepped to fallback", String(input.fallbackCount), input.fallbackCount > 0 ? BRASS : undefined],
+    [
+      "Stepped to fallback",
+      String(input.fallbackCount),
+      input.fallbackCount > 0 ? BRASS : undefined,
+    ],
     ["Blank windows", String(input.blankCount), input.blankCount > 0 ? SURVEY : undefined],
   ];
   for (const [k, v, c] of cov) y = dataRow(ctx, dsX, y, dsW, k, v, c);
@@ -217,7 +249,11 @@ export async function buildPlate(input: PlateInput): Promise<Blob> {
     font: `12px ${SANS}`,
     color: MUTED,
   });
-  text(ctx, "Compiled with OpenEarth", W - PAD, H - 40, { font: `12px ${SANS}`, color: MUTED, align: "right" });
+  text(ctx, "Compiled with OpenEarth", W - PAD, H - 40, {
+    font: `12px ${SANS}`,
+    color: MUTED,
+    align: "right",
+  });
 
   return await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"),
@@ -278,7 +314,11 @@ function dataRow(
   valueColor?: string,
 ): number {
   text(ctx, key, x, y + 14, { font: `13px ${SANS}`, color: MUTED });
-  text(ctx, value, x + w, y + 14, { font: `13px ${MONO}`, color: valueColor ?? INK, align: "right" });
+  text(ctx, value, x + w, y + 14, {
+    font: `13px ${MONO}`,
+    color: valueColor ?? INK,
+    align: "right",
+  });
   ctx.strokeStyle = RULE;
   ctx.setLineDash([1, 3]);
   line(ctx, x, y + 24.5, x + w, y + 24.5);

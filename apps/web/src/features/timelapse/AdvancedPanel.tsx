@@ -24,7 +24,11 @@ export function AdvancedPanel({
   const effectiveDim = Math.min(form.maxDim, MAX_DIM_CAP);
   const upscaled = nativeMaxDim != null && effectiveDim > nativeMaxDim;
   const toggleCrop = (crop: CropRatio) =>
-    setForm({ crops: form.crops.includes(crop) ? form.crops.filter((c) => c !== crop) : [...form.crops, crop] });
+    setForm({
+      crops: form.crops.includes(crop)
+        ? form.crops.filter((c) => c !== crop)
+        : [...form.crops, crop],
+    });
 
   return (
     <details className="cut-adv">
@@ -45,8 +49,16 @@ export function AdvancedPanel({
             onChange={(composite) => setForm({ composite })}
             options={[
               { value: "mean", label: "Mean", title: "Average all scenes in the window" },
-              { value: "median", label: "Median", title: "Per-pixel median — rejects cloud outliers" },
-              { value: "clearest", label: "Clearest", title: "The least-cloudy observation per pixel" },
+              {
+                value: "median",
+                label: "Median",
+                title: "Per-pixel median — rejects cloud outliers",
+              },
+              {
+                value: "clearest",
+                label: "Clearest",
+                title: "The least-cloudy observation per pixel",
+              },
             ]}
           />
         </label>
@@ -59,9 +71,21 @@ export function AdvancedPanel({
             disabled={!productIsRgb}
             onChange={(cloudMode) => setForm({ cloudMode })}
             options={[
-              { value: "fill", label: "Fill", title: "Forward-fill from a clear day within 2 windows" },
-              { value: "tint", label: "Tint", title: "Flag remaining holes with a colour (Survey)" },
-              { value: "show", label: "Show", title: "Show the composite as-is; unfilled holes stay transparent" },
+              {
+                value: "fill",
+                label: "Fill",
+                title: "Forward-fill from a clear day within 2 windows",
+              },
+              {
+                value: "tint",
+                label: "Tint",
+                title: "Flag remaining holes with a colour (Survey)",
+              },
+              {
+                value: "show",
+                label: "Show",
+                title: "Show the composite as-is; unfilled holes stay transparent",
+              },
             ]}
           />
         </label>
@@ -98,7 +122,11 @@ export function AdvancedPanel({
             value={form.fallback ? "on" : "off"}
             onChange={(v) => setForm({ fallback: v === "on" })}
             options={[
-              { value: "on", label: "HLS 30 m", title: "Step down to HLS when the window is empty" },
+              {
+                value: "on",
+                label: "HLS 30 m",
+                title: "Step down to HLS when the window is empty",
+              },
               { value: "off", label: "Off" },
             ]}
           />
@@ -144,15 +172,27 @@ export function AdvancedPanel({
         <fieldset className="cut-annot">
           <legend>Annotations</legend>
           <label>
-            <input type="checkbox" checked={form.dateLabel} onChange={(e) => setForm({ dateLabel: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={form.dateLabel}
+              onChange={(e) => setForm({ dateLabel: e.target.checked })}
+            />
             Date label
           </label>
           <label>
-            <input type="checkbox" checked={form.colorbar} onChange={(e) => setForm({ colorbar: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={form.colorbar}
+              onChange={(e) => setForm({ colorbar: e.target.checked })}
+            />
             Colorbar
           </label>
           <label>
-            <input type="checkbox" checked={form.scaleBar} onChange={(e) => setForm({ scaleBar: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={form.scaleBar}
+              onChange={(e) => setForm({ scaleBar: e.target.checked })}
+            />
             Scale bar
           </label>
         </fieldset>

@@ -11,7 +11,13 @@ import {
   useRenderDetail,
   usePreflight,
 } from "../../api/timelapseQueries";
-import type { Render, RenderDetail, RoiIn, ThumbnailRequest, TimelapseRequest } from "../../api/types";
+import type {
+  Render,
+  RenderDetail,
+  RoiIn,
+  ThumbnailRequest,
+  TimelapseRequest,
+} from "../../api/types";
 import { parseManifest } from "../../lib/manifest";
 import { buildPlate, downloadBlob, plateInputFromDetail } from "../../lib/plate";
 import {
@@ -143,9 +149,17 @@ export function TimelapsePage() {
     revokePreview();
     setPreview(null);
     setActiveRenderId(null);
-    setRun({ jobId: job_id, renderId: render_id, status: "running", done: 0, total: 0, message: "Queued" });
+    setRun({
+      jobId: job_id,
+      renderId: render_id,
+      status: "running",
+      done: 0,
+      total: 0,
+      message: "Queued",
+    });
     subscribeJob(job_id, {
-      onProgress: (d) => setRun((r) => (r ? { ...r, done: d.done, total: d.total, message: d.message } : r)),
+      onProgress: (d) =>
+        setRun((r) => (r ? { ...r, done: d.done, total: d.total, message: d.message } : r)),
       onDone: () => {
         setRun((r) => (r ? { ...r, status: "done" } : r));
         setActiveRenderId(render_id);
@@ -162,7 +176,10 @@ export function TimelapsePage() {
     setSubmitting(true); // synchronous — closes the double-click window before the POST
     try {
       await runJob(
-        buildTimelapseRequest({ ...form, datasetId: dataset.id, productKey }, roi, { draft, productIsRgb }),
+        buildTimelapseRequest({ ...form, datasetId: dataset.id, productKey }, roi, {
+          draft,
+          productIsRgb,
+        }),
       );
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : String(err));
@@ -199,7 +216,10 @@ export function TimelapsePage() {
     try {
       const input = plateInputFromDetail(detail, frameIndex, stillUrl(detail.id, frameIndex));
       if (!input) throw new Error("This render has no manifest to build a plate from.");
-      downloadBlob(await buildPlate(input), `${detail.dataset}_${detail.product}_plate_${frameIndex + 1}.png`);
+      downloadBlob(
+        await buildPlate(input),
+        `${detail.dataset}_${detail.product}_plate_${frameIndex + 1}.png`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -230,14 +250,22 @@ export function TimelapsePage() {
           ))}
         </div>
         <span className="cut-clip mono">{clipLabel}</span>
-        <button className="mini cut-new" onClick={clearMonitor} title="Clear the monitor for a new clip">
+        <button
+          className="mini cut-new"
+          onClick={clearMonitor}
+          title="Clear the monitor for a new clip"
+        >
           ＋ New
         </button>
       </header>
 
       <div className="cut-monitor-wrap">
         <ProgramMonitor
-          player={activeRenderId && activeDetail.data?.frame_count ? { renderId: activeRenderId, frameCount: activeDetail.data.frame_count, manifest } : null}
+          player={
+            activeRenderId && activeDetail.data?.frame_count
+              ? { renderId: activeRenderId, frameCount: activeDetail.data.frame_count, manifest }
+              : null
+          }
           run={run}
           onStopRun={() => {
             if (run) void cancelJob(run.jobId);
@@ -294,17 +322,29 @@ export function TimelapsePage() {
           className="cut-dock-body"
           role="tabpanel"
           id="dock-panel"
-          aria-labelledby={dockTab === "availability" ? "dock-tab-availability" : "dock-tab-renders"}
+          aria-labelledby={
+            dockTab === "availability" ? "dock-tab-availability" : "dock-tab-renders"
+          }
         >
           {dockTab === "availability" ? (
             <AvailabilityTimeline
               preflight={preflight}
               loading={preflightQ.isFetching}
-              error={preflightQ.error instanceof ApiError ? preflightQ.error.detail : preflightQ.error ? String(preflightQ.error) : null}
+              error={
+                preflightQ.error instanceof ApiError
+                  ? preflightQ.error.detail
+                  : preflightQ.error
+                    ? String(preflightQ.error)
+                    : null
+              }
               primary={form.datasetId}
             />
           ) : (
-            <RenderGallery activeId={activeRenderId} onSelect={selectRender} onRenderFinal={renderFinal} />
+            <RenderGallery
+              activeId={activeRenderId}
+              onSelect={selectRender}
+              onRenderFinal={renderFinal}
+            />
           )}
         </div>
       </section>

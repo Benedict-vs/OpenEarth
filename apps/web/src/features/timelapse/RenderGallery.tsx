@@ -91,12 +91,20 @@ export function RenderGallery({
 
             <div className="render-actions">
               {r.draft && playable ? (
-                <button className="mini primary" title="Re-render at full settings" onClick={() => onRenderFinal(r.id)}>
+                <button
+                  className="mini primary"
+                  title="Re-render at full settings"
+                  onClick={() => onRenderFinal(r.id)}
+                >
                   Render final
                 </button>
               ) : null}
               {playable ? (
-                <button className="mini" title="Play this render's frames on the Explore map" onClick={() => playOnMap(r)}>
+                <button
+                  className="mini"
+                  title="Play this render's frames on the Explore map"
+                  onClick={() => playOnMap(r)}
+                >
                   ▶ Map
                 </button>
               ) : null}
@@ -106,16 +114,32 @@ export function RenderGallery({
                 </a>
               ) : null}
               {r.crops?.map((crop) => (
-                <a key={crop} className="mini" href={downloadUrl(r.id, crop)} download title={`Download the ${crop} crop`}>
+                <a
+                  key={crop}
+                  className="mini"
+                  href={downloadUrl(r.id, crop)}
+                  download
+                  title={`Download the ${crop} crop`}
+                >
                   {crop}
                 </a>
               ))}
               {playable ? (
-                <a className="mini" href={stillUrl(r.id, midFrame(r))} download title="Download a full-res still">
+                <a
+                  className="mini"
+                  href={stillUrl(r.id, midFrame(r))}
+                  download
+                  title="Download a full-res still"
+                >
                   Still
                 </a>
               ) : null}
-              <button className="mini" aria-label={`Rename ${r.title}`} title="Rename" onClick={() => promptRename(r)}>
+              <button
+                className="mini"
+                aria-label={`Rename ${r.title}`}
+                title="Rename"
+                onClick={() => promptRename(r)}
+              >
                 ✎
               </button>
               {confirmId === r.id ? (

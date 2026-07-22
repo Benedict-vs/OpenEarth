@@ -58,7 +58,10 @@ function clampFps(fps: number): number {
  * [1, 30]. `nWindows` is the total window count (the server plans on windows,
  * not the post-empty frame count).
  */
-export function planFps(nWindows: number, form: Pick<TimelapseForm, "authoringMode" | "fps" | "durationS">): number {
+export function planFps(
+  nWindows: number,
+  form: Pick<TimelapseForm, "authoringMode" | "fps" | "durationS">,
+): number {
   if (form.authoringMode === "duration" && form.durationS > 0) {
     return clampFps(nWindows / form.durationS);
   }
@@ -149,7 +152,8 @@ export function buildTimelapseRequest(
   const deflicker = displayOk && form.deflicker;
   const grade = displayOk ? compileGrade(form) : null;
   const preset = activePreset(form);
-  const presetId = displayOk || (preset !== null && !presetModifiesPixels(preset)) ? (preset?.id ?? null) : null;
+  const presetId =
+    displayOk || (preset !== null && !presetModifiesPixels(preset)) ? (preset?.id ?? null) : null;
 
   // Everything except the pacing field: frame-first sends `fps`, duration-first
   // sends `duration_s` and MUST omit `fps` — the API rejects a body carrying both

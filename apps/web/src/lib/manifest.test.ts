@@ -13,17 +13,58 @@ function manifest(): TimelapseManifest {
     composite: "clearest",
     post: { gap_fill: true, fallback_source: "hls" },
     frames: [
-      { index: 0, start: "2024-01-01", end: "2024-01-31", label: "Jan", status: "rendered", source: "s2", valid_fraction: 1.0, filled_fraction: 0 },
-      { index: 1, start: "2024-02-01", end: "2024-02-29", label: "Feb", status: "rendered", source: "s2", valid_fraction: 0.9, filled_fraction: 0.05 },
-      { index: null, start: "2024-03-01", end: "2024-03-31", label: "Mar", status: "empty", source: null, valid_fraction: null, filled_fraction: null },
-      { index: 2, start: "2024-04-01", end: "2024-04-30", label: "Apr", status: "rendered", source: "hls", valid_fraction: 0.8, filled_fraction: 0.1 },
+      {
+        index: 0,
+        start: "2024-01-01",
+        end: "2024-01-31",
+        label: "Jan",
+        status: "rendered",
+        source: "s2",
+        valid_fraction: 1.0,
+        filled_fraction: 0,
+      },
+      {
+        index: 1,
+        start: "2024-02-01",
+        end: "2024-02-29",
+        label: "Feb",
+        status: "rendered",
+        source: "s2",
+        valid_fraction: 0.9,
+        filled_fraction: 0.05,
+      },
+      {
+        index: null,
+        start: "2024-03-01",
+        end: "2024-03-31",
+        label: "Mar",
+        status: "empty",
+        source: null,
+        valid_fraction: null,
+        filled_fraction: null,
+      },
+      {
+        index: 2,
+        start: "2024-04-01",
+        end: "2024-04-30",
+        label: "Apr",
+        status: "rendered",
+        source: "hls",
+        valid_fraction: 0.8,
+        filled_fraction: 0.1,
+      },
     ],
   };
 }
 
 describe("manifest readers", () => {
   it("looks up per-frame QC by dense movie index", () => {
-    expect(frameQc(manifest(), 1)).toEqual({ source: "s2", valid: 0.9, filled: 0.05, label: "Feb" });
+    expect(frameQc(manifest(), 1)).toEqual({
+      source: "s2",
+      valid: 0.9,
+      filled: 0.05,
+      label: "Feb",
+    });
     expect(frameQc(manifest(), 99)).toBeNull();
     expect(frameQc(null, 0)).toBeNull();
   });

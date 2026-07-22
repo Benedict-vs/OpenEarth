@@ -23,7 +23,8 @@ interface Props {
 
 /** The Cut inspector: the authoring stack, top-to-bottom, with a sticky run row. */
 export function Inspector(props: Props) {
-  const { datasets, products, productKey, productIsRgb, aois, roiPresets, roi, pacing, running } = props;
+  const { datasets, products, productKey, productIsRgb, aois, roiPresets, roi, pacing, running } =
+    props;
   const form = useTimelapseStore((s) => s.form);
   const setForm = useTimelapseStore((s) => s.setForm);
   const active = activePreset(form);
@@ -50,7 +51,9 @@ export function Inspector(props: Props) {
               ))}
             </select>
           </label>
-          {!roi ? <p className="cut-note warn">No region — draw an ROI in Explore or pick one above.</p> : null}
+          {!roi ? (
+            <p className="cut-note warn">No region — draw an ROI in Explore or pick one above.</p>
+          ) : null}
           <div className="cut-field-row">
             <label className="cut-field">
               <span>Dataset</span>
@@ -109,14 +112,19 @@ export function Inspector(props: Props) {
                   onChange={(e) => setForm({ intervalDays: Number(e.target.value) })}
                 />
               </label>
-              <label className="cut-num" title="Days of scenes averaged into each frame (defaults to the interval)">
+              <label
+                className="cut-num"
+                title="Days of scenes averaged into each frame (defaults to the interval)"
+              >
                 Window (days)
                 <input
                   type="number"
                   min={1}
                   placeholder="= interval"
                   value={form.windowDays ?? ""}
-                  onChange={(e) => setForm({ windowDays: e.target.value ? Number(e.target.value) : null })}
+                  onChange={(e) =>
+                    setForm({ windowDays: e.target.value ? Number(e.target.value) : null })
+                  }
                 />
               </label>
             </div>
@@ -135,7 +143,9 @@ export function Inspector(props: Props) {
                   className="cut-preset"
                   aria-pressed={active?.id === p.id}
                   disabled={blocked}
-                  title={blocked ? "Needs an RGB product — this look grades or fills pixels" : p.tagline}
+                  title={
+                    blocked ? "Needs an RGB product — this look grades or fills pixels" : p.tagline
+                  }
                   onClick={() => setForm(p.patch)}
                 >
                   <span className="cut-preset-head">
@@ -275,9 +285,19 @@ export function Inspector(props: Props) {
         {/* ── Frame data (honesty recap of the current recipe) ── */}
         <Section title="Frame data" hint="honesty">
           <FrameDataRow k="Composite" v={form.composite} highlight />
-          <FrameDataRow k="Cloud gaps" v={productIsRgb ? cloudLabel(form.cloudMode) : "Gaps shown"} />
-          <FrameDataRow k="Deflicker" v={productIsRgb && form.deflicker ? "Anchored ±20%" : "Off"} />
-          <FrameDataRow k="Fallback" v={form.fallback ? "HLS 30 m on empty" : "Off"} highlight={form.fallback} />
+          <FrameDataRow
+            k="Cloud gaps"
+            v={productIsRgb ? cloudLabel(form.cloudMode) : "Gaps shown"}
+          />
+          <FrameDataRow
+            k="Deflicker"
+            v={productIsRgb && form.deflicker ? "Anchored ±20%" : "Off"}
+          />
+          <FrameDataRow
+            k="Fallback"
+            v={form.fallback ? "HLS 30 m on empty" : "Off"}
+            highlight={form.fallback}
+          />
           <FrameDataRow
             k="Resolution"
             v={
@@ -319,7 +339,15 @@ export function Inspector(props: Props) {
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Section({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="cut-insec">
       <div className="cut-insec-head">

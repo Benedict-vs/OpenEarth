@@ -21,7 +21,9 @@ export function AvailabilityTimeline({ preflight, loading, error, primary }: Pro
   if (!preflight) {
     return (
       <p className="cut-strip-msg muted" role="status" aria-live="polite">
-        {loading ? "Checking availability…" : "Pick a region, product, and period to see availability."}
+        {loading
+          ? "Checking availability…"
+          : "Pick a region, product, and period to see availability."}
       </p>
     );
   }
