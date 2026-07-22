@@ -1,17 +1,19 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ApiError } from "../../api/client";
+import { ApiError, apiGet } from "../../api/client";
 import { useAois, useCatalog, usePresets } from "../../api/queries";
 import { subscribeJob } from "../../api/sse";
 import {
   cancelJob,
   fetchPreview,
+  stillUrl,
   submitTimelapse,
   useRenderDetail,
   usePreflight,
 } from "../../api/timelapseQueries";
-import type { Render, RoiIn, ThumbnailRequest } from "../../api/types";
+import type { Render, RenderDetail, RoiIn, ThumbnailRequest, TimelapseRequest } from "../../api/types";
 import { parseManifest } from "../../lib/manifest";
+import { buildPlate, downloadBlob, plateInputFromDetail } from "../../lib/plate";
 import {
   buildPreflightRequest,
   buildTimelapseRequest,
@@ -124,29 +126,64 @@ export function TimelapsePage() {
     }
   };
 
+  // The single submit path both the form and "Render final" flow through.
+  const runJob = async (body: TimelapseRequest) => {
+    const { job_id, render_id } = await submitTimelapse(body);
+    revokePreview();
+    setPreview(null);
+    setActiveRenderId(null);
+    setRun({ jobId: job_id, renderId: render_id, status: "running", done: 0, total: 0, message: "Queued" });
+    subscribeJob(job_id, {
+      onProgress: (d) => setRun((r) => (r ? { ...r, done: d.done, total: d.total, message: d.message } : r)),
+      onDone: () => {
+        setRun((r) => (r ? { ...r, status: "done" } : r));
+        setActiveRenderId(render_id);
+        setDockTab("renders");
+        void qc.invalidateQueries({ queryKey: ["timelapse", "renders"] });
+      },
+      onError: (d) => setRun((r) => (r ? { ...r, status: "error", detail: d.detail } : r)),
+    });
+  };
+
   const submit = async (draft: boolean) => {
     if (!roi || !productKey || !dataset) return;
     setError(null);
-    const body = buildTimelapseRequest({ ...form, datasetId: dataset.id, productKey }, roi, { draft });
     try {
-      const { job_id, render_id } = await submitTimelapse(body);
-      revokePreview();
-      setPreview(null);
-      setActiveRenderId(null);
-      setRun({ jobId: job_id, renderId: render_id, status: "running", done: 0, total: 0, message: "Queued" });
-      subscribeJob(job_id, {
-        onProgress: (d) => setRun((r) => (r ? { ...r, done: d.done, total: d.total, message: d.message } : r)),
-        onDone: () => {
-          setRun((r) => (r ? { ...r, status: "done" } : r));
-          setActiveRenderId(render_id);
-          setDockTab("renders");
-          void qc.invalidateQueries({ queryKey: ["timelapse", "renders"] });
-        },
-        onError: (d) => setRun((r) => (r ? { ...r, status: "error", detail: d.detail } : r)),
-      });
+      await runJob(buildTimelapseRequest({ ...form, datasetId: dataset.id, productKey }, roi, { draft }));
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : String(err));
       setRun(null);
+    }
+  };
+
+  // Re-render a draft at its intended full settings (draft off).
+  const renderFinal = async (renderId: string) => {
+    setError(null);
+    try {
+      const detail = await apiGet<RenderDetail>(`/api/timelapse/${renderId}`);
+      const body = { ...(detail.params as unknown as TimelapseRequest), draft: false };
+      if (body.duration_s != null) delete (body as { fps?: number }).fps; // keep duration XOR fps
+      await runJob(body);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : String(err));
+      setRun(null);
+    }
+  };
+
+  const [plateBusy, setPlateBusy] = useState(false);
+  const exportPlate = async (frameIndex: number) => {
+    const detail = activeDetail.data;
+    if (!detail) return;
+    setPlateBusy(true);
+    setError(null);
+    try {
+      const input = plateInputFromDetail(detail, frameIndex, stillUrl(detail.id, frameIndex));
+      if (!input) throw new Error("This render has no manifest to build a plate from.");
+      downloadBlob(await buildPlate(input), `${detail.dataset}_${detail.product}_plate_${frameIndex + 1}.png`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPlateBusy(false);
     }
   };
 
@@ -190,6 +227,8 @@ export function TimelapsePage() {
           previewing={previewing}
           previewError={previewError}
           canPreview={canPreview}
+          onExportPlate={exportPlate}
+          plateBusy={plateBusy}
         />
       </div>
 
@@ -226,7 +265,7 @@ export function TimelapsePage() {
               primary={form.datasetId}
             />
           ) : (
-            <RenderGallery activeId={activeRenderId} onSelect={selectRender} />
+            <RenderGallery activeId={activeRenderId} onSelect={selectRender} onRenderFinal={renderFinal} />
           )}
         </div>
       </section>

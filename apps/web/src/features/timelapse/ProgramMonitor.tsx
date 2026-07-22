@@ -27,6 +27,9 @@ interface Props {
   previewing?: boolean;
   previewError?: string | null;
   canPreview?: boolean;
+  /** Export the currently-shown frame as a citable provenance plate (PNG). */
+  onExportPlate?: (frameIndex: number) => void;
+  plateBusy?: boolean;
 }
 
 /**
@@ -44,6 +47,8 @@ export function ProgramMonitor({
   previewing,
   previewError,
   canPreview,
+  onExportPlate,
+  plateBusy,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fps, setFps] = useState(6);
@@ -172,9 +177,21 @@ export function ProgramMonitor({
           <label className="cut-opt check">
             <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} /> Loop
           </label>
-          <a className="mini" href={downloadUrl(player.renderId)} download title="Download the encoded movie">
-            ↓ Movie
-          </a>
+          <div className="cut-monitor-actions">
+            {onExportPlate ? (
+              <button
+                className="mini"
+                onClick={() => onExportPlate(t.index)}
+                disabled={plateBusy}
+                title="Export this frame + its provenance as a citable plate (PNG)"
+              >
+                {plateBusy ? "Composing…" : "◫ Plate"}
+              </button>
+            ) : null}
+            <a className="mini" href={downloadUrl(player.renderId)} download title="Download the encoded movie">
+              ↓ Movie
+            </a>
+          </div>
         </div>
       </div>
     );

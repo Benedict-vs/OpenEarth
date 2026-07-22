@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { frameUrl, useDeleteRender, useRenameRender, useRenders } from "../../api/timelapseQueries";
+import {
+  downloadUrl,
+  frameUrl,
+  stillUrl,
+  useDeleteRender,
+  useRenameRender,
+  useRenders,
+} from "../../api/timelapseQueries";
 import type { Render } from "../../api/types";
 import { usePlaybackStore } from "../../stores/playbackStore";
 import { useUiStore } from "../../stores/uiStore";
@@ -9,18 +16,19 @@ function isPlayable(r: Render): boolean {
   return (r.status === "succeeded" || r.status === "cancelled") && !!r.frame_count;
 }
 
-/** Poster = the middle rendered frame (a representative mid-sequence still). */
-function posterUrl(r: Render): string | null {
-  if (!isPlayable(r) || !r.frame_count) return null;
-  return frameUrl(r.id, Math.floor(r.frame_count / 2));
+/** Middle rendered frame index — a representative mid-sequence still. */
+function midFrame(r: Render): number {
+  return Math.floor((r.frame_count ?? 1) / 2);
 }
 
 export function RenderGallery({
   activeId,
   onSelect,
+  onRenderFinal,
 }: {
   activeId: string | null;
   onSelect: (render: Render) => void;
+  onRenderFinal: (renderId: string) => void;
 }) {
   const { data: renders } = useRenders();
   const del = useDeleteRender();
@@ -47,63 +55,73 @@ export function RenderGallery({
   return (
     <ul className="render-gallery">
       {renders.map((r) => {
-        const poster = posterUrl(r);
+        const playable = isPlayable(r);
+        const poster = playable ? frameUrl(r.id, midFrame(r)) : null;
+        const statusLabel = r.status === "cancelled" && r.frame_count ? "partial" : r.status;
         return (
-          <li
-            key={r.id}
-            className={activeId === r.id ? "render-card active" : "render-card"}
-            onClick={() => isPlayable(r) && onSelect(r)}
-          >
-            <div className="render-poster">
+          <li key={r.id} className={activeId === r.id ? "render-card active" : "render-card"}>
+            <button
+              type="button"
+              className="render-poster"
+              disabled={!playable}
+              aria-label={`Open ${r.title}`}
+              onClick={() => playable && onSelect(r)}
+            >
               {poster ? (
-                <img src={poster} alt={r.title} loading="lazy" />
+                <img src={poster} alt="" width={320} height={200} loading="lazy" />
               ) : (
-                <div className={`render-placeholder ${r.status}`}>
+                <span className={`render-placeholder ${r.status}`}>
                   {r.status === "running" ? "rendering…" : r.status}
-                </div>
+                </span>
               )}
-              <span className={`status-chip ${r.status}`}>
-                {r.status === "cancelled" && r.frame_count ? "partial" : r.status}
-              </span>
-            </div>
+              <span className={`status-chip ${r.status}`}>{statusLabel}</span>
+              {r.draft ? <span className="draft-chip">Draft</span> : null}
+            </button>
+
             <div className="render-meta">
               <span className="render-title" title={r.title}>
                 {r.title}
               </span>
               <span className="render-sub">
                 {r.status === "cancelled" && r.frame_count
-                  ? `Partial — ${r.frame_count} frames`
+                  ? `Partial · ${r.frame_count} frames`
                   : `${r.format.toUpperCase()}${r.frame_count != null ? ` · ${r.frame_count} frames` : ""}`}
               </span>
             </div>
+
             <div className="render-actions">
-              {isPlayable(r) ? (
-                <button
-                  className="mini"
-                  title="Play this render's frames on the Explore map"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    playOnMap(r);
-                  }}
-                >
-                  ▶ Play on map
+              {r.draft && playable ? (
+                <button className="mini primary" title="Re-render at full settings" onClick={() => onRenderFinal(r.id)}>
+                  Render final
                 </button>
               ) : null}
-              <button
-                className="mini"
-                title="Rename render"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  promptRename(r);
-                }}
-              >
+              {playable ? (
+                <button className="mini" title="Play this render's frames on the Explore map" onClick={() => playOnMap(r)}>
+                  ▶ Map
+                </button>
+              ) : null}
+              {playable ? (
+                <a className="mini" href={downloadUrl(r.id)} download title="Download the movie">
+                  Movie
+                </a>
+              ) : null}
+              {r.crops?.map((crop) => (
+                <a key={crop} className="mini" href={downloadUrl(r.id, crop)} download title={`Download the ${crop} crop`}>
+                  {crop}
+                </a>
+              ))}
+              {playable ? (
+                <a className="mini" href={stillUrl(r.id, midFrame(r))} download title="Download a full-res still">
+                  Still
+                </a>
+              ) : null}
+              <button className="mini" aria-label={`Rename ${r.title}`} title="Rename" onClick={() => promptRename(r)}>
                 ✎
               </button>
               {confirmId === r.id ? (
                 <button
                   className="mini danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  onClick={() => {
                     del.mutate(r.id);
                     setConfirmId(null);
                   }}
@@ -113,12 +131,10 @@ export function RenderGallery({
               ) : (
                 <button
                   className="mini"
+                  aria-label={`Delete ${r.title}`}
                   disabled={r.status === "running"}
-                  title={r.status === "running" ? "Cannot delete while rendering" : "Delete render"}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setConfirmId(r.id);
-                  }}
+                  title={r.status === "running" ? "Cannot delete while rendering" : "Delete"}
+                  onClick={() => setConfirmId(r.id)}
                 >
                   ✕
                 </button>
