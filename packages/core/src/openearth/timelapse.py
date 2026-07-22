@@ -501,6 +501,10 @@ class FrameManifest:
     # reducer and the post-processing settings that produced this render.
     composite: CompositeMode = "mean"
     post: dict[str, Any] = field(default_factory=dict)
+    # The region's native sensor limit (longest edge, px) at render time. Renders
+    # may exceed it since the decision-9 reversal (upscaling allowed); recording
+    # it here keeps the "render 1080 px · native 445 px" honesty readout possible.
+    native_max_dim: int | None = None
 
     @property
     def frame_paths(self) -> list[Path]:
@@ -547,6 +551,7 @@ class FrameManifest:
             "cancelled": self.cancelled,
             "composite": self.composite,
             "post": self.post,
+            "native_max_dim": self.native_max_dim,
             "frames": frames,
         }
 
@@ -678,6 +683,7 @@ def render_frames(
     composite_mode: CompositeMode = "mean",
     post: PostOptions | None = None,
     fallback_source: str | None = None,
+    native_max_dim: int | None = None,
     fetch: FetchFn = _fetch_bytes,
     on_progress: Callable[[int, int], None] | None = None,
     on_frame: Callable[[int | None, FrameStatus, int], None] | None = None,
@@ -698,7 +704,8 @@ def render_frames(
     _or_None, status, total)`` fires per completed window with its movie index
     (``None`` when skipped) for live previews. The manifest records per-frame
     ``source``/``valid_fraction``/``filled_fraction`` and the ``composite``/``post``
-    settings (hard rule 3) whatever mode runs.
+    settings (hard rule 3) whatever mode runs; *native_max_dim* (the region's
+    sensor limit, computed by the caller) is stored for the upscale readout.
 
     Back-compat (hard rule 2): with the defaults (mean, no post, no fallback) the
     frame builder annotates in the concurrent stage and the consumer ``os.replace``s
@@ -905,6 +912,7 @@ def render_frames(
         cancelled=cancelled,
         composite=composite_mode,
         post=post_manifest,
+        native_max_dim=native_max_dim,
     )
     _write_manifest(out_dir / "manifest.json", manifest)
     return manifest

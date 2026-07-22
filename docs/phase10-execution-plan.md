@@ -149,6 +149,13 @@ lands with its `make gen` diff in the same commit.
    drawn ROI's native limit before submit. Gated on the Stage 0 spike; if EE refuses 4K thumbs,
    the ceiling stays 1920 this phase (computePixels assembly recorded as the Phase 11+ path)
    and the schema cap is NOT raised — decide from evidence, not hope.
+   > **REVERSED 2026-07-22 (acceptance review, Benedict's call).** The native lock made the
+   > canonical Richmond Park render *worse* than a pre-Phase-10 render of the same data: the
+   > old path let EE upscale the 10 m data smoothly to 1080 px, the locked path served 445 px
+   > and the default encode softened it further. Same measured data — the lock only lowered
+   > display quality. The clamp is removed (`min(request, 3840)`), and the honesty moves to a
+   > readout instead of a cap: the manifest records `native_max_dim`, the Studio labels
+   > anything past it "(native N px, upscaled)", and the plate prints both numbers.
 10. **Draft mode is the same job, smaller.** `draft=true` forces max_dim 480/mp4/no extras,
     marks the render row (params_json), and the gallery offers "Render final" prefilled. No
     second pipeline.

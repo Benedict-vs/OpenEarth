@@ -126,12 +126,15 @@ class _RenderPlan:
     extras: ExtrasIn
 
 
-def _compile_plan(req: TimelapseRequest, bbox: BBox, n_windows: int) -> _RenderPlan:
+def _compile_plan(req: TimelapseRequest, n_windows: int) -> _RenderPlan:
     draft = req.draft
     fmt = "mp4" if draft else req.format  # draft is always a quick mp4 (decision 10)
-    # Native-locked resolution (decision 9): min(request, native GSD ceiling, 4K).
+    # Decision 9 REVERSED (2026-07-22 acceptance review): the native clamp is gone —
+    # EE's getThumbURL upscales the native data smoothly and the larger frame plus a
+    # decent encode simply looks better. Honesty moved to the manifest's
+    # native_max_dim ("render 1080 px · native 445 px"), not to a hard cap.
     requested_dim = min(req.max_dim, DRAFT_MAX_DIM) if draft else req.max_dim
-    max_dim = min(requested_dim, native_max_dim(bbox, req.dataset), MAX_DIM_4K)
+    max_dim = min(requested_dim, MAX_DIM_4K)
     if fmt == "gif":
         max_dim = min(max_dim, MAX_DIM_GIF)
     return _RenderPlan(
@@ -216,7 +219,8 @@ async def submit_timelapse(
     product_is_rgb = get_product(req.dataset, req.product).is_rgb
     post = _build_post_options(req, product_is_rgb)  # 422 on the honesty wall
     fallback = "hls" if req.fallback_source else None
-    plan = _compile_plan(req, bbox, len(windows))
+    plan = _compile_plan(req, len(windows))
+    native_dim = native_max_dim(bbox, req.dataset)
 
     # The GIF cap is on the *post-smoothing* frame count — tween inserts
     # (n-1)*tween cross-fades that all live in RAM at encode time.
@@ -265,6 +269,7 @@ async def submit_timelapse(
                 composite_mode=req.composite,
                 post=post,
                 fallback_source=fallback,
+                native_max_dim=native_dim,
                 on_progress=lambda done, total: ctx.progress(done, total, f"frame {done}/{total}"),
                 on_frame=lambda index, status, total: ctx.publish(
                     "frame", {"index": index, "status": status, "total": total}

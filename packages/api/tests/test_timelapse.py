@@ -347,6 +347,27 @@ def test_max_dim_4k_cap(client: TestClient, timelapse_ready: None) -> None:
     assert _submit(client, dataset="s2", product="RGB", max_dim=3840)["status"] == 200
 
 
+def test_render_upscales_past_native_and_forwards_the_limit(
+    client: TestClient, timelapse_ready: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decision-9 reversal: the request dimension is no longer clamped to the
+    sensor's native resolution; the native limit rides along to the manifest."""
+    captured: dict[str, Any] = {}
+    fake = svc.render_frames  # the timelapse_ready fixture's fake
+
+    def spy(dataset: str, product: str, roi: object, windows: object, **kw: Any) -> Any:
+        captured.update(kw)
+        return fake(dataset, product, roi, windows, **kw)
+
+    monkeypatch.setattr(svc, "render_frames", spy)
+    out = _submit(client, dataset="s2", product="RGB", max_dim=3840)
+    assert out["status"] == 200, out
+    _wait_status(client, out["json"]["job_id"], "succeeded")
+    # This ROI's native S2 limit is ~2226 px — the 3840 request rides through.
+    assert captured["max_dim"] == 3840
+    assert 2000 < captured["native_max_dim"] < 2400
+
+
 def test_crop_enum_rejected(client: TestClient, timelapse_ready: None) -> None:
     assert _submit(client, dataset="s2", product="RGB", extras={"crops": ["4:3"]})["status"] == 422
 

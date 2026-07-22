@@ -424,10 +424,31 @@ def test_manifest_v2_records_honesty_surfaces_even_for_legacy(
     assert m["composite"] == "mean"
     assert m["post"]["gap_fill"] is False
     assert m["post"]["fallback_source"] is None
+    assert m["native_max_dim"] is None  # not supplied → null, v1-compatible
     for f in m["frames"]:
         assert f["source"] == "s2"
         assert f["valid_fraction"] == 1.0  # opaque frames
         assert f["filled_fraction"] == 0.0
+
+
+def test_manifest_records_native_max_dim_when_supplied(fake_ee: None, tmp_path: Path) -> None:
+    """Upscale honesty (decision-9 reversal): the sensor limit rides the manifest."""
+    render_frames(
+        "s2",
+        "RGB",
+        BBOX,
+        _windows(2),
+        out_dir=tmp_path,
+        max_dim=24,
+        even_dims=True,
+        vis_min=0.0,
+        vis_max=0.3,
+        annotations=AnnotationOptions(),
+        native_max_dim=445,
+        fetch=lambda url: _png_bytes(24, 24, (10, 20, 30)),
+    )
+    m = json.loads((tmp_path / "manifest.json").read_text())
+    assert m["native_max_dim"] == 445
 
 
 def test_gap_fill_fills_a_transparent_window(fake_ee: None, tmp_path: Path) -> None:
