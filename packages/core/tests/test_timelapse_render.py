@@ -484,6 +484,56 @@ def test_gap_fill_fills_a_transparent_window(fake_ee: None, tmp_path: Path) -> N
     assert manifest.results[1].valid_fraction == 0.0  # pre-fill honesty surface
 
 
+def test_gap_fill_blends_the_borrowed_seam_in_the_render_path(
+    fake_ee: None, tmp_path: Path
+) -> None:
+    """Fix D end-to-end: a partial hole is filled AND exposure-matched/feathered."""
+    import numpy as np
+
+    windows = _windows(2)
+    hole_start = windows[1].start.isoformat()
+
+    def _frame_png(arr: np.ndarray) -> bytes:
+        buf = io.BytesIO()
+        Image.fromarray(arr).save(buf, format="PNG")
+        return buf.getvalue()
+
+    full = np.zeros((64, 64, 4), dtype=np.uint8)
+    full[..., :3] = 100
+    full[..., 3] = 255
+    partial = np.zeros((64, 64, 4), dtype=np.uint8)
+    partial[:, :32, :3] = 140
+    partial[:, :32, 3] = 255  # left half measured brighter; right half a hole
+
+    def fetch(url: str) -> bytes:
+        start = url.rsplit("/", 1)[1]
+        return _frame_png(partial if start == hole_start else full)
+
+    manifest = render_frames(
+        "s2",
+        "RGB",
+        BBOX,
+        windows,
+        out_dir=tmp_path,
+        max_dim=64,
+        even_dims=True,
+        vis_min=0.0,
+        vis_max=0.3,
+        annotations=AnnotationOptions(),
+        post=PostOptions(gap_fill=True),
+        fetch=fetch,
+    )
+    assert manifest.results[1].filled_fraction == pytest.approx(0.5)
+    with Image.open(manifest.frame_paths[1]) as im:
+        # Deep in the borrowed half: the pasted 100 was gain-matched toward the
+        # measured 140 and clamped at +15 % → 115, not a hard 100 paste.
+        assert im.getpixel((60, 8))[0] == 115
+        # Measured half is untouched.
+        assert im.getpixel((8, 8))[0] == 140
+    m = json.loads((tmp_path / "manifest.json").read_text())
+    assert m["post"]["seam_blend"] is True
+
+
 def test_source_ladder_steps_down_to_fallback_on_empty(
     fake_ee: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

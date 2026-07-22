@@ -42,6 +42,7 @@ from openearth.timelapse_post import (
     NonDisplayFrameError,
     apply_gain,
     apply_lut,
+    blend_fill_seams,
     deflicker_gains,
     frame_luminance,
     grade,
@@ -457,6 +458,9 @@ class PostOptions:
         return {
             "gap_fill": self.gap_fill,
             "gap_fill_cap_windows": FILL_CAP_WINDOWS if self.gap_fill else None,
+            # Fix D rides with gap-fill: borrowed regions are exposure-matched and
+            # feathered (in-mask only — provenance untouched).
+            "seam_blend": self.gap_fill,
             "deflicker_strength": self.deflicker_strength,
             "grade": None
             if grade is None
@@ -901,6 +905,8 @@ def render_frames(
                     if filler is not None:
                         arr, fill = filler.push(arr)  # forward-fill in window order
                         filled_fraction = fill.filled_fraction
+                        if fill.mask is not None:  # fix D: dissolve the paste seam
+                            arr = blend_fill_seams(arr, fill.mask, product_is_rgb=product_is_rgb)
                     if second_pass:
                         filled_staging = out_dir / f".filled_{dense:04d}.png"
                         _save_rgba(arr, filled_staging)

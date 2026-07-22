@@ -18,10 +18,11 @@ runs (hard rule 3).
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
+from scipy import ndimage
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -30,6 +31,18 @@ if TYPE_CHECKING:
 FILL_CAP_WINDOWS = 2  # a hole inherits a valid pixel at most this many windows old
 MAX_DEFLICKER_GAIN = 0.20  # ± clamp on the per-frame luminance gain
 DEFLICKER_REFERENCE_WINDOW = 5  # centred rolling-median window (frames) for the anchor
+
+# ── Seam blending (acceptance-pass fix D: gap-fill outlines) ──────
+# A borrowed region comes from a different date/exposure than the measured
+# pixels around it, so a hard paste shows an outline. Blending is confined to
+# the borrowed pixels: measured pixels are NEVER altered, and the fill mask /
+# filled_fraction stay exactly truthful (the honesty wall's provenance rule).
+SEAM_FEATHER_FRAC = 0.015  # feather width as a fraction of the longest frame edge
+SEAM_FEATHER_MIN_PX = 3
+SEAM_FEATHER_MAX_PX = 24
+SEAM_GAIN_CLAMP = 0.15  # ± clamp on the per-channel borrowed-region exposure gain
+SEAM_RING_PX = 4  # ring width (px) sampled either side of the seam for the gain
+SEAM_MIN_RING_PIXELS = 64  # thinner rings are noise — skip the gain, keep the feather
 
 # ── Sequence exposure (acceptance-pass fix C: snow/highlight blowout) ──
 # Windows sampled (evenly spaced, first/last always included) to estimate one
@@ -108,6 +121,10 @@ class FrameFill:
 
     filled_fraction: float  # share of the frame filled from an earlier observation
     max_staleness: int  # oldest fill used, in windows (0 when nothing was filled)
+    # The exact borrowed-pixel mask (True where this frame inherited a value) —
+    # the provenance record seam blending is confined to. Excluded from equality
+    # (array comparison is ambiguous); None when nothing was filled.
+    mask: NDArray[np.bool_] | None = field(default=None, compare=False, repr=False)
 
 
 class ForwardFiller:
@@ -150,8 +167,83 @@ class ForwardFiller:
         out[..., 3] = np.where(fillable, np.uint8(255), frame[..., 3])
 
         filled_fraction = float(np.count_nonzero(fillable) / fillable.size)
-        max_staleness = int(self._age[fillable].max()) if fillable.any() else 0
-        return out, FrameFill(filled_fraction, max_staleness)
+        filled_any = bool(fillable.any())
+        max_staleness = int(self._age[fillable].max()) if filled_any else 0
+        return out, FrameFill(filled_fraction, max_staleness, fillable if filled_any else None)
+
+
+def blend_fill_seams(
+    frame: NDArray[np.uint8],
+    fill_mask: NDArray[np.bool_],
+    *,
+    product_is_rgb: bool,
+) -> NDArray[np.uint8]:
+    """Make a forward-filled frame's borrowed regions sit seamlessly (fix D).
+
+    Two steps, both confined to the borrowed pixels (*fill_mask*), so measured
+    pixels are never altered and the recorded fill provenance stays exact:
+
+    1. **Boundary exposure match** — the borrowed content comes from an earlier
+       date, so its dominant artifact is a uniform exposure/colour offset. A
+       per-channel gain is estimated from median levels in :data:`SEAM_RING_PX`-
+       wide rings either side of the seam, clamped to ±:data:`SEAM_GAIN_CLAMP`,
+       and applied to every borrowed pixel. Skipped when either ring is thinner
+       than :data:`SEAM_MIN_RING_PIXELS` (noise).
+    2. **One-sided distance feather** — borrowed pixels within the feather width
+       of the seam blend toward their *nearest measured pixel's* colour, weight
+       falling from the seam inward. The hard outline dissolves; the measured
+       side of the boundary is untouched.
+
+    Heavier machinery (Laplacian/multiband blending, histogram matching) is
+    deliberately rejected: halo risk and hue shifts for no gain over what is,
+    physically, an exposure offset. Survey mode's tint remains the fully
+    explicit alternative display for gaps.
+    """
+    _require_display(product_is_rgb)
+    frame = _as_rgba(frame)
+    if fill_mask.shape != frame.shape[:2]:
+        raise ValueError(f"fill mask {fill_mask.shape} does not match frame {frame.shape[:2]}")
+    measured = (frame[..., 3] > 0) & ~fill_mask
+    if not fill_mask.any() or not measured.any():
+        return frame.copy()
+
+    out = frame.copy()
+    rgb = out[..., :3].astype(np.float32)
+
+    # 1. Boundary exposure match (clamped per-channel gain on the borrowed side).
+    near_measured = ndimage.binary_dilation(measured, iterations=SEAM_RING_PX)
+    near_fill = ndimage.binary_dilation(fill_mask, iterations=SEAM_RING_PX)
+    measured_ring = measured & near_fill
+    borrowed_ring = fill_mask & near_measured
+    if (
+        int(measured_ring.sum()) >= SEAM_MIN_RING_PIXELS
+        and int(borrowed_ring.sum()) >= SEAM_MIN_RING_PIXELS
+    ):
+        for channel in range(3):
+            target = float(np.median(rgb[measured_ring, channel]))
+            source = float(np.median(rgb[borrowed_ring, channel]))
+            gain = np.clip(target / max(source, 1.0), 1.0 - SEAM_GAIN_CLAMP, 1.0 + SEAM_GAIN_CLAMP)
+            rgb[fill_mask, channel] *= gain
+
+    # 2. One-sided feather toward the nearest measured pixel's colour.
+    feather_px = int(
+        np.clip(
+            round(SEAM_FEATHER_FRAC * max(frame.shape[0], frame.shape[1])),
+            SEAM_FEATHER_MIN_PX,
+            SEAM_FEATHER_MAX_PX,
+        )
+    )
+    dist, (iy, ix) = ndimage.distance_transform_edt(~measured, return_indices=True)
+    ramp = fill_mask & (dist < feather_px)
+    if ramp.any():
+        w = (dist[ramp] / feather_px).astype(np.float32)[:, None]
+        nearest = rgb[iy[ramp], ix[ramp], :]
+        rgb[ramp] = w * rgb[ramp] + (1.0 - w) * nearest
+
+    out[..., :3] = np.clip(np.round(rgb), 0, 255).astype(np.uint8)
+    # Measured pixels are bit-identical by construction (only in-mask writes).
+    out[..., :3][measured] = frame[..., :3][measured]
+    return out
 
 
 def forward_fill(

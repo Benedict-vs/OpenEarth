@@ -21,6 +21,7 @@ from openearth.timelapse_post import (
     NonDisplayFrameError,
     apply_gain,
     apply_lut,
+    blend_fill_seams,
     deflicker,
     deflicker_gains,
     forward_fill,
@@ -106,6 +107,77 @@ def test_forward_filler_streaming_matches_whole_sequence() -> None:
         out, info = filler.push(frame)
         np.testing.assert_array_equal(out, whole[i])
         assert info == whole_fills[i]
+
+
+# ── Seam blending (acceptance fix D) ─────────────────────────────
+
+
+def _half_filled_pair(measured_level: int, borrowed_level: int) -> tuple[np.ndarray, np.ndarray]:
+    """A 64×64 filled frame: left half measured at *measured_level*, right half
+    borrowed at *borrowed_level* — plus the exact fill mask."""
+    frame = np.zeros((64, 64, 4), dtype=np.uint8)
+    frame[:, :32, :3] = measured_level
+    frame[:, 32:, :3] = borrowed_level
+    frame[..., 3] = 255
+    mask = np.zeros((64, 64), dtype=bool)
+    mask[:, 32:] = True
+    return frame, mask
+
+
+def test_seam_blend_exposure_matches_borrowed_region() -> None:
+    frame, mask = _half_filled_pair(measured_level=120, borrowed_level=100)
+    out = blend_fill_seams(frame, mask, product_is_rgb=True)
+    # Measured pixels are bit-identical.
+    np.testing.assert_array_equal(out[:, :32], frame[:, :32])
+    # Deep in the borrowed region (beyond the feather) the clamped gain applies:
+    # 120/100 = 1.2 → clamped to 1.15 → 115.
+    assert int(out[32, 60, 0]) == 115
+    # Alpha and the fill mask are untouched (provenance intact).
+    np.testing.assert_array_equal(out[..., 3], frame[..., 3])
+
+
+def test_seam_blend_feathers_toward_the_measured_boundary() -> None:
+    frame, mask = _half_filled_pair(measured_level=120, borrowed_level=100)
+    out = blend_fill_seams(frame, mask, product_is_rgb=True)
+    # Feather width for a 64-px frame clamps to the 3-px minimum: the borrowed
+    # pixel touching the seam is pulled strongly toward the measured colour,
+    # decaying monotonically to the gained value inside.
+    seam_vals = [int(out[32, 32 + d, 0]) for d in range(4)]
+    assert seam_vals[0] > seam_vals[1] > seam_vals[2] >= seam_vals[3] == 115
+    assert seam_vals[0] > 116  # visibly closer to the measured 120 than the paste
+
+
+def test_seam_blend_gain_clamp_is_respected_downward() -> None:
+    frame, mask = _half_filled_pair(measured_level=100, borrowed_level=200)
+    out = blend_fill_seams(frame, mask, product_is_rgb=True)
+    # 100/200 = 0.5 → clamped to 0.85 → 170.
+    assert int(out[32, 60, 0]) == 170
+
+
+def test_seam_blend_no_measured_pixels_is_a_no_op() -> None:
+    frame = np.full((16, 16, 4), 90, dtype=np.uint8)
+    mask = np.ones((16, 16), dtype=bool)  # everything borrowed → nothing to match
+    out = blend_fill_seams(frame, mask, product_is_rgb=True)
+    np.testing.assert_array_equal(out, frame)
+
+
+def test_seam_blend_empty_mask_is_a_no_op_and_guards_display() -> None:
+    frame = np.full((8, 8, 4), 50, dtype=np.uint8)
+    empty = np.zeros((8, 8), dtype=bool)
+    np.testing.assert_array_equal(blend_fill_seams(frame, empty, product_is_rgb=True), frame)
+    with pytest.raises(NonDisplayFrameError):
+        blend_fill_seams(frame, empty, product_is_rgb=False)
+    with pytest.raises(ValueError, match="mask"):
+        blend_fill_seams(frame, np.zeros((4, 4), dtype=bool), product_is_rgb=True)
+
+
+def test_forward_fill_exposes_the_fill_mask() -> None:
+    f0 = np.array([[[10, 10, 10, 255], [0, 0, 0, 0]]], dtype=np.uint8)
+    f1 = np.array([[[0, 0, 0, 0], [0, 0, 0, 0]]], dtype=np.uint8)
+    _, fills = forward_fill([f0, f1], product_is_rgb=True)
+    assert fills[0].mask is None  # nothing borrowed in frame 0
+    assert fills[1].mask is not None
+    np.testing.assert_array_equal(fills[1].mask, np.array([[True, False]]))
 
 
 # ── Deflicker (decision 4) ───────────────────────────────────────
