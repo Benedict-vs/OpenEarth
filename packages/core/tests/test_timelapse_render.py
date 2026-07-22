@@ -371,9 +371,21 @@ def test_all_empty_windows_do_not_trip_the_breaker(
 # ── Phase 10: back-compat (hard rule 2) + manifest v2 honesty surfaces ──
 
 
-def test_legacy_defaults_render_byte_identical_output(fake_ee: None, tmp_path: Path) -> None:
+def _pixel_hash(path: Path) -> str:
+    """sha256 over the decoded pixels (+ size), not the PNG container.
+
+    PNG file bytes vary with the platform's zlib (the macOS and manylinux Pillow
+    wheels compress differently), so the golden pins what actually matters — the
+    rendered pixels, which Pillow produces deterministically across platforms."""
+    with Image.open(path) as im:
+        rgb = im.convert("RGB")
+        payload = f"{rgb.size}".encode() + rgb.tobytes()
+    return hashlib.sha256(payload).hexdigest()[:24]
+
+
+def test_legacy_defaults_render_pixel_identical_output(fake_ee: None, tmp_path: Path) -> None:
     """A legacy request (mean, no post, no fallback) must reproduce the exact frame
-    bytes captured from the pre-Phase-10 render_frames — pinned golden hashes."""
+    pixels captured from the pre-Phase-10 render_frames — pinned golden hashes."""
     windows = _windows(4)
 
     def fetch(url: str) -> bytes:
@@ -394,12 +406,12 @@ def test_legacy_defaults_render_byte_identical_output(fake_ee: None, tmp_path: P
         fetch=fetch,
     )
     golden = [
-        "6ee1e6416410add50ce8c11b",
-        "2bbb65f58819561893758978",
-        "4b79f1c3044f2bfb5544f1c3",
-        "7535b88e8cc13bc69fc1a21c",
+        "9842627c26a1530c06c6a2ae",
+        "62a1a31b2f03631a84792d57",
+        "d1a392002905bee94a45cd96",
+        "7316345e6cfee885c52bdb02",
     ]
-    got = [hashlib.sha256(p.read_bytes()).hexdigest()[:24] for p in manifest.frame_paths]
+    got = [_pixel_hash(p) for p in manifest.frame_paths]
     assert got == golden
     assert (manifest.width, manifest.height) == (40, 40)
 
