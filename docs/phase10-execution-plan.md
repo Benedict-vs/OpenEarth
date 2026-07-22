@@ -285,3 +285,49 @@ on-screen copy).
 - **Reference-selection ladder** — Phase 11 (was "Phase 10" pre-renumbering; memory updated).
 - **HLS/Landsat in Compare recipes (DNBR etc.)** — the sources land generically browsable;
   recipe-level cross-source products are the fusion backlog item.
+
+---
+
+## Stage 0 findings (2026-07-22, live EE — project openearth-488015)
+
+Run: `uv run python scripts/spike_4k_thumb.py` and `scripts/spike_hls_scaling.py`.
+
+### 4K thumb spike → **DECISION: raise `max_dim` cap 1920 → 3840 (native-locked)**
+
+`getThumbURL` served both frames over the Richmond Park bbox (S2 RGB, mean over
+2023-06→08) with no refusal:
+
+| dimensions | latency | bytes | payload |
+|---|---|---|---|
+| 1920×1080 (control) | 21.6 s | 619,495 (0.62 MB) | valid PNG |
+| 3840×2160 (4K) | 25.0 s | 1,056,052 (1.06 MB) | valid PNG |
+
+4K cost only ~+3.4 s and ~+0.44 MB over 1920 — latency is dominated by the
+composite reduction, not pixel count. The endpoint has ample headroom, so
+**decision 9 proceeds: the schema `max_dim` cap rises to 3840**, with the
+effective dimension still `min(request, native_px(roi, gsd), 3840)` so nothing
+upscales past native GSD. computePixels 4K assembly stays parked (not needed).
+
+### HLS scaling spike → **DECISION: GEE HLS is pre-scaled float reflectance — provider does NOT re-scale**
+
+Both `NASA/HLS/HLSL30/v002` and `NASA/HLS/HLSS30/v002` deliver reflectance bands
+already as physical floats in ~[0, 1] (with small negatives from atmospheric
+correction), NOT raw DN — despite each band carrying a `B*_scale=0.0001` metadata
+property. Applying that scale would wash every HLS frame to black.
+
+- L30 (Landsat 8/9) mean reflectance over the Permian window: B4=0.232, B3=0.163,
+  B2=0.107 (min −0.048, max 0.64). S30 (Sentinel-2) mosaic: B4=0.231, B3=0.158,
+  B2=0.104, B8A=0.330 — identical magnitude convention.
+- **GEE band names (unpadded, confirm the plan):** RGB = **B4/B3/B2** on both.
+  - L30 bands: `B1 B2 B3 B4 B5 B6 B7 B9 B10 B11 Fmask SZA SAA VZA VAA` — **no B8/B12**;
+    NIR-narrow = **B5**; SWIR = B6/B7; B10/B11 are thermal (scale 0.01, Kelvin, unused).
+  - S30 bands: `B1 B2 B3 B4 B5 B6 B7 B8 B8A B9 B10 B11 B12 Fmask …`; NIR-narrow = **B8A**,
+    NIR-broad = B8; SWIR = B11/B12.
+  - **`Fmask` is an integer bit-packed QA band** (sampled 64–240): the S30 mosaic
+    showed bits 4–7 set (snow/water + aerosol-level) exactly as documented — cloud
+    mask = bits 1|2|3.
+- **Provider consequence (Stage 1):** `providers/hls.py` selects bands directly as
+  reflectance (no `.divide(1e4)`), masks on `Fmask` bits 1|2|3, and renames
+  per-sensor NIR (L30 B5 / S30 B8A) to a canonical name before merging S30+L30 so
+  NDVI/NDWI band math is source-uniform. Landsat C2 L2 (Stage 1) is the separate
+  case that DOES need the `×0.0000275 − 0.2` SR scale (verified in the plan header).
