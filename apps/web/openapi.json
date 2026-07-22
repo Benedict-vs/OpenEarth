@@ -2125,6 +2125,17 @@
       },
       "PreflightWindowOut": {
         "properties": {
+          "advisory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advisory"
+          },
           "end": {
             "format": "date",
             "title": "End",

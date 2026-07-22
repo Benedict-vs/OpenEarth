@@ -484,6 +484,62 @@ def test_preflight_source_ladder_fills_empty_span(
     assert body["empty_count"] == 0
 
 
+class _FakeMetadata:
+    """Stands in for the ee.Dictionary scene_metadata returns."""
+
+    def __init__(self, payload: dict[str, list[str]]) -> None:
+        self.payload = payload
+
+    def getInfo(self) -> dict[str, list[str]]:
+        return self.payload
+
+
+def test_preflight_flags_thin_slc_off_landsat_windows(
+    client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 1–2 scene post-2003 Landsat window that is all SLC-off L7 carries an
+    advisory; a pre-2003 window never pays for the metadata probe."""
+    app.dependency_overrides[ensure_ee] = lambda: None
+    import openearth.providers as providers
+    import openearth.providers.landsat as landsat
+
+    monkeypatch.setattr(
+        providers, "get_collection", lambda product, roi, start, end, source: _FakeColl(1)
+    )
+    probed: list[str] = []
+
+    def fake_scene_metadata(roi: object, start: object, end: object) -> _FakeMetadata:
+        probed.append(str(start))
+        return _FakeMetadata({"spacecraft": ["LANDSAT_7"], "acquired": [f"{start}"]})
+
+    monkeypatch.setattr(landsat, "scene_metadata", fake_scene_metadata)
+
+    body = _preflight_body(
+        dataset="landsat",
+        dates={"start": "2001-06-01", "end": "2008-07-31"},
+        step={"mode": "interval", "interval_days": 365, "window_days": 15},
+    )
+    resp = client.post("/api/timelapse/preflight", json=body)
+    assert resp.status_code == 200, resp.text
+    windows = resp.json()["windows"]
+    # Pre-2003 windows: no probe, no advisory. Post-2003 L7-only: advisory fires.
+    pre = [w for w in windows if w["start"] < "2003-05-31"]
+    post = [w for w in windows if w["start"] > "2003-05-31"]
+    assert pre
+    assert post
+    assert all(w["advisory"] is None for w in pre)
+    assert all("wedge" in w["advisory"] for w in post)
+    assert all(p > "2003-05-31" for p in probed)  # cheap gate: probes only post-SLC windows
+
+
+def test_preflight_advisory_absent_for_non_landsat(
+    client: TestClient, preflight_ready: None
+) -> None:
+    resp = client.post("/api/timelapse/preflight", json=_preflight_body())
+    assert resp.status_code == 200, resp.text
+    assert all(w["advisory"] is None for w in resp.json()["windows"])
+
+
 def test_cancelled_partial_writes_partial_row(
     client: TestClient, timelapse_ready: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:

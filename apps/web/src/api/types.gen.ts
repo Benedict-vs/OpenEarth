@@ -1636,6 +1636,8 @@ export interface components {
     };
     /** PreflightWindowOut */
     PreflightWindowOut: {
+      /** Advisory */
+      advisory?: string | null;
       /**
        * End
        * Format: date

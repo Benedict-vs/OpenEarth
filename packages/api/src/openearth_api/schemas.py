@@ -786,6 +786,9 @@ class PreflightWindowOut(BaseModel):
     scene_count: int
     mean_cloud: float | None = None  # scene-level cloud %, where the source reports it
     source: str  # which ladder source supplied the count (primary or fallback)
+    # Data-quality warning for the window (currently only Landsat SLC-off wedge
+    # gaps: thin post-2003 windows whose only scenes are gap-striped Landsat-7).
+    advisory: str | None = None
 
 
 class PreflightOut(BaseModel):

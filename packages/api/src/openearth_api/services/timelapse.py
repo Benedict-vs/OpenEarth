@@ -58,7 +58,9 @@ if TYPE_CHECKING:
     import diskcache
     from sqlalchemy import Engine
 
+    from openearth.geometry import PolygonROI
     from openearth.settings import Settings
+    from openearth.timelapse import FrameWindow
     from openearth_api.jobs import JobContext, JobManager
 
 # A GIF holds every frame in RAM at encode time; cap the frame count so a long
@@ -305,6 +307,41 @@ def _dataset_has_product(dataset_id: str, key: str) -> bool:
         return False
 
 
+def _landsat_advisory(
+    dataset: str,
+    used: str,
+    count: int,
+    roi: BBox | PolygonROI,
+    window: FrameWindow,
+) -> str | None:
+    """SLC-off wedge warning for a thin Landsat window (best-effort).
+
+    Only windows that could actually be all-SLC-off pay for the metadata probe:
+    the primary Landsat source supplied 1–2 scenes and the window reaches past
+    the 2003 SLC failure. One aggregate ``getInfo``; any EE failure degrades to
+    "no advisory" — the probe must never break the availability strip.
+    """
+    from openearth.ee.client import ee_call
+    from openearth.providers.landsat import (
+        MIN_SLC_OFF_COMPOSITE_SCENES,
+        SLC_OFF_DATE,
+        advisory_from_metadata,
+        scene_metadata,
+    )
+
+    if dataset != "landsat" or used != "landsat":
+        return None
+    if count == 0 or count >= MIN_SLC_OFF_COMPOSITE_SCENES:
+        return None
+    if window.end <= SLC_OFF_DATE:
+        return None
+    try:
+        info = ee_call(scene_metadata(roi, window.start, window.end).getInfo)
+    except Exception:  # the advisory is a nicety — it must never 500 the strip
+        return None
+    return advisory_from_metadata(info)
+
+
 def preflight(req: PreflightRequest, cache: diskcache.Cache) -> PreflightOut:
     """Per-window availability strip (decision 11): scene counts + the native limit.
 
@@ -378,6 +415,7 @@ def preflight(req: PreflightRequest, cache: diskcache.Cache) -> PreflightOut:
                 scene_count=count,
                 mean_cloud=None,
                 source=used,
+                advisory=_landsat_advisory(req.dataset, used, count, roi, window),
             )
         )
 
