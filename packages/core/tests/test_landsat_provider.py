@@ -21,6 +21,7 @@ from openearth.providers.landsat import (
     MIN_SLC_OFF_COMPOSITE_SCENES,
     QA_PIXEL_CLOUD_BITS,
     SLC_OFF_DATE,
+    advisory_from_metadata,
     is_slc_off,
     slc_off_advisory,
 )
@@ -114,3 +115,36 @@ def test_slc_off_advisory_only_fires_on_thin_l7_only_windows() -> None:
     assert slc_off_advisory(["LE07", "LC08"], [late, l8]) is None
     # Pre-2003 L7 is intact (not SLC-off) → no advisory even alone.
     assert slc_off_advisory(["LE07"], [early]) is None
+
+
+def test_advisory_from_metadata_normalizes_the_ee_payload() -> None:
+    # The exact shape one getInfo on scene_metadata returns (verified live).
+    fires = advisory_from_metadata({"spacecraft": ["LANDSAT_7"], "acquired": ["2008-07-01"]})
+    assert fires is not None
+    assert "wedge" in fires
+    # A companion spacecraft in the window → composite fills, no advisory.
+    assert (
+        advisory_from_metadata(
+            {"spacecraft": ["LANDSAT_7", "LANDSAT_5"], "acquired": ["2008-07-01", "2008-07-03"]}
+        )
+        is None
+    )
+
+
+def test_advisory_from_metadata_drops_unknown_and_unparseable_scenes() -> None:
+    # Unknown spacecraft ids and bad dates are dropped, not guessed at: the one
+    # usable scene left is SLC-off L7 → advisory still fires.
+    assert (
+        advisory_from_metadata(
+            {
+                "spacecraft": ["LANDSAT_99", "LANDSAT_7", "LANDSAT_7"],
+                "acquired": ["2008-07-01", "not-a-date", "2008-07-05"],
+            }
+        )
+        is not None
+    )
+    # Nothing usable at all → silent.
+    only_unknown = {"spacecraft": ["LANDSAT_99"], "acquired": ["2008-07-01"]}
+    assert advisory_from_metadata(only_unknown) is None
+    assert advisory_from_metadata(None) is None
+    assert advisory_from_metadata({}) is None

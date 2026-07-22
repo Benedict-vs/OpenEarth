@@ -31,7 +31,7 @@ from openearth.providers.generic import _compute_product
 from openearth.providers.qa import bit_mask
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from datetime import datetime
 
     from openearth.geometry import ROI
@@ -102,6 +102,66 @@ def slc_off_advisory(spacecrafts: Sequence[str], dates: Sequence[date]) -> str |
             "spacecraft."
         )
     return None
+
+
+# EE SPACECRAFT_ID property values → our short tags (the collection id prefixes).
+SPACECRAFT_TAGS: dict[str, str] = {
+    "LANDSAT_5": "LT05",
+    "LANDSAT_7": "LE07",
+    "LANDSAT_8": "LC08",
+    "LANDSAT_9": "LC09",
+}
+
+
+def scene_metadata(
+    roi: ROI,
+    start_date: str | date | datetime,
+    end_date: str | date | datetime,
+) -> ee.Dictionary:
+    """Spacecraft tags + acquisition dates of the raw scenes in a window.
+
+    Aggregate-only probe over the unprepped archives (the prepped collections
+    keep only ``system:time_start``, so the identifying properties must come
+    from the raw images). One ``getInfo`` on the result yields
+    ``{"spacecraft": ["LANDSAT_7", …], "acquired": ["2008-07-01", …]}`` for
+    :func:`advisory_from_metadata`.
+    """
+    geometry = roi.to_ee_geometry()
+    start, end = to_ee_date(start_date), to_ee_date(end_date)
+    merged = ee.ImageCollection(_SENSORS[0][1]).filterDate(start, end).filterBounds(geometry)
+    for _, collection_id, _ in _SENSORS[1:]:
+        merged = merged.merge(
+            ee.ImageCollection(collection_id).filterDate(start, end).filterBounds(geometry)
+        )
+    return ee.Dictionary(
+        {
+            "spacecraft": merged.aggregate_array("SPACECRAFT_ID"),
+            "acquired": merged.aggregate_array("DATE_ACQUIRED"),
+        }
+    )
+
+
+def advisory_from_metadata(info: Mapping[str, Sequence[str]] | None) -> str | None:
+    """Pure: a fetched :func:`scene_metadata` payload → :func:`slc_off_advisory`.
+
+    Tolerant of the EE property payload — scenes with an unknown spacecraft id
+    or an unparseable date are dropped rather than guessed at.
+    """
+    if not info:
+        return None
+    spacecrafts: list[str] = []
+    dates: list[date] = []
+    for raw_tag, raw_date in zip(info.get("spacecraft", []), info.get("acquired", []), strict=True):
+        tag = SPACECRAFT_TAGS.get(raw_tag)
+        if tag is None:
+            continue
+        try:
+            acquired = date.fromisoformat(raw_date)
+        except ValueError:
+            continue
+        spacecrafts.append(tag)
+        dates.append(acquired)
+    return slc_off_advisory(spacecrafts, dates)
 
 
 def _prep_sensor(
