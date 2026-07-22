@@ -1016,15 +1016,26 @@ def _encode_gif(plan: list[BlendStep], dest: Path, fps: int) -> None:
     )
 
 
+# Constant-quality encode settings. imageio-ffmpeg's default quality=5 maps to
+# x264 CRF 25 / vp9 -qscale 16 — visibly soft on satellite frames (a 12-frame
+# 1080p render came out 172 KB). CRF 18 is the usual "visually lossless" x264
+# point; vp9's scale differs, 30 with -b:v 0 selects its constant-quality mode.
+X264_CRF = 18
+VP9_CRF = 30
+
+
 def _encode_video(plan: list[BlendStep], dest: Path, *, fmt: MovieFormat, fps: int) -> None:
     import imageio_ffmpeg
 
     size = _plan_frame(plan[0]).size  # (W, H) — all frames share it
 
     codec = "libx264" if fmt == "mp4" else "libvpx-vp9"
+    crf_params = ["-crf", str(X264_CRF)] if fmt == "mp4" else ["-crf", str(VP9_CRF), "-b:v", "0"]
     try:
         # macro_block_size=1 disables imageio's pad-to-multiple-of-16 (our even
         # dims are already yuv420p-legal; padding would resample annotations).
+        # quality=None keeps imageio-ffmpeg from emitting its own -crf/-qscale;
+        # the explicit constants above are the only quality flags on the command.
         writer = imageio_ffmpeg.write_frames(
             str(dest),
             size,
@@ -1032,6 +1043,8 @@ def _encode_video(plan: list[BlendStep], dest: Path, *, fmt: MovieFormat, fps: i
             codec=codec,
             pix_fmt_out="yuv420p",
             macro_block_size=1,
+            quality=None,
+            output_params=crf_params,
         )
         writer.send(None)  # prime the generator
         for step in plan:
