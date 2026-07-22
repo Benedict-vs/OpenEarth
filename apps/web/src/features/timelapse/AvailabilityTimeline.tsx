@@ -31,6 +31,7 @@ export function AvailabilityTimeline({ preflight, loading, error, primary }: Pro
   const windows = preflight.windows;
   const maxCount = Math.max(1, ...windows.map((w) => w.scene_count));
   const fallbacks = windows.filter((w) => w.scene_count > 0 && w.source !== primary).length;
+  const warned = windows.filter((w) => w.advisory != null).length;
 
   return (
     <div className={`cut-avail ${loading ? "stale" : ""}`}>
@@ -49,23 +50,26 @@ export function AvailabilityTimeline({ preflight, loading, error, primary }: Pro
         {windows.map((w, i) => {
           const empty = w.scene_count === 0;
           const kind = empty ? "gap" : w.source === primary ? "primary" : "fallback";
+          const warn = w.advisory != null;
           const height = empty ? 0 : Math.max(14, Math.round((w.scene_count / maxCount) * 100));
+          const detail = empty
+            ? `${w.label}: no scenes`
+            : `${w.label}: ${w.scene_count} scene${w.scene_count === 1 ? "" : "s"} · ${w.source.toUpperCase()}`;
           return (
             <div
               key={`${w.start}-${i}`}
               className={`cut-cell ${kind}`}
               role="listitem"
-              title={
-                empty
-                  ? `${w.label}: no scenes`
-                  : `${w.label}: ${w.scene_count} scene${w.scene_count === 1 ? "" : "s"} · ${w.source.toUpperCase()}`
-              }
+              title={warn ? `${detail} · ⚠ ${w.advisory}` : detail}
             >
               <div className="cut-cell-bar-track">
                 {empty ? (
                   <div className="cut-cell-nodata">—</div>
                 ) : (
-                  <div className={`cut-cell-bar ${kind}`} style={{ height: `${height}%` }} />
+                  <div
+                    className={`cut-cell-bar ${kind}${warn ? " warn" : ""}`}
+                    style={{ height: `${height}%` }}
+                  />
                 )}
               </div>
               <div className={`cut-cell-src ${kind}`}>{empty ? "—" : w.source.toUpperCase()}</div>
@@ -87,6 +91,11 @@ export function AvailabilityTimeline({ preflight, loading, error, primary }: Pro
         {preflight.empty_count > 0 ? (
           <span>
             <i className="sw gap" /> No data
+          </span>
+        ) : null}
+        {warned > 0 ? (
+          <span title="Only striped Landsat-7 SLC-off scenes in these windows — expect diagonal wedge gaps. Widen the window to composite them away.">
+            <i className="sw warn" /> Wedge gaps likely
           </span>
         ) : null}
         <span className="cut-avail-note">Bar height = scenes in the window</span>

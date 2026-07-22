@@ -2614,6 +2614,13 @@ button.ghost {
 .cut-cell-bar.fallback {
   background: var(--rec);
 }
+/* SLC-off advisory: the stripes literally preview the wedge gaps the frame would show. */
+.cut-cell-bar.warn {
+  background: repeating-linear-gradient(45deg, var(--clear) 0 4px, rgba(5, 5, 6, 0.65) 4px 7px);
+}
+.cut-cell-bar.fallback.warn {
+  background: repeating-linear-gradient(45deg, var(--rec) 0 4px, rgba(5, 5, 6, 0.65) 4px 7px);
+}
 .cut-cell.gap .cut-cell-bar-track {
   border: 1px dashed var(--gap);
 }
@@ -2673,6 +2680,9 @@ button.ghost {
 .cut-avail-legend .sw.gap {
   background: transparent;
   border: 1px dashed var(--gap);
+}
+.cut-avail-legend .sw.warn {
+  background: repeating-linear-gradient(45deg, var(--clear) 0 3px, rgba(5, 5, 6, 0.65) 3px 5px);
 }
 .cut-avail-note {
   margin-left: auto;
