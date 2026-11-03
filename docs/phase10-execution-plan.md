@@ -149,6 +149,13 @@ lands with its `make gen` diff in the same commit.
    drawn ROI's native limit before submit. Gated on the Stage 0 spike; if EE refuses 4K thumbs,
    the ceiling stays 1920 this phase (computePixels assembly recorded as the Phase 11+ path)
    and the schema cap is NOT raised — decide from evidence, not hope.
+   > **REVERSED 2026-07-22 (acceptance review, Benedict's call).** The native lock made the
+   > canonical Richmond Park render *worse* than a pre-Phase-10 render of the same data: the
+   > old path let EE upscale the 10 m data smoothly to 1080 px, the locked path served 445 px
+   > and the default encode softened it further. Same measured data — the lock only lowered
+   > display quality. The clamp is removed (`min(request, 3840)`), and the honesty moves to a
+   > readout instead of a cap: the manifest records `native_max_dim`, the Studio labels
+   > anything past it "(native N px, upscaled)", and the plate prints both numbers.
 10. **Draft mode is the same job, smaller.** `draft=true` forces max_dim 480/mp4/no extras,
     marks the render row (params_json), and the gallery offers "Render final" prefilled. No
     second pipeline.
@@ -241,15 +248,46 @@ against fake EE.
 
 **Exit:** direction chosen and recorded; Stage 5 builds exactly that.
 
+### Stage 4 decision — recorded 2026-07-22 (Benedict's pick)
+
+Three clickable directions were delivered (`docs/phase10-studio-directions.html`, also a private
+Artifact): **A · Console** (app-native devtool wizard), **B · Cut** (editing suite: program-
+monitor hero, grade inspector, filmstrip-timeline availability strip with a source-ladder track),
+**C · Atlas** (each timelapse a published map plate with a legend-as-data-sheet).
+
+**Pick: B · Cut for authoring + Atlas's citable plate as an opt-in export ("Cut + plate").**
+
+- **Authoring is Cut, unchanged** — the program monitor + grade inspector + filmstrip timeline
+  (per-window scene density + source ladder + per-frame valid/filled/source, all scrubbable).
+- **The plate is an optional add-on at render-complete**, not a second authoring mode. A finished
+  render gets an **Export plate** action that composites the hero still + a provenance data sheet
+  (source ladder per window, measured/filled/blank %, coordinates, scale, attribution, the recipe)
+  into one downloadable card. It sits alongside the existing extras (stills, 1:1/9:16 crops, title
+  card, watermark); the movie stays the primary output.
+- **No new "truth":** the plate only packages provenance the pipeline already records (the Stage 2
+  manifest per-frame source/valid_fraction/filled_fraction). Public hosted share links stay parked
+  (GEE terms) — the plate is a self-contained downloadable, not a hosted URL.
+- **Stage 5 consequence:** build the Cut Studio shell, and add one new **plate export** render path
+  (still + data-sheet composite → PNG) reachable from the finished-render view. Console's numbered-
+  wizard clarity informs the entry flow; Atlas's visual language is scoped to the plate only.
+
 ## Stage 5 — `web:` the Studio rebuild + player/gallery
 
-- Wizard flow per the chosen direction; preset cards (Showcase/Survey/Every pass/Seasonal
-  pulse) carrying their policy explanations; availability strip from preflight; single-frame
-  preview; draft/final buttons; authoring-mode toggle with the pacing math readout; Advanced
-  panel exposing every knob (composite, cloud display + tint color, gap-fill, deflicker,
-  grade suite, fallback, resolution with native-limit readout, tween, fps, format, extras).
+- **Direction: "Cut + plate" (Stage 4 decision).** Cut editing-suite shell for authoring — a
+  program-monitor hero, a grade inspector, and a filmstrip-timeline availability strip carrying
+  the source-ladder + per-frame QC; the preset cards + pacing readout + Advanced panel live in
+  Cut's layout (Console's numbered-wizard clarity informs the entry order).
+- Preset cards (Showcase/Survey/Every pass/Seasonal pulse) carrying their policy explanations;
+  availability strip from preflight; single-frame preview; draft/final buttons; authoring-mode
+  toggle with the pacing math readout; Advanced panel exposing every knob (composite, cloud
+  display + tint color, gap-fill, deflicker, grade suite, fallback, resolution with native-limit
+  readout, tween, fps, format, extras).
 - Player: QC badges per frame (valid/filled/source) on the scrubber; gallery: draft chip,
   "Render final", extras downloads, existing partial/rename/delete kept.
+- **Plate export (the citable add-on):** a finished render gets an **Export plate** action that
+  composites the hero still + provenance data sheet (source ladder, measured/filled/blank %,
+  coords, scale, attribution, recipe) into one downloadable PNG — Atlas visual language, scoped
+  to the plate. New render path (still + data-sheet composite); opt-in, alongside the movie/extras.
 - Every substage: Playwright screenshot loop vs the mockup + stated criteria;
   `web-design-guidelines` audit + fresh-context `/code-review` before the stage commit.
 
@@ -285,3 +323,115 @@ on-screen copy).
 - **Reference-selection ladder** — Phase 11 (was "Phase 10" pre-renumbering; memory updated).
 - **HLS/Landsat in Compare recipes (DNBR etc.)** — the sources land generically browsable;
   recipe-level cross-source products are the fusion backlog item.
+
+---
+
+## Stage 0 findings (2026-07-22, live EE — project openearth-488015)
+
+Run: `uv run python scripts/spike_4k_thumb.py` and `scripts/spike_hls_scaling.py`.
+
+### 4K thumb spike → **DECISION: raise `max_dim` cap 1920 → 3840 (native-locked)**
+
+`getThumbURL` served both frames over the Richmond Park bbox (S2 RGB, mean over
+2023-06→08) with no refusal:
+
+| dimensions | latency | bytes | payload |
+|---|---|---|---|
+| 1920×1080 (control) | 21.6 s | 619,495 (0.62 MB) | valid PNG |
+| 3840×2160 (4K) | 25.0 s | 1,056,052 (1.06 MB) | valid PNG |
+
+4K cost only ~+3.4 s and ~+0.44 MB over 1920 — latency is dominated by the
+composite reduction, not pixel count. The endpoint has ample headroom, so
+**decision 9 proceeds: the schema `max_dim` cap rises to 3840**, with the
+effective dimension still `min(request, native_px(roi, gsd), 3840)` so nothing
+upscales past native GSD. computePixels 4K assembly stays parked (not needed).
+
+### HLS scaling spike → **DECISION: GEE HLS is pre-scaled float reflectance — provider does NOT re-scale**
+
+Both `NASA/HLS/HLSL30/v002` and `NASA/HLS/HLSS30/v002` deliver reflectance bands
+already as physical floats in ~[0, 1] (with small negatives from atmospheric
+correction), NOT raw DN — despite each band carrying a `B*_scale=0.0001` metadata
+property. Applying that scale would wash every HLS frame to black.
+
+- L30 (Landsat 8/9) mean reflectance over the Permian window: B4=0.232, B3=0.163,
+  B2=0.107 (min −0.048, max 0.64). S30 (Sentinel-2) mosaic: B4=0.231, B3=0.158,
+  B2=0.104, B8A=0.330 — identical magnitude convention.
+- **GEE band names (unpadded, confirm the plan):** RGB = **B4/B3/B2** on both.
+  - L30 bands: `B1 B2 B3 B4 B5 B6 B7 B9 B10 B11 Fmask SZA SAA VZA VAA` — **no B8/B12**;
+    NIR-narrow = **B5**; SWIR = B6/B7; B10/B11 are thermal (scale 0.01, Kelvin, unused).
+  - S30 bands: `B1 B2 B3 B4 B5 B6 B7 B8 B8A B9 B10 B11 B12 Fmask …`; NIR-narrow = **B8A**,
+    NIR-broad = B8; SWIR = B11/B12.
+  - **`Fmask` is an integer bit-packed QA band** (sampled 64–240): the S30 mosaic
+    showed bits 4–7 set (snow/water + aerosol-level) exactly as documented — cloud
+    mask = bits 1|2|3.
+- **Provider consequence (Stage 1):** `providers/hls.py` selects bands directly as
+  reflectance (no `.divide(1e4)`), masks on `Fmask` bits 1|2|3, and renames
+  per-sensor NIR (L30 B5 / S30 B8A) to a canonical name before merging S30+L30 so
+  NDVI/NDWI band math is source-uniform. Landsat C2 L2 (Stage 1) is the separate
+  case that DOES need the `×0.0000275 − 0.2` SR scale (verified in the plan header).
+
+---
+
+## Acceptance-pass fixes (2026-07-22, after the first Stage 6 round)
+
+The first acceptance round surfaced four issues Benedict judged against the old renders; all
+four landed as separate commits before the re-render (decision letters from the handover):
+
+- **A — native lock reversed** (see the annotation at decision 9). `_compile_plan` no longer
+  clamps to `native_max_dim`; the manifest records `native_max_dim`, the Studio slider runs to
+  3840 with a "native N px, upscaled" readout, and the plate prints both numbers.
+- **B — encode quality.** `encode_movie` had inherited imageio-ffmpeg's implicit `quality=5`
+  (x264 CRF 25 / vp9 `-qscale 16`) — a 12-frame 1080p mp4 came out 172 KB and visibly soft.
+  Now explicit constant quality: `X264_CRF = 18`, `VP9_CRF = 30` (+ `-b:v 0`), `quality=None`.
+- **C — sequence exposure (the Aletsch snow blowout).** RGB renders minted with the catalog's
+  fixed range (0–0.3 for S2), clipping ρ≈0.6–0.9 snow to flat white. Fully-auto RGB renders now
+  sample robust p1/p99 stats on ≤ `VIS_SAMPLE_WINDOWS` (5) evenly spaced windows
+  (`rgb_range_stats`): the minted range extends to the sequence's true highlight, midtones
+  anchor to the *typical* window's highlight (25th percentile of window p99s), and an HDR
+  sequence (`hi_ext > 1.25 × hi_typ`) passes every frame through ONE fixed C¹ highlight-shoulder
+  LUT whose knee-out adapts (`shoulder slope ≤ 3× its average`) so snow keeps real gradation.
+  One curve per render — no per-frame adaptation, so no pumping (the fix's hard constraint).
+  Recorded as manifest `tone`; `vis` stays the true minted range. Explicit vis overrides bypass
+  everything; non-RGB keeps the `compute_vis_range` path. (Side note recorded: `clearest` is a
+  single-observation mosaic and slightly noisier than `mean` — accepted, it is what kills cloud
+  smear; no change.)
+- **D — gap-fill seam blending.** `forward_fill` pasted borrowed pixels with a hard edge (a
+  different date's exposure → visible outline, e.g. Richmond Dec 2024 at 1.5 % measured).
+  `blend_fill_seams` now (1) exposure-matches the borrowed region per channel against thin
+  rings either side of the seam (median ratio, clamped ±15 %) and (2) feathers borrowed pixels
+  toward their nearest measured pixel over a resolution-scaled width (3–24 px). **Both write
+  only inside the fill mask** — measured pixels stay bit-identical and `filled_fraction` / the
+  per-pixel provenance are untouched (the honesty wall's rule that a borrowed pixel is never
+  passed off as measured is preserved; the blend only changes how borrowed pixels *look*).
+  Laplacian/multiband blending and histogram matching were considered and rejected (halo risk /
+  hue shifts, heavy machinery for what is physically an exposure offset). Manifest `post` gains
+  `seam_blend`.
+
+Legacy byte-equivalence: the golden test still pins the legacy path (explicit vis, no post) —
+A/B/C/D change only auto-exposed RGB renders, gap-filled renders, and encode bytes (no test
+pins movie bytes). The acceptance set was re-rendered after these fixes — outcomes in the
+Stage 6 notes below.
+
+**Fifth fix found by the re-render itself:** the first fixed-code Aletsch render still clipped
+32 % of the winter scene — alpine snow SR legitimately exceeds the nominal 1.0, and the
+`valid_max` clamp on the minted top re-introduced the clipping the percentiles prevent. The top
+now follows the data; `valid_max` only anchors a 1.5× pathology backstop
+(`HIGHLIGHT_CEILING_FACTOR` — large-area sunglint protection). Winter clipping 32.4 % → 2.4 %.
+
+### Stage 6 notes — acceptance re-render (2026-07-22, live EE, all settings expanded per scene)
+
+All five submitted through `POST /api/timelapse` at max_dim 1080 / mp4 / fps 6 / tween 0 with
+auto vis (the new sequence exposure). Kept in the gallery under "Acceptance v2/v3 · …".
+
+| Scene | Render id | Result |
+|---|---|---|
+| **Richmond Park 2024 monthly · Showcase (CANONICAL)** | `eab92d30…` | 12/12 frames, 842×1080 (native 445 — upscaled), movie **3.22 MB** (was 172 KB pre-CRF-fix). Auto vis (0, 0.108) exposes the park brightly; June frame sharp and punchy. December (1.5 % measured / 98.5 % borrowed) renders as ONE coherent scene — no paste outlines; the thin-cloud measured patches blend softly (seam fix D working). **Zero visible artifacts.** |
+| Po Valley 2023–24 quarterly · Seasonal | `5bb87063…` | 8/8 frames, vis (0, 0.244), no fill needed, crisp field mosaic + river. Clean. |
+| Gigafactory Berlin 2020–22 monthly · Showcase | `c01089c7…` | 36/36 frames; shoulder engaged (knee 0.68 — winter snow windows). Construction crisp, no gap-fill smearing of buildings (max filled_fraction 0.26); dark pine forest is honest content. |
+| Aletsch 2023–24 monthly · Showcase (SNOW) | v2 `eb2eea75…` → **v3 `6d9c9afd…`** | v2 exposed the valid_max-clamp bug (32.4 % winter pixels ≥250). v3 (ceiling backstop): vis (0, 1.42) data-driven, winter clipping **2.4 %** (residual = specular faces), glacier flow texture visible in accumulation zones, summer moraines/ice fully readable. `tone` stays None correctly — the glacier is bright in *every* window (not HDR across time), so one linear range is the no-pumping exposure. |
+| Las Vegas 1984→2024 annual · Landsat | `b0f8cc74…` | 42/42 frames, 8.71 MB, vis (0.025, 0.455). 1984 golden-desert grid → 2024 full build-out; gap-fill covered one thin early-Landsat year (62 % filled, recorded). Known quirk: 365-day interval stepping drifts ~10 days over 41 yr, so the last window clips to Dec 21–31 (honest label; an "annual" calendar step is a possible later nicety). |
+
+Exposure-stat spot checks (luminance, annotation strip excluded): Richmond June p50 112 /
+1.9 % ≥250; Richmond Dec p50 99 / 0 % ≥250; Aletsch v3 Jan p50 147 / 2.39 % ≥250 (v2: 32.4 %);
+Gigafactory p50 28 (dark pine forest, honest); Vegas frames clean. Canonical gate: **PASS** —
+final verdict on the five scenes is Benedict's, from the gallery + the PR evidence.

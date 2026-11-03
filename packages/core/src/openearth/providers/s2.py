@@ -181,6 +181,61 @@ def get_s2_collection(
     return base.map(lambda img: _compute_index(img, config))
 
 
+def get_s2_clearest_image(
+    index_key: str,
+    roi: ROI,
+    start_date: str | date | datetime,
+    end_date: str | date | datetime,
+    *,
+    cloud_max: int = 65,
+    cloud_prob_thresh: int = DEFAULT_CLOUD_PROB_THRESH,
+) -> ee.Image:
+    """Per-pixel least-cloudy composite (Phase 10 "clearest" mode).
+
+    Builds a ``cloudless`` quality band = ``100 − s2cloudless probability`` per
+    scene (scenes without a probability match get a neutral 50), masked to the
+    product's own footprint so ``qualityMosaic`` only ranks valid pixels, then
+    selects, per pixel, the observation with the highest cloudless score. This is
+    the S2 realisation of decision 2; other sources degenerate "clearest" to a
+    masked median (their cloud products are binary).
+    """
+    config = get_product("s2", index_key)
+    collection_id = config.collection_id or S2_SR_COLLECTION_ID
+    start = to_ee_date(start_date)
+    end = to_ee_date(end_date)
+    geometry = roi.to_ee_geometry()
+
+    s2 = (
+        ee.ImageCollection(collection_id)
+        .filterDate(start, end)
+        .filterBounds(geometry)
+        .filter(ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_max))
+    )
+    cloud_prob = ee.ImageCollection(S2_CLOUD_PROB_ID).filterDate(start, end).filterBounds(geometry)
+    joined = _join_cloud_prob(s2, cloud_prob)
+
+    def _with_quality(image: ee.Image) -> ee.Image:
+        prepared = _to_reflectance(_mask_clouds(image, cloud_prob_thresh))
+        prob = prepared.get("cloud_prob_img")
+        score = ee.Image(
+            ee.Algorithms.If(
+                prob,
+                ee.Image.constant(100).subtract(ee.Image(prob).select("probability")),
+                ee.Image.constant(50),
+            )
+        ).toFloat()
+        product = ee.Image(_compute_index(prepared, config))
+        # Mask the score to the product's footprint so qualityMosaic never picks
+        # a scene where the product itself is cloud-masked.
+        valid = product.mask().reduce(ee.Reducer.min())
+        return product.addBands(score.updateMask(valid).rename("cloudless"))
+
+    mosaic = joined.map(_with_quality).qualityMosaic("cloudless")
+    if config.is_rgb:
+        return mosaic.select(config.bands)
+    return mosaic.select(config.band)
+
+
 def _b12_over_b11(img: ee.Image) -> ee.Image:
     return img.select("B12").divide(img.select("B11")).copyProperties(img, ["system:time_start"])
 

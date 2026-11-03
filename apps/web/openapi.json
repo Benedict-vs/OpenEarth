@@ -1423,6 +1423,98 @@
         "title": "ExportGeotiffRequest",
         "type": "object"
       },
+      "ExtrasIn": {
+        "description": "Share extras, re-encoded from the kept frames (never a re-render).",
+        "properties": {
+          "crops": {
+            "items": {
+              "enum": [
+                "1:1",
+                "9:16"
+              ],
+              "type": "string"
+            },
+            "title": "Crops",
+            "type": "array"
+          },
+          "end_card": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Card"
+          },
+          "title_card": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Card"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watermark"
+          }
+        },
+        "title": "ExtrasIn",
+        "type": "object"
+      },
+      "GradeIn": {
+        "description": "A colour grade (decision 5): a declared tone curve + composable sliders.",
+        "properties": {
+          "brightness": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Brightness",
+            "type": "number"
+          },
+          "contrast": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Contrast",
+            "type": "number"
+          },
+          "curve": {
+            "default": "natural",
+            "enum": [
+              "natural",
+              "vivid",
+              "cinematic"
+            ],
+            "title": "Curve",
+            "type": "string"
+          },
+          "saturation": {
+            "default": 1.0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Saturation",
+            "type": "number"
+          }
+        },
+        "title": "GradeIn",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1939,6 +2031,155 @@
         "title": "PolygonIn",
         "type": "object"
       },
+      "PreflightOut": {
+        "description": "Per-window availability + the native-resolution ceiling for the ROI.",
+        "properties": {
+          "empty_count": {
+            "title": "Empty Count",
+            "type": "integer"
+          },
+          "frame_count": {
+            "title": "Frame Count",
+            "type": "integer"
+          },
+          "native_max_dim": {
+            "title": "Native Max Dim",
+            "type": "integer"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/PreflightWindowOut"
+            },
+            "title": "Windows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "windows",
+          "frame_count",
+          "empty_count",
+          "native_max_dim"
+        ],
+        "title": "PreflightOut",
+        "type": "object"
+      },
+      "PreflightRequest": {
+        "description": "A cheap availability probe (decision 11) \u2014 collection aggregates only.",
+        "properties": {
+          "composite": {
+            "default": "mean",
+            "enum": [
+              "mean",
+              "median",
+              "clearest"
+            ],
+            "title": "Composite",
+            "type": "string"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "dates": {
+            "$ref": "#/components/schemas/DateRangeIn"
+          },
+          "fallback_source": {
+            "default": false,
+            "title": "Fallback Source",
+            "type": "boolean"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "roi": {
+            "discriminator": {
+              "mapping": {
+                "bbox": "#/components/schemas/BBoxIn",
+                "polygon": "#/components/schemas/PolygonIn"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BBoxIn"
+              },
+              {
+                "$ref": "#/components/schemas/PolygonIn"
+              }
+            ],
+            "title": "Roi"
+          },
+          "step": {
+            "$ref": "#/components/schemas/StepIn"
+          }
+        },
+        "required": [
+          "dataset",
+          "product",
+          "roi",
+          "dates"
+        ],
+        "title": "PreflightRequest",
+        "type": "object"
+      },
+      "PreflightWindowOut": {
+        "properties": {
+          "advisory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advisory"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "mean_cloud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Cloud"
+          },
+          "scene_count": {
+            "title": "Scene Count",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "label",
+          "scene_count",
+          "source"
+        ],
+        "title": "PreflightWindowOut",
+        "type": "object"
+      },
       "ProductOut": {
         "properties": {
           "description": {
@@ -2089,9 +2330,21 @@
             "title": "Created At",
             "type": "string"
           },
+          "crops": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Crops",
+            "type": "array"
+          },
           "dataset": {
             "title": "Dataset",
             "type": "string"
+          },
+          "draft": {
+            "default": false,
+            "title": "Draft",
+            "type": "boolean"
           },
           "format": {
             "enum": [
@@ -2148,6 +2401,17 @@
             "additionalProperties": true,
             "title": "Params",
             "type": "object"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "product": {
             "title": "Product",
@@ -2210,15 +2474,27 @@
         "type": "object"
       },
       "RenderOut": {
-        "description": "Gallery row: SQL-only, no manifest parse.",
+        "description": "Gallery row: SQL row + a couple of fields surfaced from ``params_json``.",
         "properties": {
           "created_at": {
             "title": "Created At",
             "type": "string"
           },
+          "crops": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Crops",
+            "type": "array"
+          },
           "dataset": {
             "title": "Dataset",
             "type": "string"
+          },
+          "draft": {
+            "default": false,
+            "title": "Draft",
+            "type": "boolean"
           },
           "format": {
             "enum": [
@@ -2258,6 +2534,17 @@
               }
             ],
             "title": "Movie Bytes"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "product": {
             "title": "Product",
@@ -3069,10 +3356,25 @@
         "type": "object"
       },
       "TimelapseRequest": {
-        "description": "A timelapse render request. ``roi`` is required \u2014 no global timelapse.",
+        "description": "A timelapse render request. ``roi`` is required \u2014 no global timelapse.\n\nEvery Phase-10 field defaults to the legacy behaviour (mean composite, no\npost-processing, no fallback, 1080 longest edge), so an old client renders\nbyte-equivalent output.",
         "properties": {
           "annotations": {
             "$ref": "#/components/schemas/AnnotationsIn"
+          },
+          "cloud_display": {
+            "default": "composite",
+            "title": "Cloud Display",
+            "type": "string"
+          },
+          "composite": {
+            "default": "mean",
+            "enum": [
+              "mean",
+              "median",
+              "clearest"
+            ],
+            "title": "Composite",
+            "type": "string"
           },
           "dataset": {
             "title": "Dataset",
@@ -3080,6 +3382,37 @@
           },
           "dates": {
             "$ref": "#/components/schemas/DateRangeIn"
+          },
+          "deflicker": {
+            "default": false,
+            "title": "Deflicker",
+            "type": "boolean"
+          },
+          "draft": {
+            "default": false,
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "duration_s": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 120.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration S"
+          },
+          "extras": {
+            "$ref": "#/components/schemas/ExtrasIn"
+          },
+          "fallback_source": {
+            "default": false,
+            "title": "Fallback Source",
+            "type": "boolean"
           },
           "format": {
             "default": "mp4",
@@ -3098,12 +3431,39 @@
             "title": "Fps",
             "type": "integer"
           },
+          "gap_fill": {
+            "default": false,
+            "title": "Gap Fill",
+            "type": "boolean"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GradeIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "max_dim": {
             "default": 1080,
-            "maximum": 1920.0,
+            "maximum": 3840.0,
             "minimum": 64.0,
             "title": "Max Dim",
             "type": "integer"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "product": {
             "title": "Product",
@@ -5827,6 +6187,47 @@
         ]
       }
     },
+    "/api/timelapse/preflight": {
+      "post": {
+        "operationId": "preflight_api_timelapse_preflight_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreflightRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreflightOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preflight",
+        "tags": [
+          "timelapse"
+        ]
+      }
+    },
     "/api/timelapse/{render_id}": {
       "delete": {
         "operationId": "delete_render_api_timelapse__render_id__delete",
@@ -5964,6 +6365,23 @@
               "title": "Render Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "variant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(1:1|9:16)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Variant"
+            }
           }
         ],
         "responses": {
@@ -6040,6 +6458,56 @@
           }
         },
         "summary": "Get Frame",
+        "tags": [
+          "timelapse"
+        ]
+      }
+    },
+    "/api/timelapse/{render_id}/still/{index}": {
+      "get": {
+        "operationId": "get_still_api_timelapse__render_id__still__index__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "render_id",
+            "required": true,
+            "schema": {
+              "title": "Render Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "title": "Index",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Still",
         "tags": [
           "timelapse"
         ]

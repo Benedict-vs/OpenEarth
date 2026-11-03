@@ -25,11 +25,14 @@ ALL_PRODUCTS = [
 
 
 def test_expected_datasets_and_counts() -> None:
-    assert set(DATASETS) == {"s5p", "s2", "s1", "emit"}
+    assert set(DATASETS) == {"s5p", "s2", "s1", "emit", "hls", "landsat"}
     assert len(DATASETS["s5p"].products) == 6  # NO2, SO2, CO, O3, CH4, HCHO
     assert len(DATASETS["s1"].products) == 5  # VV, VH, VV_VH_RATIO, RVI, FLOOD_VV_CHANGE
     assert len(DATASETS["s2"].products) >= 30  # indices + raw bands + RGB + proxies
     assert len(DATASETS["emit"].products) == 1  # CH4ENH
+    # Phase 10 optical deep-history sources: canonical RGB/NDVI/NDWI on each.
+    assert set(DATASETS["hls"].products) == {"RGB", "NDVI", "NDWI"}
+    assert set(DATASETS["landsat"].products) == {"RGB", "NDVI", "NDWI"}
 
 
 def test_emit_ch4enh_registry_round_trip() -> None:

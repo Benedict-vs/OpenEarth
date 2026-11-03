@@ -84,6 +84,54 @@ export type Render = components["schemas"]["RenderOut"];
 export type RenderDetail = components["schemas"]["RenderDetailOut"];
 export type StepConfig = components["schemas"]["StepIn"];
 export type AnnotationsConfig = components["schemas"]["AnnotationsIn"];
+export type GradeConfig = components["schemas"]["GradeIn"];
+export type ExtrasConfig = components["schemas"]["ExtrasIn"];
+export type PreflightRequest = components["schemas"]["PreflightRequest"];
+export type Preflight = components["schemas"]["PreflightOut"];
+
+/**
+ * The parsed `manifest.json` a finished render carries (Phase-10 manifest v2).
+ * The generated `RenderDetail.manifest` is an untyped object; this is the shape
+ * `FrameManifest.to_dict` writes (packages/core/src/openearth/timelapse.py) — the
+ * honesty surfaces (per-frame source / valid / filled) the player + plate read.
+ */
+export interface ManifestFrame {
+  /** Dense movie index of a rendered frame, or null for a skipped window. */
+  index: number | null;
+  start: string;
+  end: string;
+  label: string;
+  status: "rendered" | "empty" | "failed";
+  source: string | null;
+  valid_fraction: number | null;
+  filled_fraction: number | null;
+}
+export interface TimelapseManifest {
+  dataset: string;
+  product: string;
+  width: number;
+  height: number;
+  vis: [number, number];
+  cancelled: boolean;
+  composite: "mean" | "median" | "clearest";
+  post: {
+    gap_fill?: boolean;
+    gap_fill_cap_windows?: number | null;
+    /** Borrowed regions are exposure-matched + feathered (in-mask only). */
+    seam_blend?: boolean;
+    deflicker_strength?: number;
+    grade?: { curve: string; brightness: number; contrast: number; saturation: number } | null;
+    tint_hole_color?: string | null;
+    fallback_source?: string | null;
+  };
+  /** The region's native sensor limit (longest edge, px) at render time — the
+   *  upscale-honesty readout. Absent/null on legacy manifests. */
+  native_max_dim?: number | null;
+  /** The fixed highlight-shoulder curve applied to an HDR RGB sequence;
+   *  null/absent for plain linear renders. `vis` is the true minted range. */
+  tone?: { knee_in: number; knee_out: number } | null;
+  frames: ManifestFrame[];
+}
 
 /** The Monte-Carlo Q histogram embedded in a detection's `result` blob. */
 export interface MethaneHistogram {

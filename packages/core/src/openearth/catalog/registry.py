@@ -11,7 +11,14 @@ keeping core imports side-effect-free.
 
 from __future__ import annotations
 
-from openearth.catalog.builtin import EMIT_DATASET, S1_DATASET, S2_DATASET, S5P_DATASET
+from openearth.catalog.builtin import (
+    EMIT_DATASET,
+    HLS_DATASET,
+    LANDSAT_DATASET,
+    S1_DATASET,
+    S2_DATASET,
+    S5P_DATASET,
+)
 from openearth.catalog.models import DatasetSpec, ProductSpec
 
 DATASETS: dict[str, DatasetSpec] = {
@@ -19,6 +26,8 @@ DATASETS: dict[str, DatasetSpec] = {
     S2_DATASET.id: S2_DATASET,
     S1_DATASET.id: S1_DATASET,
     EMIT_DATASET.id: EMIT_DATASET,
+    HLS_DATASET.id: HLS_DATASET,
+    LANDSAT_DATASET.id: LANDSAT_DATASET,
 }
 
 # The v1 "methane" mode is a virtual source that routes per product key.

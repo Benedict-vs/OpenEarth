@@ -297,6 +297,249 @@ def test_gif_cap_is_post_tween(client: TestClient, timelapse_ready: None) -> Non
     assert "smoothing" in over["json"]["detail"]
 
 
+# ── Phase 10 Stage 3: schema v2, honesty wall, draft, extras, preflight ──
+
+
+def test_duration_xor_fps_conflict_422(client: TestClient, timelapse_ready: None) -> None:
+    body = {
+        "dataset": "s2",
+        "product": "RGB",
+        "roi": ROI,
+        "dates": {"start": "2024-06-01", "end": "2024-07-31"},
+        "step": {"mode": "monthly"},
+        "fps": 6,
+        "duration_s": 10.0,  # both set → 422
+    }
+    assert client.post("/api/timelapse", json=body).status_code == 422
+
+
+def test_duration_first_derives_fps(client: TestClient, timelapse_ready: None) -> None:
+    body = {
+        "dataset": "s2",
+        "product": "RGB",
+        "roi": ROI,
+        "dates": {"start": "2024-06-01", "end": "2024-07-31"},
+        "step": {"mode": "monthly"},  # → 2 windows
+        "duration_s": 1.0,  # 2 frames / 1 s → 2 fps
+    }
+    resp = client.post("/api/timelapse", json=body)
+    assert resp.status_code == 200, resp.text
+    _wait_status(client, resp.json()["job_id"], "succeeded")
+    row = client.get("/api/timelapse").json()[0]
+    assert row["fps"] == 2
+
+
+def test_cloud_display_bad_format_422(client: TestClient, timelapse_ready: None) -> None:
+    assert _submit(client, dataset="s2", product="RGB", cloud_display="tint:red")["status"] == 422
+    assert _submit(client, dataset="s2", product="RGB", cloud_display="composite")["status"] == 200
+
+
+def test_post_processing_on_non_rgb_422(client: TestClient, timelapse_ready: None) -> None:
+    # The honesty wall: gap-fill / deflicker / grade / tint on a scientific product.
+    assert _submit(client, dataset="s5p", product="NO2", gap_fill=True)["status"] == 422
+    assert _submit(client, dataset="s5p", product="NO2", deflicker=True)["status"] == 422
+    # The same knobs on an RGB product are fine.
+    assert _submit(client, dataset="s2", product="RGB", gap_fill=True)["status"] == 200
+
+
+def test_max_dim_4k_cap(client: TestClient, timelapse_ready: None) -> None:
+    assert _submit(client, dataset="s2", product="RGB", max_dim=4000)["status"] == 422  # > 3840
+    assert _submit(client, dataset="s2", product="RGB", max_dim=3840)["status"] == 200
+
+
+def test_render_upscales_past_native_and_forwards_the_limit(
+    client: TestClient, timelapse_ready: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decision-9 reversal: the request dimension is no longer clamped to the
+    sensor's native resolution; the native limit rides along to the manifest."""
+    captured: dict[str, Any] = {}
+    fake = svc.render_frames  # the timelapse_ready fixture's fake
+
+    def spy(dataset: str, product: str, roi: object, windows: object, **kw: Any) -> Any:
+        captured.update(kw)
+        return fake(dataset, product, roi, windows, **kw)
+
+    monkeypatch.setattr(svc, "render_frames", spy)
+    out = _submit(client, dataset="s2", product="RGB", max_dim=3840)
+    assert out["status"] == 200, out
+    _wait_status(client, out["json"]["job_id"], "succeeded")
+    # This ROI's native S2 limit is ~2226 px — the 3840 request rides through.
+    assert captured["max_dim"] == 3840
+    assert 2000 < captured["native_max_dim"] < 2400
+
+
+def test_crop_enum_rejected(client: TestClient, timelapse_ready: None) -> None:
+    assert _submit(client, dataset="s2", product="RGB", extras={"crops": ["4:3"]})["status"] == 422
+
+
+def test_draft_forces_small_mp4(client: TestClient, timelapse_ready: None) -> None:
+    out = _submit(client, dataset="s2", product="RGB", format="gif", draft=True)
+    assert out["status"] == 200, out
+    _wait_status(client, out["json"]["job_id"], "succeeded")
+    row = client.get("/api/timelapse").json()[0]
+    assert row["draft"] is True
+    assert row["format"] == "mp4"  # draft always renders a quick mp4
+
+
+def test_preset_surfaced_in_gallery(client: TestClient, timelapse_ready: None) -> None:
+    out = _submit(client, dataset="s2", product="RGB", preset="Showcase")
+    assert out["status"] == 200
+    _wait_status(client, out["json"]["job_id"], "succeeded")
+    assert client.get("/api/timelapse").json()[0]["preset"] == "Showcase"
+
+
+def test_extras_crops_encoded_and_downloadable(client: TestClient, timelapse_ready: None) -> None:
+    out = _submit(
+        client,
+        dataset="s2",
+        product="RGB",
+        extras={"crops": ["1:1"], "title_card": "Richmond Park", "watermark": "OpenEarth"},
+    )
+    assert out["status"] == 200, out
+    render_id = out["json"]["render_id"]
+    _wait_status(client, out["json"]["job_id"], "succeeded")
+
+    row = client.get("/api/timelapse").json()[0]
+    assert row["crops"] == ["1:1"]
+    # The 1:1 crop variant is downloadable; an un-encoded crop 404s.
+    assert client.get(f"/api/timelapse/{render_id}/download?variant=1:1").status_code == 200
+    assert client.get(f"/api/timelapse/{render_id}/download?variant=9:16").status_code == 404
+    # Still export serves a full-res frame as an attachment.
+    still = client.get(f"/api/timelapse/{render_id}/still/0")
+    assert still.status_code == 200
+    assert "attachment" in still.headers["content-disposition"]
+
+
+# ── preflight ──
+
+
+class _FakeSize:
+    def __init__(self, n: int) -> None:
+        self.n = n
+
+    def getInfo(self) -> int:
+        return self.n
+
+
+class _FakeColl:
+    def __init__(self, n: int) -> None:
+        self.n = n
+
+    def size(self) -> _FakeSize:
+        return _FakeSize(self.n)
+
+
+@pytest.fixture
+def preflight_ready(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    app.dependency_overrides[ensure_ee] = lambda: None
+    import openearth.providers as providers
+
+    def fake_get_collection(product: str, roi: object, start: object, end: object, source: str):
+        # s2 has no imagery in the middle month; HLS (fallback) does. May, Jul have s2.
+        if source == "s2" and str(start).startswith("2024-06"):
+            return _FakeColl(0)
+        if source == "hls":
+            return _FakeColl(3)
+        return _FakeColl(5)
+
+    monkeypatch.setattr(providers, "get_collection", fake_get_collection)
+
+
+def _preflight_body(**overrides: Any) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "dataset": "s2",
+        "product": "RGB",
+        "roi": ROI,
+        "dates": {"start": "2024-05-01", "end": "2024-07-31"},
+        "step": {"mode": "monthly"},  # May, Jun, Jul
+    }
+    body.update(overrides)
+    return body
+
+
+def test_preflight_scene_counts_and_native_cap(client: TestClient, preflight_ready: None) -> None:
+    resp = client.post("/api/timelapse/preflight", json=_preflight_body())
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert len(body["windows"]) == 3
+    # Without fallback, June is empty for s2.
+    june = body["windows"][1]
+    assert june["scene_count"] == 0
+    assert june["source"] == "s2"
+    assert body["empty_count"] == 1
+    assert body["frame_count"] == 2
+    # Native cap is a positive pixel ceiling the UI shows before submit.
+    assert body["native_max_dim"] > 0
+
+
+def test_preflight_source_ladder_fills_empty_span(
+    client: TestClient, preflight_ready: None
+) -> None:
+    resp = client.post("/api/timelapse/preflight", json=_preflight_body(fallback_source=True))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    june = body["windows"][1]
+    assert june["scene_count"] == 3  # stepped down to HLS
+    assert june["source"] == "hls"
+    assert body["empty_count"] == 0
+
+
+class _FakeMetadata:
+    """Stands in for the ee.Dictionary scene_metadata returns."""
+
+    def __init__(self, payload: dict[str, list[str]]) -> None:
+        self.payload = payload
+
+    def getInfo(self) -> dict[str, list[str]]:
+        return self.payload
+
+
+def test_preflight_flags_thin_slc_off_landsat_windows(
+    client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 1–2 scene post-2003 Landsat window that is all SLC-off L7 carries an
+    advisory; a pre-2003 window never pays for the metadata probe."""
+    app.dependency_overrides[ensure_ee] = lambda: None
+    import openearth.providers as providers
+    import openearth.providers.landsat as landsat
+
+    monkeypatch.setattr(
+        providers, "get_collection", lambda product, roi, start, end, source: _FakeColl(1)
+    )
+    probed: list[str] = []
+
+    def fake_scene_metadata(roi: object, start: object, end: object) -> _FakeMetadata:
+        probed.append(str(start))
+        return _FakeMetadata({"spacecraft": ["LANDSAT_7"], "acquired": [f"{start}"]})
+
+    monkeypatch.setattr(landsat, "scene_metadata", fake_scene_metadata)
+
+    body = _preflight_body(
+        dataset="landsat",
+        dates={"start": "2001-06-01", "end": "2008-07-31"},
+        step={"mode": "interval", "interval_days": 365, "window_days": 15},
+    )
+    resp = client.post("/api/timelapse/preflight", json=body)
+    assert resp.status_code == 200, resp.text
+    windows = resp.json()["windows"]
+    # Pre-2003 windows: no probe, no advisory. Post-2003 L7-only: advisory fires.
+    pre = [w for w in windows if w["start"] < "2003-05-31"]
+    post = [w for w in windows if w["start"] > "2003-05-31"]
+    assert pre
+    assert post
+    assert all(w["advisory"] is None for w in pre)
+    assert all("wedge" in w["advisory"] for w in post)
+    assert all(p > "2003-05-31" for p in probed)  # cheap gate: probes only post-SLC windows
+
+
+def test_preflight_advisory_absent_for_non_landsat(
+    client: TestClient, preflight_ready: None
+) -> None:
+    resp = client.post("/api/timelapse/preflight", json=_preflight_body())
+    assert resp.status_code == 200, resp.text
+    assert all(w["advisory"] is None for w in resp.json()["windows"])
+
+
 def test_cancelled_partial_writes_partial_row(
     client: TestClient, timelapse_ready: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:

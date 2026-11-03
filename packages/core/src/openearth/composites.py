@@ -8,15 +8,22 @@ Global-coverage detection is now pure client-side math on the ROI model
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import ee
 
+from openearth.catalog.registry import resolve_source
 from openearth.providers import get_collection, get_product_config, get_single_image
-from openearth.providers.s2 import compute_methane_anomaly
+from openearth.providers.s2 import compute_methane_anomaly, get_s2_clearest_image
 
 if TYPE_CHECKING:
+    from openearth.catalog.models import ProductSpec
     from openearth.geometry import ROI
+
+# Compositing reducers (Phase 10). ``mean`` is the legacy default; ``median`` is
+# outlier-robust; ``clearest`` picks the per-pixel least-cloudy observation
+# (s2cloudless qualityMosaic on S2, masked-median elsewhere — decision 2).
+CompositeMode = Literal["mean", "median", "clearest"]
 
 
 def _clip_unless_global(image: ee.Image, roi: ROI) -> ee.Image:
@@ -26,6 +33,50 @@ def _clip_unless_global(image: ee.Image, roi: ROI) -> ee.Image:
     return image.clip(roi.to_ee_geometry())
 
 
+def _reduce(
+    data_key: str,
+    roi: ROI,
+    start_date: str | date | datetime,
+    end_date: str | date | datetime,
+    source: str,
+    cfg: ProductSpec,
+    *,
+    median: bool,
+) -> ee.Image:
+    """Mean- or median-reduce the product collection, selecting the output band."""
+    collection = get_collection(data_key, roi, start_date, end_date, source)
+    reduced = collection.median() if median else collection.mean()
+    return reduced if cfg.is_rgb else reduced.select(cfg.band)
+
+
+def build_composite(
+    data_key: str,
+    roi: ROI,
+    start_date: str | date | datetime,
+    end_date: str | date | datetime,
+    source: str = "s5p",
+    *,
+    mode: CompositeMode = "mean",
+) -> ee.Image:
+    """Composite the product over ``[start, end]`` with the chosen reducer.
+
+    ``mean`` (legacy default) and ``median`` reduce the product collection;
+    ``clearest`` uses the s2cloudless ``qualityMosaic`` for Sentinel-2 and a
+    masked median for every other source (whose cloud products are binary, so
+    "clearest" degenerates to median-of-clear — decision 2).
+    """
+    cfg = get_product_config(data_key, source)
+    if mode == "clearest":
+        dataset_id = resolve_source(data_key, source)
+        if dataset_id == "s2":
+            image = get_s2_clearest_image(data_key, roi, start_date, end_date)
+        else:
+            image = _reduce(data_key, roi, start_date, end_date, source, cfg, median=True)
+    else:
+        image = _reduce(data_key, roi, start_date, end_date, source, cfg, median=(mode == "median"))
+    return _clip_unless_global(image, roi)
+
+
 def build_mean_composite(
     data_key: str,
     roi: ROI,
@@ -33,11 +84,8 @@ def build_mean_composite(
     end_date: str | date | datetime,
     source: str = "s5p",
 ) -> ee.Image:
-    """Pixel-wise mean image over the full date range."""
-    cfg = get_product_config(data_key, source)
-    collection = get_collection(data_key, roi, start_date, end_date, source)
-    image = collection.mean() if cfg.is_rgb else collection.mean().select(cfg.band)
-    return _clip_unless_global(image, roi)
+    """Pixel-wise mean image over the full date range (thin alias for back-compat)."""
+    return build_composite(data_key, roi, start_date, end_date, source, mode="mean")
 
 
 def build_date_composite(
