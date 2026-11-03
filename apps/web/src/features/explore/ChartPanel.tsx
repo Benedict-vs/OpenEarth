@@ -14,6 +14,7 @@ import { useRoiStore } from "../../stores/roiStore";
 import { PeriodPicker } from "./PeriodPicker";
 import { SeriesChart } from "./SeriesChart";
 import { StatsCards } from "./StatsCards";
+import { useLayerBounds } from "./useLayerBounds";
 
 export function ChartPanel() {
   const { map } = useMapContext();
@@ -38,6 +39,7 @@ export function ChartPanel() {
   const start = period.start;
   const end = period.end;
   const { data: catalog } = useCatalog();
+  const bounds = useLayerBounds();
 
   // Default target = topmost (last) visible ready layer, else topmost layer.
   const topDown = [...layers].reverse();
@@ -96,7 +98,7 @@ export function ChartPanel() {
             </option>
           ))}
         </select>
-        <PeriodPicker period={period} onChange={setPeriod} compact />
+        <PeriodPicker period={period} onChange={setPeriod} compact bounds={bounds} />
         <button className="primary" onClick={onRun} disabled={!canRun}>
           Run
         </button>

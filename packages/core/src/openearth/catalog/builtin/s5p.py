@@ -7,6 +7,8 @@ masks values outside each product's physically valid range.
 
 from __future__ import annotations
 
+from datetime import date
+
 from openearth.catalog.models import DatasetSpec, ProductSpec
 
 # ------------------------------------------------------------------
@@ -107,6 +109,7 @@ S5P_PRODUCTS: dict[str, ProductSpec] = {
         key="NO2",
         name="Nitrogen Dioxide",
         collection_id="COPERNICUS/S5P/OFFL/L3_NO2",
+        available_from=date(2018, 6, 28),
         source_band="tropospheric_NO2_column_number_density",
         vis_min=0.0,
         vis_max=0.0003,
@@ -147,6 +150,7 @@ S5P_PRODUCTS: dict[str, ProductSpec] = {
         key="SO2",
         name="Sulphur Dioxide",
         collection_id="COPERNICUS/S5P/OFFL/L3_SO2",
+        available_from=date(2018, 12, 5),
         source_band="SO2_column_number_density",
         vis_min=0.0,
         vis_max=0.0005,
@@ -186,6 +190,7 @@ S5P_PRODUCTS: dict[str, ProductSpec] = {
         key="CO",
         name="Carbon Monoxide",
         collection_id="COPERNICUS/S5P/OFFL/L3_CO",
+        available_from=date(2018, 6, 28),
         source_band="CO_column_number_density",
         vis_min=0.0,
         vis_max=0.05,
@@ -223,6 +228,7 @@ S5P_PRODUCTS: dict[str, ProductSpec] = {
         key="O3",
         name="Ozone",
         collection_id="COPERNICUS/S5P/OFFL/L3_O3",
+        available_from=date(2018, 9, 8),
         source_band="O3_column_number_density",
         vis_min=0.07,
         vis_max=0.20,
@@ -262,6 +268,7 @@ S5P_PRODUCTS: dict[str, ProductSpec] = {
         key="CH4",
         name="Methane",
         collection_id="COPERNICUS/S5P/OFFL/L3_CH4",
+        available_from=date(2019, 2, 8),
         source_band=("CH4_column_volume_mixing_ratio_dry_air_bias_corrected"),
         vis_min=1750.0,
         vis_max=2000.0,
@@ -300,6 +307,7 @@ S5P_PRODUCTS: dict[str, ProductSpec] = {
         key="HCHO",
         name="Formaldehyde",
         collection_id="COPERNICUS/S5P/OFFL/L3_HCHO",
+        available_from=date(2018, 12, 5),
         source_band=("tropospheric_HCHO_column_number_density"),
         vis_min=0.0,
         vis_max=0.0005,
@@ -345,4 +353,6 @@ S5P_DATASET = DatasetSpec(
     attribution="Google Earth Engine / Copernicus Sentinel-5P",
     default_scale_m=1000,
     products=S5P_PRODUCTS,
+    # Earliest OFFL L3 granule (NO2/CO); the gases narrow it per product.
+    available_from=date(2018, 6, 28),
 )

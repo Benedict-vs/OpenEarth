@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
+import { useCatalog } from "../../api/queries";
+import { boundsCaption, clampDate, productBounds, rangeOutside } from "../../lib/coverage";
 import { formatCountdown } from "../../lib/time";
+import { windowRange } from "../../lib/timeWindow";
+import { useDateStore } from "../../stores/dateStore";
 import { useLayersStore, type Layer } from "../../stores/layersStore";
 import { ExportButton } from "./ExportDialog";
 import { Legend } from "./Legend";
@@ -31,6 +35,11 @@ function LayerRow({ layer, isTop, isBottom }: { layer: Layer; isTop: boolean; is
   const { removeLayer, setOpacity, setRef, toggleVisible, toggleAutoRange, moveLayer } =
     useLayersStore.getState();
   const now = useNow(1000);
+  const { data: catalog } = useCatalog();
+  const window = useDateStore((s) => s.window);
+  const bounds = productBounds(catalog, layer.dataset, layer.product);
+  const shown = windowRange(window);
+  const noData = rangeOutside(shown.start, shown.end, bounds);
 
   return (
     <li className="layer-row">
@@ -93,17 +102,35 @@ function LayerRow({ layer, isTop, isBottom }: { layer: Layer; isTop: boolean; is
             <input
               type="date"
               value={layer.ref.start}
+              min={bounds.min}
+              max={layer.ref.end}
               aria-label="Reference start"
-              onChange={(e) => setRef(layer.id, { start: e.target.value, end: layer.ref!.end })}
+              onChange={(e) =>
+                e.target.value &&
+                setRef(layer.id, { start: clampDate(e.target.value, bounds), end: layer.ref!.end })
+              }
             />
             <input
               type="date"
               value={layer.ref.end}
+              min={layer.ref.start}
+              max={bounds.max}
               aria-label="Reference end"
-              onChange={(e) => setRef(layer.id, { start: layer.ref!.start, end: e.target.value })}
+              onChange={(e) =>
+                e.target.value &&
+                setRef(layer.id, {
+                  start: layer.ref!.start,
+                  end: clampDate(e.target.value, bounds),
+                })
+              }
             />
           </div>
         </div>
+      ) : null}
+      {noData ? (
+        <p className="muted layer-error">
+          No data in this window — {boundsCaption(bounds)?.toLowerCase()}.
+        </p>
       ) : null}
       {layer.mint ? <Legend legend={layer.mint.legend} /> : null}
       {layer.status === "error" && layer.error ? (

@@ -74,6 +74,9 @@ class ProductOut(BaseModel):
     methane_only: bool
     requires_builder: bool
     needs_ref: bool = False  # two-window compare product (pre + post) → show a ref picker
+    # Effective inclusive coverage (product override, else dataset); None = unbounded.
+    available_from: date | None = None
+    available_to: date | None = None
 
 
 class DatasetOut(BaseModel):
@@ -83,6 +86,8 @@ class DatasetOut(BaseModel):
     attribution: str
     default_scale_m: int
     is_custom: bool
+    available_from: date | None = None
+    available_to: date | None = None
     products: list[ProductOut]
 
 

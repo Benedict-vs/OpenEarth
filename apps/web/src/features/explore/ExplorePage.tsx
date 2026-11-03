@@ -13,6 +13,7 @@ import { LayerPanel } from "./LayerPanel";
 import { PlaybackBar } from "../timelapse/PlaybackBar";
 import { RoiToolbar } from "./RoiToolbar";
 import { TimeWindowPicker } from "./TimeWindowPicker";
+import { useLayerBounds } from "./useLayerBounds";
 
 /** Inside MapProvider so its hooks can reach the map instance. */
 function ExplorePanel({ draw }: { draw: DrawApi }) {
@@ -61,7 +62,8 @@ function ExplorePanel({ draw }: { draw: DrawApi }) {
 function WindowControl() {
   const window = useDateStore((s) => s.window);
   const setWindow = useDateStore((s) => s.setWindow);
-  return <TimeWindowPicker window={window} onChange={setWindow} />;
+  const bounds = useLayerBounds();
+  return <TimeWindowPicker window={window} onChange={setWindow} bounds={bounds} />;
 }
 
 function WindToggle() {

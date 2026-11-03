@@ -18,6 +18,8 @@ it flows through ``get_generic_collection`` like any user-registered dataset.
 
 from __future__ import annotations
 
+from datetime import date
+
 from openearth.catalog.models import DatasetSpec, ProductSpec
 
 EMIT_CH4ENH_COLLECTION_ID = "NASA/EMIT/L2B/CH4ENH"
@@ -93,4 +95,7 @@ EMIT_DATASET = DatasetSpec(
     attribution="Google Earth Engine / NASA JPL EMIT (V001 mirror)",
     default_scale_m=60,
     products=EMIT_PRODUCTS,
+    # The frozen V001 mirror — no new granules will ever land here.
+    available_from=date(2022, 8, 10),
+    available_to=date(2024, 11, 30),
 )

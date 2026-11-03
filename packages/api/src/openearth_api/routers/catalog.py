@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["catalog"])
 
 
-def _product_out(spec: ProductSpec) -> ProductOut:
+def _product_out(dataset: DatasetSpec, spec: ProductSpec) -> ProductOut:
+    available_from, available_to = dataset.coverage(spec.key)
     return ProductOut(
         key=spec.key,
         name=spec.name,
@@ -41,6 +42,8 @@ def _product_out(spec: ProductSpec) -> ProductOut:
         methane_only=spec.methane_only,
         requires_builder=spec.builder is not None,
         needs_ref=spec.needs_ref,
+        available_from=available_from,
+        available_to=available_to,
     )
 
 
@@ -52,7 +55,9 @@ def _dataset_out(spec: DatasetSpec) -> DatasetOut:
         attribution=spec.attribution,
         default_scale_m=spec.default_scale_m,
         is_custom=spec.id not in DATASETS,
-        products=[_product_out(p) for p in spec.products.values()],
+        available_from=spec.available_from,
+        available_to=spec.available_to,
+        products=[_product_out(spec, p) for p in spec.products.values()],
     )
 
 

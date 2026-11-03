@@ -13,6 +13,8 @@ Not a fallback for HLS — this is a separately selectable deep-history source. 
 
 from __future__ import annotations
 
+from datetime import date
+
 from openearth.catalog.builtin.optical import canonical_optical_products
 from openearth.catalog.models import DatasetSpec
 
@@ -31,4 +33,6 @@ LANDSAT_DATASET = DatasetSpec(
     attribution="USGS / NASA Landsat Collection 2",
     default_scale_m=30,
     products=LANDSAT_PRODUCTS,
+    # First LT05 C02 L2 scene; LC08/LC09 keep the merged archive open-ended.
+    available_from=date(1984, 3, 16),
 )

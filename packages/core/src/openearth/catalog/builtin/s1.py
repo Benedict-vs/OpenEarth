@@ -7,6 +7,8 @@ The v2 provider adds orbit-pass filtering and optional speckle reduction.
 
 from __future__ import annotations
 
+from datetime import date
+
 from openearth.catalog.models import DatasetSpec, ProductSpec
 
 # ------------------------------------------------------------------
@@ -214,4 +216,5 @@ S1_DATASET = DatasetSpec(
     attribution="Google Earth Engine / Copernicus Sentinel-1",
     default_scale_m=100,
     products=S1_PRODUCTS,
+    available_from=date(2014, 10, 3),
 )

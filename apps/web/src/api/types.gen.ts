@@ -1057,6 +1057,10 @@ export interface components {
     DatasetOut: {
       /** Attribution */
       attribution: string;
+      /** Available From */
+      available_from?: string | null;
+      /** Available To */
+      available_to?: string | null;
       /** Collection Id */
       collection_id: string;
       /** Default Scale M */
@@ -1659,6 +1663,10 @@ export interface components {
     };
     /** ProductOut */
     ProductOut: {
+      /** Available From */
+      available_from?: string | null;
+      /** Available To */
+      available_to?: string | null;
       /** Description */
       description: string;
       /** Display Scale */

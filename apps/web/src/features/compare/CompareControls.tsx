@@ -1,15 +1,18 @@
 import { useCatalog } from "../../api/queries";
 import type { Dataset } from "../../api/types";
+import { productBounds } from "../../lib/coverage";
 import type { TimeWindow } from "../../lib/timeWindow";
 import { useCompareStore, type SideConfig } from "../../stores/compareStore";
 import { TimeWindowPicker } from "../explore/TimeWindowPicker";
 
 /** Bridge a side's {date=center, halfDays} to a TimeWindowPicker window + patch. */
 function SideWindow({
+  catalog,
   config,
   side,
   onChange,
 }: {
+  catalog: Dataset[] | undefined;
   config: SideConfig;
   side: "left" | "right";
   onChange: (side: "left" | "right", patch: Partial<SideConfig>) => void;
@@ -19,6 +22,7 @@ function SideWindow({
     <TimeWindowPicker
       compact
       window={window}
+      bounds={productBounds(catalog, config.dataset, config.product)}
       onChange={(patch) => {
         const next: Partial<SideConfig> = {};
         if (patch.center !== undefined) next.date = patch.center;
@@ -75,11 +79,11 @@ export function CompareControls() {
           <div className="compare-side-windows">
             <div className="compare-side-window">
               <span className="compare-side-label">Left (A)</span>
-              <SideWindow config={left} side="left" onChange={setSide} />
+              <SideWindow catalog={catalog} config={left} side="left" onChange={setSide} />
             </div>
             <div className="compare-side-window">
               <span className="compare-side-label">Right (B)</span>
-              <SideWindow config={right} side="right" onChange={setSide} />
+              <SideWindow catalog={catalog} config={right} side="right" onChange={setSide} />
             </div>
           </div>
         </div>
@@ -113,7 +117,7 @@ function SidePanel({
         product={config.product}
         onChange={(dataset, product) => onChange(side, { dataset, product })}
       />
-      <SideWindow config={config} side={side} onChange={onChange} />
+      <SideWindow catalog={catalog} config={config} side={side} onChange={onChange} />
     </div>
   );
 }

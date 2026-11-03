@@ -1,4 +1,5 @@
 import type { Aoi, Dataset, Product, RoiIn, RoiPreset } from "../../api/types";
+import { productBounds, unionBounds, type DateBounds } from "../../lib/coverage";
 import { activePreset, PRESETS, presetModifiesPixels } from "../../lib/presets";
 import type { PacingSummary } from "../../lib/timelapse";
 import { useTimelapseStore } from "../../stores/timelapseStore";
@@ -19,6 +20,21 @@ interface Props {
   running: boolean;
   onRender: (draft: boolean) => void;
   submitError: string | null;
+}
+
+/** Span coverage: the primary product, widened by the HLS step-down when it can serve it. */
+function spanBounds(
+  datasets: Dataset[] | undefined,
+  datasetId: string,
+  productKey: string,
+  fallback: boolean,
+): DateBounds {
+  const primary = productBounds(datasets, datasetId, productKey);
+  const hlsServes =
+    fallback &&
+    datasetId !== "hls" &&
+    !!datasets?.find((d) => d.id === "hls")?.products.some((p) => p.key === productKey);
+  return hlsServes ? unionBounds([primary, productBounds(datasets, "hls", productKey)]) : primary;
 }
 
 /** The Cut inspector: the authoring stack, top-to-bottom, with a sticky run row. */
@@ -87,6 +103,7 @@ export function Inspector(props: Props) {
             period={{ start: form.start, end: form.end }}
             onChange={(start, end) => setForm({ start, end })}
             label=""
+            bounds={spanBounds(datasets, form.datasetId, productKey, form.fallback)}
           />
           <label className="cut-field">
             <span>Cadence</span>

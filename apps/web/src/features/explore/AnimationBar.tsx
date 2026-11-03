@@ -7,6 +7,7 @@ import { useLayersStore, type Layer } from "../../stores/layersStore";
 import { useTimelapseStore } from "../../stores/timelapseStore";
 import { useUiStore } from "../../stores/uiStore";
 import { PeriodPicker } from "./PeriodPicker";
+import { useLayerBounds } from "./useLayerBounds";
 
 const MS_PER_DAY = 24 * 3600 * 1000;
 
@@ -45,6 +46,7 @@ function PreviewControls({
   const halfDays = useDateStore((s) => s.window.halfDays);
   const navigate = useUiStore((s) => s.navigate);
   const setForm = useTimelapseStore((s) => s.setForm);
+  const bounds = useLayerBounds();
 
   const [enabled, setEnabled] = useState(false);
   const [steps, setSteps] = useState(12);
@@ -117,7 +119,7 @@ function PreviewControls({
         </label>
       </div>
 
-      <PeriodPicker period={period} onChange={setPeriod} compact />
+      <PeriodPicker period={period} onChange={setPeriod} compact bounds={bounds} />
 
       <div className="anim-controls">
         <label className="num-row">

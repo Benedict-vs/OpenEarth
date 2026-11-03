@@ -8,6 +8,8 @@ TOA (S2_HARMONIZED) explicitly because the point-source retrieval literature
 
 from __future__ import annotations
 
+from datetime import date
+
 from openearth.catalog.models import DatasetSpec, ProductSpec
 
 # Green → dark-green vegetation palette.
@@ -194,6 +196,9 @@ DIVERGING_PALETTE: list[str] = [
 
 S2_COLLECTION_ID = "COPERNICUS/S2_HARMONIZED"
 S2_SR_COLLECTION_ID = "COPERNICUS/S2_SR_HARMONIZED"
+# First granules in GEE: L1C from Sentinel-2A launch; L2A SR only from 2017-03-28.
+S2_L1C_AVAILABLE_FROM = date(2015, 6, 27)
+S2_SR_AVAILABLE_FROM = date(2017, 3, 28)
 
 
 S2_PRODUCTS: dict[str, ProductSpec] = {
@@ -764,6 +769,7 @@ S2_PRODUCTS: dict[str, ProductSpec] = {
         methane_only=True,
         # Methane proxies stay on L1C TOA (retrieval literature convention).
         collection_id=S2_COLLECTION_ID,
+        available_from=S2_L1C_AVAILABLE_FROM,
     ),
     "B12_B11": ProductSpec(
         key="B12_B11",
@@ -796,6 +802,7 @@ S2_PRODUCTS: dict[str, ProductSpec] = {
         palette=METHANE_PALETTE,
         methane_only=True,
         collection_id=S2_COLLECTION_ID,
+        available_from=S2_L1C_AVAILABLE_FROM,
     ),
     "CH4_ANOMALY": ProductSpec(
         key="CH4_ANOMALY",
@@ -833,6 +840,7 @@ S2_PRODUCTS: dict[str, ProductSpec] = {
         palette=METHANE_PALETTE,
         methane_only=True,
         collection_id=S2_COLLECTION_ID,
+        available_from=S2_L1C_AVAILABLE_FROM,
     ),
     # ── Raw spectral bands (ordered by wavelength) ───────────────
     "B1": ProductSpec(
@@ -1064,4 +1072,5 @@ S2_DATASET = DatasetSpec(
     attribution="Google Earth Engine / Copernicus Sentinel-2",
     default_scale_m=100,
     products=S2_PRODUCTS,
+    available_from=S2_SR_AVAILABLE_FROM,
 )

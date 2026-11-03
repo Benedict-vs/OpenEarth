@@ -14,6 +14,7 @@ Schema (``[dataset]`` table + one ``[products.KEY]`` table per product)::
     collection_id = "MODIS/061/MOD11A1"
     attribution = "NASA LP DAAC"
     default_scale_m = 1000
+    available_from = 2000-02-24       # optional TOML dates; bound the UI date pickers
 
     [products.LST_DAY]
     name = "LST (day)"
@@ -34,6 +35,7 @@ from __future__ import annotations
 import logging
 import re
 import tomllib
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +54,12 @@ _DATASET_REQUIRED = {
     "collection_id": str,
     "attribution": str,
     "default_scale_m": int,
+}
+
+# Coverage bounds (TOML local dates); allowed on the dataset and per product.
+_COVERAGE_OPTIONAL = {
+    "available_from": date,
+    "available_to": date,
 }
 
 _PRODUCT_REQUIRED = {
@@ -73,6 +81,7 @@ _PRODUCT_OPTIONAL = {
     "collection_id": str,
     "source_band": str,
     "needs_ref": bool,
+    **_COVERAGE_OPTIONAL,
 }
 
 _PRODUCT_FORBIDDEN = ("builder", "methane_only", "key")
@@ -88,6 +97,10 @@ def _typecheck(table: str, key: str, value: Any, expected: type) -> Any:
         return float(value)
     if expected is int and isinstance(value, bool):
         raise InvalidDatasetSpecError(f"{table}: {key!r} must be an integer, got a boolean.")
+    if expected is date and isinstance(value, datetime):  # datetime subclasses date
+        raise InvalidDatasetSpecError(
+            f"{table}: {key!r} must be a plain date (YYYY-MM-DD), got a date-time."
+        )
     if not isinstance(value, expected):
         raise InvalidDatasetSpecError(
             f"{table}: {key!r} must be {expected.__name__}, got {type(value).__name__}."
@@ -182,13 +195,16 @@ def parse_dataset_toml(text: str) -> DatasetSpec:
     if "dataset" not in doc or not isinstance(doc["dataset"], dict):
         raise InvalidDatasetSpecError("Missing [dataset] table.")
     raw_dataset = doc["dataset"]
-    _check_keys("[dataset]", raw_dataset, set(_DATASET_REQUIRED))
+    _check_keys("[dataset]", raw_dataset, set(_DATASET_REQUIRED) | set(_COVERAGE_OPTIONAL))
 
     ds_fields: dict[str, Any] = {}
     for name, expected in _DATASET_REQUIRED.items():
         if name not in raw_dataset:
             raise InvalidDatasetSpecError(f"[dataset]: missing required key {name!r}.")
         ds_fields[name] = _typecheck("[dataset]", name, raw_dataset[name], expected)
+    for name, expected in _COVERAGE_OPTIONAL.items():
+        if name in raw_dataset:
+            ds_fields[name] = _typecheck("[dataset]", name, raw_dataset[name], expected)
 
     if not _ID_RE.match(ds_fields["id"]):
         raise InvalidDatasetSpecError(
@@ -202,7 +218,10 @@ def parse_dataset_toml(text: str) -> DatasetSpec:
         raise InvalidDatasetSpecError("At least one [products.KEY] table is required.")
 
     products = {key: _parse_product(key, raw) for key, raw in raw_products.items()}
-    return DatasetSpec(products=products, **ds_fields)
+    try:
+        return DatasetSpec(products=products, **ds_fields)
+    except ValueError as exc:  # e.g. coverage that ends before it starts
+        raise InvalidDatasetSpecError(str(exc)) from exc
 
 
 def load_catalog_dir(path: Path) -> dict[str, DatasetSpec]:

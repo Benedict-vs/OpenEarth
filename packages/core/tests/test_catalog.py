@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 
 import pytest
 
@@ -11,8 +12,11 @@ from openearth.catalog import DATASETS, get_product, resolve_product
 from openearth.catalog.builtin.s2 import (
     METHANE_S2_KEYS,
     S2_COLLECTION_ID,
+    S2_L1C_AVAILABLE_FROM,
+    S2_SR_AVAILABLE_FROM,
     S2_SR_COLLECTION_ID,
 )
+from openearth.catalog.models import DatasetSpec, ProductSpec
 from openearth.catalog.registry import resolve_source
 
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -131,3 +135,51 @@ def test_unknown_lookups_raise_with_valid_keys() -> None:
         get_product("s2", "NOPE")
     with pytest.raises(KeyError, match="s5p"):
         get_product("nope", "NDVI")
+
+
+# ── Temporal coverage (UIs clamp date pickers to it) ─────────────────────
+
+
+@pytest.mark.parametrize(("ds_id", "key"), ALL_PRODUCTS)
+def test_every_builtin_product_has_a_start(ds_id: str, key: str) -> None:
+    start, end = DATASETS[ds_id].coverage(key)
+    assert start is not None
+    assert start >= date(1984, 1, 1)  # Landsat 5 is the oldest archive we serve
+    assert end is None or end > start
+
+
+def test_s5p_gases_narrow_the_dataset_start() -> None:
+    s5p = DATASETS["s5p"]
+    assert s5p.coverage("NO2") == (date(2018, 6, 28), None)
+    assert s5p.coverage("CH4") == (date(2019, 2, 8), None)
+    # The dataset bound is the earliest gas, so it never hides a valid product date.
+    assert s5p.available_from == min(s5p.coverage(k)[0] for k in s5p.products)
+
+
+def test_s2_l1c_proxies_reach_back_before_l2a() -> None:
+    s2 = DATASETS["s2"]
+    assert s2.coverage("NDVI")[0] == S2_SR_AVAILABLE_FROM
+    for key in METHANE_S2_KEYS:
+        if s2.get(key).collection_id == S2_COLLECTION_ID:
+            assert s2.coverage(key)[0] == S2_L1C_AVAILABLE_FROM
+
+
+def test_emit_mirror_is_closed_ended() -> None:
+    assert DATASETS["emit"].coverage("CH4ENH") == (date(2022, 8, 10), date(2024, 11, 30))
+
+
+def test_inverted_coverage_is_rejected() -> None:
+    product = ProductSpec(
+        key="X", name="x", vis_min=0, vis_max=1, valid_min=0, valid_max=1, display_unit=""
+    )
+    with pytest.raises(ValueError, match="ends"):
+        DatasetSpec(
+            id="bad",
+            title="bad",
+            collection_id="A/B",
+            attribution="",
+            default_scale_m=10,
+            products={"X": product},
+            available_from=date(2020, 1, 1),
+            available_to=date(2019, 1, 1),
+        )

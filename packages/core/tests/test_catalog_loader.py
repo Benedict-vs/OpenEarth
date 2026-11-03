@@ -5,6 +5,7 @@ All offline — the loader and registry never touch Earth Engine.
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -98,6 +99,16 @@ def test_minimal_toml_uses_defaults() -> None:
     assert product.vis_min == 0.0
     assert isinstance(product.vis_min, float)  # TOML int coerced to float
     assert len(product.palette) == 10  # default grey ramp
+    assert spec.coverage("DEM") == (None, None)  # no coverage → unbounded pickers
+
+
+def test_coverage_dates_parse_on_dataset_and_product() -> None:
+    toml = _replace(
+        MINIMAL_TOML, "default_scale_m = 30", "default_scale_m = 30\navailable_from = 2000-02-24"
+    )
+    toml = _replace(toml, 'display_unit = "m"', 'display_unit = "m"\navailable_to = 2020-12-31')
+    spec = parse_dataset_toml(toml)
+    assert spec.coverage("DEM") == (date(2000, 2, 24), date(2020, 12, 31))
 
 
 def test_expression_product_requires_and_keeps_bands() -> None:
@@ -172,6 +183,18 @@ display_unit = "delta"
         (("default_scale_m = 30", "default_scale_m = 0"), "must be positive"),
         (("default_scale_m = 30", 'default_scale_m = "30"'), "must be int"),
         (('display_unit = "m"', "display_unit = 5"), "must be str"),
+        (
+            ("default_scale_m = 30", "default_scale_m = 30\navailable_from = 2000-02-24T00:00:00"),
+            "plain date",
+        ),
+        (("default_scale_m = 30", 'default_scale_m = 30\navailable_from = "2000"'), "must be date"),
+        (
+            (
+                "default_scale_m = 30",
+                "default_scale_m = 30\navailable_from = 2020-01-01\navailable_to = 2019-01-01",
+            ),
+            "before it starts",
+        ),
     ],
 )
 def test_invalid_specs_rejected_with_precise_message(

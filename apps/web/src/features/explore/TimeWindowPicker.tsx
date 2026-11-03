@@ -3,6 +3,8 @@
  * and the pinned caption. Reusable — the Explore sidebar wires it to the shared
  * dateStore; Compare uses the `compact` variant per side against its own store.
  */
+import { useEffect } from "react";
+import { boundsCaption, clampDate, type DateBounds } from "../../lib/coverage";
 import {
   clampHalfDays,
   formatWindowCaption,
@@ -17,9 +19,24 @@ interface TimeWindowPickerProps {
   onChange(patch: Partial<TimeWindow>): void;
   /** Denser layout for inline / per-side use (Compare). */
   compact?: boolean;
+  /** Archive coverage of the product(s) shown; the center is clamped into it. */
+  bounds?: DateBounds;
 }
 
-export function TimeWindowPicker({ window, onChange, compact = false }: TimeWindowPickerProps) {
+export function TimeWindowPicker({
+  window,
+  onChange,
+  compact = false,
+  bounds = {},
+}: TimeWindowPickerProps) {
+  const { min, max } = bounds;
+  // Re-clamp when the bounds move under a stored center (product switch,
+  // workspace restore) — idempotent, so this settles after one write.
+  useEffect(() => {
+    const clamped = clampDate(window.center, { min, max });
+    if (clamped !== window.center) onChange({ center: clamped });
+  }, [window.center, min, max, onChange]);
+  const coverage = boundsCaption(bounds);
   const isCustom = !WINDOW_PRESETS.some((p) => p.halfDays === window.halfDays);
   return (
     <div className={compact ? "window-picker compact" : "window-picker"}>
@@ -28,7 +45,12 @@ export function TimeWindowPicker({ window, onChange, compact = false }: TimeWind
         <input
           type="date"
           value={window.center}
-          onChange={(e) => onChange({ center: e.target.value })}
+          min={min}
+          max={max}
+          title={coverage ?? undefined}
+          onChange={(e) =>
+            e.target.value && onChange({ center: clampDate(e.target.value, bounds) })
+          }
         />
       </label>
       <div className="window-presets">
@@ -56,6 +78,7 @@ export function TimeWindowPicker({ window, onChange, compact = false }: TimeWind
         </label>
       </div>
       <p className="muted window-caption">{formatWindowCaption(window)}</p>
+      {coverage && !compact ? <p className="muted window-coverage">{coverage}</p> : null}
     </div>
   );
 }

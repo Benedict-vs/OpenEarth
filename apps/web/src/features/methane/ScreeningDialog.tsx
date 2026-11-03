@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { submitScreening, useCreateSite } from "../../api/methaneQueries";
+import { useCatalog } from "../../api/queries";
 import { subscribeJob } from "../../api/sse";
 import type { Hotspot, ScreeningRequest } from "../../api/types";
+import { boundsCaption, clampDate, productBounds } from "../../lib/coverage";
 import { useMethaneStore } from "../../stores/methaneStore";
 
 /** A 0.3° box around a hotspot cell (for "create site here"). */
@@ -16,6 +18,9 @@ export function ScreeningDialog({ onClose }: { onClose: () => void }) {
   const [dates, setDates] = useState({ start: "2023-06-01", end: "2023-09-01" });
   const [status, setStatus] = useState<string>("");
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
+  // Screening reads the S5P OFFL L3 CH4 archive (first granule 2019-02-08).
+  const { data: catalog } = useCatalog();
+  const bounds = productBounds(catalog, "s5p", "CH4");
 
   const bbox = site
     ? site.bbox
@@ -67,7 +72,13 @@ export function ScreeningDialog({ onClose }: { onClose: () => void }) {
             <input
               type="date"
               value={dates.start}
-              onChange={(e) => setDates((d) => ({ ...d, start: e.target.value }))}
+              min={bounds.min}
+              max={dates.end}
+              title={boundsCaption(bounds) ?? undefined}
+              onChange={(e) => {
+                const start = clampDate(e.target.value, bounds);
+                if (e.target.value) setDates((d) => ({ ...d, start }));
+              }}
             />
           </label>
           <label>
@@ -75,7 +86,13 @@ export function ScreeningDialog({ onClose }: { onClose: () => void }) {
             <input
               type="date"
               value={dates.end}
-              onChange={(e) => setDates((d) => ({ ...d, end: e.target.value }))}
+              min={dates.start}
+              max={bounds.max}
+              title={boundsCaption(bounds) ?? undefined}
+              onChange={(e) => {
+                const end = clampDate(e.target.value, bounds);
+                if (e.target.value) setDates((d) => ({ ...d, end }));
+              }}
             />
           </label>
         </div>

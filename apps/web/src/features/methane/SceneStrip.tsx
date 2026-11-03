@@ -1,5 +1,7 @@
 import { useEffect } from "react";
+import { useCatalog } from "../../api/queries";
 import { useSiteScenes } from "../../api/methaneQueries";
+import { productBounds } from "../../lib/coverage";
 import { analysisAreaToBBox } from "../../lib/methane";
 import { PeriodPicker } from "../explore/PeriodPicker";
 import { useMethaneStore } from "../../stores/methaneStore";
@@ -11,6 +13,9 @@ export function SceneStrip() {
   const target = useMethaneStore((s) => s.targetSceneId);
   const setTarget = useMethaneStore((s) => s.setTarget);
   const area = useMethaneStore((s) => s.analysisArea);
+  // Scene search runs on S2 L1C — the MBSP proxy pins that collection.
+  const { data: catalog } = useCatalog();
+  const bounds = productBounds(catalog, "s2", "MBSP");
 
   // Search over the analysis area so every listed scene covers the chip.
   const {
@@ -29,7 +34,7 @@ export function SceneStrip() {
 
   return (
     <div className="scene-strip">
-      <PeriodPicker period={dates} onChange={setDates} label="Search period" />
+      <PeriodPicker period={dates} onChange={setDates} label="Search period" bounds={bounds} />
 
       {error ? (
         <p className="error-text">{error instanceof Error ? error.message : "Scene load failed"}</p>

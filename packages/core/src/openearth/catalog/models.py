@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -68,6 +69,11 @@ class ProductSpec:
     # the single-window pipeline; rendered via ``get_compare_image``. Unlike
     # ``builder`` this is allowed in user TOML (it needs no bespoke code).
     needs_ref: bool = False
+    # Temporal coverage override (inclusive UTC dates) for a product whose collection
+    # differs from the dataset's — each S5P gas has its own L3 archive, S2 L1C starts
+    # in 2015 but L2A in 2017. ``None`` inherits the dataset's bound.
+    available_from: date | None = None
+    available_to: date | None = None
 
     @property
     def band(self) -> str:
@@ -85,6 +91,11 @@ class DatasetSpec:
     attribution: str
     default_scale_m: int
     products: Mapping[str, ProductSpec]
+    # Inclusive archive coverage (UTC dates) so UIs never offer dates with no data.
+    # ``None`` = unbounded: an unknown start (user datasets) or a still-operating
+    # mission (end). Products may narrow it — see ``coverage``.
+    available_from: date | None = None
+    available_to: date | None = None
 
     def __post_init__(self) -> None:
         # Freeze the mapping and check key consistency once at import time.
@@ -94,6 +105,20 @@ class DatasetSpec:
                 raise ValueError(
                     f"Dataset {self.id!r}: product dict key {key!r} != {product.key!r}"
                 )
+            start, end = self.coverage(key)
+            if start is not None and end is not None and end < start:
+                raise ValueError(
+                    f"Dataset {self.id!r}: product {key!r} coverage ends ({end}) "
+                    f"before it starts ({start})"
+                )
+
+    def coverage(self, key: str) -> tuple[date | None, date | None]:
+        """Effective inclusive ``(from, to)`` coverage of product *key*."""
+        product = self.get(key)
+        return (
+            product.available_from or self.available_from,
+            product.available_to or self.available_to,
+        )
 
     def get(self, key: str) -> ProductSpec:
         try:

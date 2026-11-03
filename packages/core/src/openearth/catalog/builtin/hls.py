@@ -10,6 +10,8 @@ bands to the canonical scheme so RGB/NDVI/NDWI are source-uniform.
 
 from __future__ import annotations
 
+from datetime import date
+
 from openearth.catalog.builtin.optical import canonical_optical_products
 from openearth.catalog.models import DatasetSpec
 
@@ -27,4 +29,6 @@ HLS_DATASET = DatasetSpec(
     attribution="NASA LP DAAC / Harmonized Landsat Sentinel-2",
     default_scale_m=30,
     products=HLS_PRODUCTS,
+    # L30 start; S30 joins 2015-11-28 (merged, so the earlier bound applies).
+    available_from=date(2013, 4, 11),
 )

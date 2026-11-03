@@ -46,6 +46,13 @@ def test_list_catalog_builtins(client: TestClient) -> None:
     assert emit["is_custom"] is False
     ch4enh = next(p for p in emit["products"] if p["key"] == "CH4ENH")
     assert ch4enh["requires_builder"] is False
+    # Coverage: product-effective bounds so pickers can clamp per product.
+    assert emit["available_from"] == "2022-08-10"
+    assert ch4enh["available_to"] == "2024-11-30"
+    s5p = next(ds for ds in body if ds["id"] == "s5p")
+    ch4 = next(p for p in s5p["products"] if p["key"] == "CH4")
+    assert (s5p["available_from"], ch4["available_from"]) == ("2018-06-28", "2019-02-08")
+    assert ch4["available_to"] is None
 
 
 def test_get_single_dataset_and_404(client: TestClient) -> None:
