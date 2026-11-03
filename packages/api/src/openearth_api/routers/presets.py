@@ -1,4 +1,4 @@
-"""ROI presets (continents, cities, methane sites with date hints)."""
+"""ROI presets (continents, countries, cities, methane sites with date hints)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import date
 from fastapi import APIRouter
 
 from openearth.catalog.presets import ROI_PRESETS
-from openearth_api.schemas import BBoxIn, RoiPresetOut
+from openearth_api.schemas import BBoxIn, PolygonIn, RoiPresetOut
 
 router = APIRouter(tags=["presets"])
 
@@ -23,6 +23,9 @@ def list_roi_presets() -> list[RoiPresetOut]:
                 south=preset.bbox.south,
                 east=preset.bbox.east,
                 north=preset.bbox.north,
+            ),
+            polygon=(
+                PolygonIn(coordinates=list(preset.polygon.coordinates)) if preset.polygon else None
             ),
             date_hint=(
                 (date.fromisoformat(preset.date_hint[0]), date.fromisoformat(preset.date_hint[1]))

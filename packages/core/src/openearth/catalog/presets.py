@@ -9,9 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from openearth.geometry import BBox
+from openearth.catalog.preset_shapes import CHINA_RING
+from openearth.geometry import BBox, PolygonROI
 
-Category = Literal["continent", "city", "methane_site"]
+Category = Literal["continent", "country", "city", "methane_site"]
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,8 @@ class RoiPreset:
     category: Category
     # Suggested (start, end) ISO dates — methane sites carry known-event windows.
     date_hint: tuple[str, str] | None = None
+    # Exact outline when the region is not a box; ``bbox`` is then its bounds.
+    polygon: PolygonROI | None = None
 
 
 def _preset(
@@ -35,6 +38,13 @@ def _preset(
     return RoiPreset(name, BBox(west, south, east, north), category, date_hint)
 
 
+def _polygon_preset(
+    name: str, ring: tuple[tuple[float, float], ...], category: Category
+) -> RoiPreset:
+    polygon = PolygonROI(ring)
+    return RoiPreset(name, polygon.bounds, category, polygon=polygon)
+
+
 ROI_PRESETS: dict[str, RoiPreset] = {
     p.name: p
     for p in [
@@ -47,6 +57,8 @@ ROI_PRESETS: dict[str, RoiPreset] = {
         _preset("Oceania", 110.0, -50.0, 180.0, 0.0, "continent"),
         _preset("Antarctica", -180.0, -90.0, 180.0, -60.0, "continent"),
         _preset("Entire Earth", -180.0, -90.0, 180.0, 90.0, "continent"),
+        # Countries (polygon outlines)
+        _polygon_preset("China", CHINA_RING, "country"),
         # Cities
         _preset("Heidelberg (Germany)", 8.58, 49.35, 8.77, 49.46, "city"),
         _preset("London (UK)", -0.51, 51.28, 0.33, 51.70, "city"),

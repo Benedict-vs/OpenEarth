@@ -1821,11 +1821,12 @@ export interface components {
        * Category
        * @enum {string}
        */
-      category: "continent" | "city" | "methane_site";
+      category: "continent" | "country" | "city" | "methane_site";
       /** Date Hint */
       date_hint?: [string, string] | null;
       /** Name */
       name: string;
+      polygon?: components["schemas"]["PolygonIn"] | null;
     };
     /**
      * SceneInfoOut

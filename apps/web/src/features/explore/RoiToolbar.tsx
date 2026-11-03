@@ -47,14 +47,11 @@ export function RoiToolbar({ draw }: { draw: DrawApi }) {
   const applyPreset = (name: string) => {
     const preset = presets?.find((p) => p.name === name);
     if (!preset) return;
-    const bbox = boundsToBBox(
-      preset.bbox.west,
-      preset.bbox.south,
-      preset.bbox.east,
-      preset.bbox.north,
-    );
+    const presetRoi =
+      preset.polygon ??
+      boundsToBBox(preset.bbox.west, preset.bbox.south, preset.bbox.east, preset.bbox.north);
     draw.clear();
-    useRoiStore.getState().applyPreset(preset.name, bbox);
+    useRoiStore.getState().applyPreset(preset.name, presetRoi);
     if (preset.date_hint) {
       const [start, end] = preset.date_hint;
       // A site hint is a season, not a composite: it sets the period, and a
@@ -63,7 +60,7 @@ export function RoiToolbar({ draw }: { draw: DrawApi }) {
       useDateStore.getState().setPeriod(start, end);
       useDateStore.getState().setWindow({ center: w.center, halfDays: Math.min(w.halfDays, 45) });
     }
-    fitTo(bbox);
+    fitTo(presetRoi);
   };
 
   const applySavedAoi = (aoi: Aoi) => {
@@ -110,6 +107,7 @@ export function RoiToolbar({ draw }: { draw: DrawApi }) {
 
   const categories: { key: string; label: string }[] = [
     { key: "continent", label: "Continents" },
+    { key: "country", label: "Countries" },
     { key: "city", label: "Cities" },
     { key: "methane_site", label: "Methane sites" },
   ];

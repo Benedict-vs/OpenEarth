@@ -374,7 +374,11 @@ function clipTimecode(
 }
 
 type Aoi = { id: number; name: string; roi: RoiIn };
-type Preset = { name: string; bbox: { west: number; south: number; east: number; north: number } };
+type Preset = {
+  name: string;
+  bbox: { west: number; south: number; east: number; north: number };
+  polygon?: RoiIn | null;
+};
 
 /** Resolve the ROI-source key to a concrete ROI (current map / AOI / preset). */
 function resolveRoi(
@@ -391,7 +395,8 @@ function resolveRoi(
   if (source.startsWith("preset:")) {
     const name = source.slice(7);
     const p = presets?.find((x) => x.name === name);
-    return p ? { kind: "bbox", ...p.bbox } : null;
+    if (!p) return null;
+    return p.polygon ?? { kind: "bbox", ...p.bbox };
   }
   return null;
 }

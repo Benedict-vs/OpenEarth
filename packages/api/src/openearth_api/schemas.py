@@ -271,8 +271,10 @@ class WindFieldOut(BaseModel):
 
 class RoiPresetOut(BaseModel):
     name: str
-    category: Literal["continent", "city", "methane_site"]
+    category: Literal["continent", "country", "city", "methane_site"]
+    # Always the bounds; ``polygon`` (when set) is the actual ROI to apply.
     bbox: BBoxIn
+    polygon: PolygonIn | None = None
     date_hint: tuple[date, date] | None = None
 
 
