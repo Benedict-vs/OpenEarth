@@ -14,7 +14,7 @@ import httpx
 from fastapi import HTTPException
 
 from openearth.ee.render import thumb_url
-from openearth_api.cache import cache_key, roi_key_part, ttl_for
+from openearth_api.cache import cache_key, recipe_key_part, roi_key_part, ttl_for
 from openearth_api.services.tiles import build_image, resolve_request
 
 if TYPE_CHECKING:
@@ -80,7 +80,7 @@ def _effective_end_date(req: ThumbnailRequest) -> date | None:
 
 
 def render_thumbnail(req: ThumbnailRequest, cache: diskcache.Cache) -> bytes:
-    _dataset, spec, roi = resolve_request(req)
+    dataset, spec, roi = resolve_request(req)
 
     key = cache_key(
         "thumbnail",
@@ -98,6 +98,7 @@ def render_thumbnail(req: ThumbnailRequest, cache: diskcache.Cache) -> bytes:
         # thumbnails that differ only in the reference (Tier 3 P4).
         ref=[req.ref.start, req.ref.end] if req.ref else None,
         methane_ref=[req.methane_ref.start, req.methane_ref.end] if req.methane_ref else None,
+        **recipe_key_part(dataset, spec),
     )
     cached = cache.get(key)
     if cached is not None:

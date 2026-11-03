@@ -8,27 +8,30 @@ title = "MODIS Land Surface Temperature"
 collection_id = "MODIS/061/MOD11A1"
 attribution = "NASA LP DAAC / MODIS"
 default_scale_m = 1000
+available_from = 2000-02-24   # first MOD11A1 granule in GEE
 
+# The band is DN in kelvin × 50 (scale 0.02 K/DN); the expression converts to °C
+# so legend, pixel inspector, and time series all read in Celsius.
 [products.LST_DAY]
 name = "LST (day)"
-source_band = "LST_Day_1km"
-vis_min = 13000.0   # ~ -11 °C at scale 0.02
-vis_max = 16500.0   # ~ +57 °C
-valid_min = 7500.0
-valid_max = 65535.0
-display_unit = "K"
-display_scale = 0.02
+bands = ["LST_Day_1km"]
+expression = "LST_Day_1km * 0.02 - 273.15"
+vis_min = -13.0     # 260 K
+vis_max = 57.0      # 330 K
+valid_min = -123.15 # DN 7500 = 150 K, the MOD11 valid floor (also drops fill DN 0)
+valid_max = 1037.55 # DN 65535
+display_unit = "°C"
 palette = ["#0b1d51", "#4462c8", "#7fd4e4", "#f8fcc1", "#f4a663", "#a30f0f"]
-description = "1 km daytime land surface temperature. DN × 0.02 = kelvin."
+description = "1 km daytime land surface temperature in °C (DN × 0.02 − 273.15)."
 
 [products.LST_NIGHT]
 name = "LST (night)"
-source_band = "LST_Night_1km"
-vis_min = 12500.0
-vis_max = 15500.0
-valid_min = 7500.0
-valid_max = 65535.0
-display_unit = "K"
-display_scale = 0.02
+bands = ["LST_Night_1km"]
+expression = "LST_Night_1km * 0.02 - 273.15"
+vis_min = -23.0     # 250 K
+vis_max = 37.0      # 310 K
+valid_min = -123.15
+valid_max = 1037.55
+display_unit = "°C"
 palette = ["#0b1d51", "#4462c8", "#7fd4e4", "#f8fcc1", "#f4a663", "#a30f0f"]
-description = "1 km nighttime land surface temperature. DN × 0.02 = kelvin."
+description = "1 km nighttime land surface temperature in °C (DN × 0.02 − 273.15)."

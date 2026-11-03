@@ -12,6 +12,7 @@ thumbnails and other derived artifacts are.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from datetime import UTC, date, datetime
@@ -19,9 +20,11 @@ from typing import TYPE_CHECKING, Any
 
 import diskcache
 
+from openearth.catalog import DATASETS
 from openearth.geometry import BBox, PolygonROI
 
 if TYPE_CHECKING:
+    from openearth.catalog.models import DatasetSpec, ProductSpec
     from openearth.geometry import ROI
     from openearth.settings import Settings
 
@@ -59,6 +62,19 @@ def roi_key_part(roi: ROI | None) -> dict[str, Any] | None:
             "ring": [(round(lon, _ROI_NDIGITS), round(lat, _ROI_NDIGITS)) for lon, lat in roi.ring],
         }
     raise TypeError(f"Unsupported ROI type: {type(roi).__name__}")
+
+
+def recipe_key_part(dataset: DatasetSpec, product: ProductSpec) -> dict[str, Any]:
+    """Key parts pinning a USER dataset's pixel recipe (``**``-splat into ``cache_key``).
+
+    A TOML dataset can be deleted and re-added with the same id but a different
+    expression/scale, and no ``ALGO_VERSION`` bump covers that — without this an
+    edited spec replays stale cached values. Builtins return ``{}`` so their keys
+    stay byte-stable (their changes are versioned by ``ALGO_VERSION``).
+    """
+    if dataset.id in DATASETS:
+        return {}
+    return {"recipe": {"collection_id": dataset.collection_id, **dataclasses.asdict(product)}}
 
 
 def cache_key(op: str, **parts: Any) -> str:

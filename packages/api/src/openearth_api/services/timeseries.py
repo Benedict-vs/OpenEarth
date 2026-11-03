@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse, Response
 
 from openearth.errors import validate_date_range
 from openearth.timeseries import daily_timeseries
-from openearth_api.cache import cache_key, roi_key_part, ttl_for
+from openearth_api.cache import cache_key, recipe_key_part, roi_key_part, ttl_for
 from openearth_api.schemas import (
     JobCreated,
     TimeseriesPoint,
@@ -70,6 +70,7 @@ def _resolve(req: TimeseriesRequest) -> tuple[DatasetSpec, ProductSpec, ROI, int
         roi=roi_key_part(roi),
         dates={"start": req.dates.start.isoformat(), "end": req.dates.end.isoformat()},
         scale_m=scale_m,
+        **recipe_key_part(dataset, product),
     )
     return dataset, product, roi, scale_m, key
 

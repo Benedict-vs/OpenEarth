@@ -9,18 +9,19 @@ title = "MODIS Land Surface Temperature"
 collection_id = "MODIS/061/MOD11A1"
 attribution = "NASA LP DAAC"
 default_scale_m = 1000
+available_from = 2000-02-24
 
 [products.LST_DAY]
 name = "LST (day)"
-source_band = "LST_Day_1km"
-vis_min = 13000.0
-vis_max = 16500.0
-valid_min = 7500.0
-valid_max = 65535.0
-display_unit = "K"
-display_scale = 0.02
+bands = ["LST_Day_1km"]
+expression = "LST_Day_1km * 0.02 - 273.15"
+vis_min = -13.0
+vis_max = 57.0
+valid_min = -123.15
+valid_max = 1037.55
+display_unit = "°C"
 palette = ["#0b1d51", "#4462c8", "#7fd4e4", "#f8fcc1", "#f4a663", "#a30f0f"]
-description = "1 km daytime land surface temperature (scale 0.02 K/DN)."
+description = "1 km daytime land surface temperature in °C (DN × 0.02 − 273.15)."
 `;
 
 export function CustomDatasetEditor() {

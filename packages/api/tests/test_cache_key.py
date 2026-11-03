@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import UTC, datetime, timedelta
 
+from openearth.catalog import DATASETS
 from openearth.geometry import BBox, PolygonROI
 from openearth_api import cache
-from openearth_api.cache import cache_key, roi_key_part, ttl_for
+from openearth_api.cache import cache_key, recipe_key_part, roi_key_part, ttl_for
 
 
 def test_key_is_deterministic_and_order_independent() -> None:
@@ -54,3 +56,19 @@ def test_ttl_policy() -> None:
     assert ttl_for(yesterday) is None  # closed historical range: immutable
     assert ttl_for(today) == cache.OPEN_ENDED_TTL_SECONDS
     assert ttl_for(tomorrow) == cache.OPEN_ENDED_TTL_SECONDS
+
+
+def test_recipe_part_empty_for_builtins_so_their_keys_stay_stable() -> None:
+    s2 = DATASETS["s2"]
+    assert recipe_key_part(s2, s2.get("NDVI")) == {}
+
+
+def test_recipe_part_tracks_an_edited_user_dataset() -> None:
+    # A user dataset re-added under the same id with a new expression must not
+    # replay the old spec's cached values (e.g. MODIS LST raw DN → °C).
+    base = dataclasses.replace(DATASETS["s2"], id="modis_lst")
+    product = base.get("NDVI")
+    edited = dataclasses.replace(product, expression="(b('B8') - b('B4')) * 2")
+    old = cache_key("timeseries", dataset="modis_lst", **recipe_key_part(base, product))
+    new = cache_key("timeseries", dataset="modis_lst", **recipe_key_part(base, edited))
+    assert old != new
