@@ -39,7 +39,7 @@ detection suite}}
 \small Faculty of Physics and Astronomy, Heidelberg University\\
 \small \texttt{benedictvonschubert@gmail.com}}
 
-\date{\small July 2026 \;\textperiodcentered\; preprint describing OpenEarth~v2 (development phase~8)}
+\date{\small July 2026, revised November 2026 (composite-reference correction, Sect.~\ref{sec:composite}) \;\textperiodcentered\; preprint describing OpenEarth~v2 (development phase~8)}
 
 \begin{document}
 \maketitle
@@ -68,10 +68,12 @@ anticipated by an empirical detection floor measured on 35 plume-free
 scene pairs (pooled $24.6\perh$). A U-Net candidate ranker trained on CH4Net is evaluated
 under a leakage-controlled protocol (scene-level $F_1$ 0.571 vs.\ 0.416
 for the physics baseline), with its label-inheritance limits stated. Two
-pre-registered design hypotheses were tested, refuted, and kept: adding
-interfering-gas and solar-spectrum physics changed the forward model by
-only ${\sim}1.6\,\%$, and a median-composite reference failed to rescue
-the persistent-emitter case. Every headline number of the
+pre-registered design hypotheses were tested: adding interfering-gas and
+solar-spectrum physics changed the forward model by only
+${\sim}1.6\,\%$ (refuted and kept), while the median-composite reference
+experiment was later found void --- a member-selection bug duplicated
+acquisitions across tile overlaps --- and is kept in the record with a
+correction. Every headline number of the
 single-reference pipeline is reproducible from committed artifacts; we
 argue that this negative-result-preserving engineering discipline, more
 than any individual algorithm, is the transferable contribution.
@@ -152,9 +154,10 @@ contributions are:
   retrieval's ${\sim}23\,\%$ forward-model offset is dominated by missing
   interfering-gas/solar physics was tested and refuted
   (Sect.~\ref{sec:lut}); the hypothesis that a median-composite reference
-  rescues recurrent emitters was tested and refuted
-  (Sect.~\ref{sec:composite}). Both ship with their pre-registered
-  predictions and A/B numbers.
+  rescues recurrent emitters was tested, but that A/B was later voided by a
+  member-selection bug and remains untested (Sect.~\ref{sec:composite}).
+  Both ship with their pre-registered predictions and A/B numbers, the
+  latter with a dated correction.
 \end{enumerate}
 
 We deliberately claim no new retrieval physics: the scientific content of
@@ -586,7 +589,10 @@ run against the frozen single-reference baseline
 \centering\small
 \caption{Composite-reference A/B on the 17-event harness (LUT v5, seed 0).
 Hypotheses were pre-registered; the headline hypothesis was refuted, so
-the mode ships opt-in and default-off. Unlike the single-reference
+the mode ships opt-in and default-off. \emph{Corrected November 2026:} the
+composite column is void for 6 of the 14 MBMP events, whose members
+duplicated acquisitions across MGRS tiles (see the correction below the
+discussion). Unlike the single-reference
 baselines, the composite column records a single documented live run with
 no frozen per-event artifact; its slope movement is dominated by one
 event (korpezhe, Sect.~\ref{sec:composite}).}
@@ -623,6 +629,33 @@ marginally ($-0.016$); no homogeneous-subset statistic was computed.
 Consequently the composite ships default-off, no baseline was re-frozen
 around it, and the literature's regression-background design remains the
 recorded upgrade path.
+
+\paragraph{Correction (November 2026).} The A/B above did not test the
+composite as designed. Where an ROI touches more than one MGRS tile
+(UTM-zone overlaps, tile edges), the Sentinel-2 L1C catalogue lists each
+acquisition once per tile --- same datatake, timestamps under a second
+apart --- and the member picker did not collapse those copies. Recomputing
+the Phase-8 member sets from the live catalogue (selection only, no
+retrieval), 6 of the 14 MBMP events had fewer distinct overpasses than
+members: libya-sirte, permian and turkmenistan-south had 2; korpezhe,
+hassi-messaoud and turkmenistan-caspian had 3. A median over two
+overpasses counted repeatedly has no 50\,\% breakdown point, so the
+libya-sirte result (1.72 to $1.76\perh$) neither supports nor refutes the
+hypothesis: whether a true five-overpass median rescues the persistent
+emitter is \emph{untested}. Korpezhe's $162\perh$ --- and the slope
+movement it dominates --- is an artifact of the bug, not of shared
+contamination: on current code, the duplicated member set reproduces the
+blow-up ($166\perh$), while the de-duplicated set of five distinct
+same-tile overpasses yields no plume at all and still trips the
+contamination flag, failing in the opposite direction. The
+single-reference baselines are unaffected (14 of 17 events pin their
+reference and the other 3 are MBSP), as is the two-event gate. The single
+auto-picker shared the root cause (it could prefer a cross-tile copy on a
+sub-second tie); both pickers now keep one product per acquisition,
+preferring the target's tile. Table~\ref{tab:composite} is kept as the
+record of what was measured, not as evidence about the method; a re-run on
+the fixed picker, with hypotheses re-registered first, is part of the
+reference-selection work ahead.
 
 % ---------------------------------------------------------------------------
 \subsection{Screening and validation tiers}\label{sec:tiers}
@@ -1005,9 +1038,10 @@ baked in (high-elevation sites are biased), and the ${\sim}23\,\%$ anchor
 offset remains unattributed after two refuted explanations.
 \item \textbf{The reference problem is reported, not solved.} Persistent
 emitters can lack any in-period plume-free reference; the contamination
-diagnostic fires (conservatively --- 12 of 13 intercomparison events), the
-composite mode measurably does not fix persistence
-(Sect.~\ref{sec:composite}), and the regression-background design of
+diagnostic fires (conservatively --- 12 of 13 intercomparison events),
+whether the composite mode fixes persistence is untested (its A/B was
+voided by a member-selection bug, Sect.~\ref{sec:composite}), and the
+regression-background design of
 \citet{ehret2022} is the recorded upgrade path.
 \item \textbf{Borrowed wind coefficients.} $U_{\mathrm{eff}} = \alpha
 U_{10} + \beta$ was LES-calibrated against \emph{Varon's} plume-mask
@@ -1088,9 +1122,11 @@ anything, pre-register hypotheses for design experiments, keep refuted
 hypotheses in the record, measure the detection floor with the same
 pipeline that makes detections, and let the UI say ``this is
 indistinguishable from noise'' --- proved more consequential than any
-single algorithm choice. Twice, plausible improvements (spectroscopic
-completeness; a robust composite reference) were shown to not deliver
-their expected gains, and both null results shipped. For a class of
+single algorithm choice. Once, a plausible improvement (spectroscopic
+completeness) was shown not to deliver its expected gain and the null
+result shipped; a second (a robust composite reference) produced a null
+result that a later audit traced to a member-selection bug, and the record
+was corrected in place rather than rewritten. For a class of
 measurement where a blind test found professional systems' confidence
 intervals covering truth barely half the time \citep{sherwin2024}, we
 believe tooling that makes such self-audit cheap is a contribution in
@@ -1113,7 +1149,8 @@ document the suite is developed against. The exception is the
 composite-reference A/B (Table~\ref{tab:composite}): its numbers are
 recorded from a single documented live run in the methods document, with
 no frozen per-event artifact --- re-running it requires live Earth
-Engine. Live-Earth-Engine reproduction
+Engine --- and they are void for 6 of its 14 MBMP events
+(Sect.~\ref{sec:composite}). Live-Earth-Engine reproduction
 scripts (\code{validate\_events.py}, \code{calibration\_harness.py})
 require user credentials; the offline test suite requires none. CH4Net
 derivatives (chips, masks, weights) are not distributed, per
