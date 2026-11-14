@@ -41,6 +41,25 @@ export function analysisAreaToBBox(area: AnalysisArea): BBoxIn {
   };
 }
 
+/** True when (lat, lon) lies inside the analysis square — a source outside it is
+ *  ignored by the retrieval (flag ``source_outside_chip``). */
+export function isInAnalysisArea(area: AnalysisArea, lat: number, lon: number): boolean {
+  const b = analysisAreaToBBox(area);
+  return lon >= b.west && lon <= b.east && lat >= b.south && lat <= b.north;
+}
+
+/** A finite latitude/longitude pair within range (typed coordinates). */
+export function isValidLatLon(lat: number, lon: number): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lon >= -180 &&
+    lon <= 180
+  );
+}
+
 /** Default analysis area for a site: centred, 10 km (shrunk to fit small sites). */
 export function defaultAnalysisArea(site: Site): AnalysisArea {
   const { west, south, east, north } = site.bbox;
@@ -252,6 +271,10 @@ export function detectionNumbers(detail: DetectionDetail): NumberRow[] {
     { label: "ΔXCH4 max", value: fmt(detail.xch4_max_ppb, 0, "ppb") },
     { label: "c (target)", value: fmt(calib.c_target, 4) },
     { label: "c (reference)", value: fmt(calib.c_ref, 4) },
+    // Only when a source point was given: how far the reported mask is from it.
+    ...(typeof r.source_distance_m === "number"
+      ? [{ label: "Source → mask", value: fmt(r.source_distance_m, 0, "m") }]
+      : []),
   ];
 }
 
@@ -310,6 +333,10 @@ export const FLAG_HINTS: Record<string, string> = {
   sparse_chip: "fewer than 70% of the chip's pixels are valid — the retrieval is unreliable here",
   net_negative_ime:
     "the ML footprint's integrated ΔΩ is net negative — a column deficit, not an enhancement; the Q is reported as computed but this is unlikely to be a plume",
+  source_not_in_mask:
+    "a source point was given but the reported mask does not touch it (±60 m) — it is the chip's strongest blob instead. 'Source → mask' says how far off: a few hundred m may still be this plume (coordinate error, fragmented mask); kilometres means the Q is not this source's rate",
+  source_outside_chip:
+    "the source point lies outside the analysis area and was ignored — centre the area on the source",
   no_reference_mbsp_fallback:
     "MBMP was requested but no reference qualified (≤ 30 % cloud, 1–120 d) — this is a single-scene MBSP result; pin a reference to run MBMP",
   cloudy_chip: "high mean blue-band (B2) reflectance suggests cloud/haze contamination",

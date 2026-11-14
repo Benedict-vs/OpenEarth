@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useCatalog } from "../../api/queries";
-import { boundsCaption, clampDate, productBounds, rangeOutside } from "../../lib/coverage";
+import { boundsCaption, productBounds, rangeOutside } from "../../lib/coverage";
 import { formatCountdown } from "../../lib/time";
 import { windowRange } from "../../lib/timeWindow";
 import { useDateStore } from "../../stores/dateStore";
 import { useLayersStore, type Layer } from "../../stores/layersStore";
+import { DateField } from "./DateField";
 import { ExportButton } from "./ExportDialog";
 import { Legend } from "./Legend";
 
@@ -99,30 +100,19 @@ function LayerRow({ layer, isTop, isBottom }: { layer: Layer; isTop: boolean; is
             Reference window (pre)
           </span>
           <div className="layer-ref-inputs">
-            <input
-              type="date"
+            <DateField
               value={layer.ref.start}
               min={bounds.min}
               max={layer.ref.end}
-              aria-label="Reference start"
-              onChange={(e) =>
-                e.target.value &&
-                setRef(layer.id, { start: clampDate(e.target.value, bounds), end: layer.ref!.end })
-              }
+              ariaLabel="Reference start"
+              onCommit={(start) => setRef(layer.id, { start, end: layer.ref!.end })}
             />
-            <input
-              type="date"
+            <DateField
               value={layer.ref.end}
               min={layer.ref.start}
               max={bounds.max}
-              aria-label="Reference end"
-              onChange={(e) =>
-                e.target.value &&
-                setRef(layer.id, {
-                  start: layer.ref!.start,
-                  end: clampDate(e.target.value, bounds),
-                })
-              }
+              ariaLabel="Reference end"
+              onCommit={(end) => setRef(layer.id, { start: layer.ref!.start, end })}
             />
           </div>
         </div>

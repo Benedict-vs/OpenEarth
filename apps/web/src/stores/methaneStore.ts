@@ -38,6 +38,10 @@ interface MethaneState {
   analysisArea: AnalysisArea | null;
   /** True while the next Lab-map click recentres the analysis area. */
   placingArea: boolean;
+  /** Optional known emitter location: anchors plume selection (sent as source_lonlat). */
+  sourcePoint: { lat: number; lon: number } | null;
+  /** True while the next Lab-map click sets the source point. */
+  placingSource: boolean;
   /** True-colour preview of the target scene on the Lab map (helps area selection). */
   rgbPreviewEnabled: boolean;
   /** ΔXCH4 detection overlay visibility + opacity (bare-eye RGB comparison). */
@@ -55,6 +59,8 @@ interface MethaneState {
   setEmitPlumes(enabled: boolean): void;
   setAnalysisArea(area: Partial<AnalysisArea>): void;
   setPlacingArea(placing: boolean): void;
+  setSourcePoint(point: { lat: number; lon: number } | null): void;
+  setPlacingSource(placing: boolean): void;
   setRgbPreview(enabled: boolean): void;
   setOverlayVisible(visible: boolean): void;
   setOverlayOpacity(opacity: number): void;
@@ -89,6 +95,8 @@ export const useMethaneStore = create<MethaneState>()((set) => ({
   emitPlumesEnabled: false,
   analysisArea: null,
   placingArea: false,
+  sourcePoint: null,
+  placingSource: false,
   rgbPreviewEnabled: true,
   overlayVisible: true,
   overlayOpacity: 0.85,
@@ -104,6 +112,8 @@ export const useMethaneStore = create<MethaneState>()((set) => ({
       selectedDetectionId: null,
       analysisArea: site ? defaultAnalysisArea(site) : null,
       placingArea: false,
+      sourcePoint: null,
+      placingSource: false,
     }),
   setDates: (start, end) => set({ dates: { start, end } }),
   setTarget: (sceneId, time = null) =>
@@ -138,7 +148,12 @@ export const useMethaneStore = create<MethaneState>()((set) => ({
   setEmitPlumes: (enabled) => set({ emitPlumesEnabled: enabled }),
   setAnalysisArea: (area) =>
     set((s) => (s.analysisArea ? { analysisArea: { ...s.analysisArea, ...area } } : s)),
-  setPlacingArea: (placing) => set({ placingArea: placing }),
+  // One map-click mode at a time: arming one disarms the other.
+  setPlacingArea: (placing) =>
+    set(placing ? { placingArea: true, placingSource: false } : { placingArea: false }),
+  setSourcePoint: (point) => set({ sourcePoint: point }),
+  setPlacingSource: (placing) =>
+    set(placing ? { placingSource: true, placingArea: false } : { placingSource: false }),
   setRgbPreview: (enabled) => set({ rgbPreviewEnabled: enabled }),
   setOverlayVisible: (visible) => set({ overlayVisible: visible }),
   setOverlayOpacity: (opacity) => set({ overlayOpacity: opacity }),

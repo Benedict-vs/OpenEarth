@@ -83,6 +83,11 @@ export function LabMap() {
   const placing = useMethaneStore((s) => s.placingArea);
   const setAnalysisArea = useMethaneStore((s) => s.setAnalysisArea);
   const setPlacingArea = useMethaneStore((s) => s.setPlacingArea);
+  const sourcePoint = useMethaneStore((s) => s.sourcePoint);
+  const placingSource = useMethaneStore((s) => s.placingSource);
+  const setSourcePoint = useMethaneStore((s) => s.setSourcePoint);
+  const setPlacingSource = useMethaneStore((s) => s.setPlacingSource);
+  const sourceMarker = useRef<maplibregl.Marker | null>(null);
   const targetSceneTime = useMethaneStore((s) => s.targetSceneTime);
   const rgbEnabled = useMethaneStore((s) => s.rgbPreviewEnabled);
   const setRgbPreview = useMethaneStore((s) => s.setRgbPreview);
@@ -245,6 +250,37 @@ export function LabMap() {
       canvas.style.cursor = "";
     };
   }, [placing, setAnalysisArea, setPlacingArea]);
+
+  // "Pick on map" for the source point (mutually exclusive with area placing).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !placingSource) return;
+    const canvas = map.getCanvas();
+    canvas.style.cursor = "crosshair";
+    const onClick = (e: maplibregl.MapMouseEvent) => {
+      setSourcePoint({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+      setPlacingSource(false);
+    };
+    map.once("click", onClick);
+    return () => {
+      map.off("click", onClick);
+      canvas.style.cursor = "";
+    };
+  }, [placingSource, setSourcePoint, setPlacingSource]);
+
+  // The source point as a ringed dot — a DOM marker, so it stays above every layer.
+  useEffect(() => {
+    const map = mapRef.current;
+    sourceMarker.current?.remove();
+    sourceMarker.current = null;
+    if (!map || !ready || !sourcePoint) return;
+    const el = document.createElement("div");
+    el.className = "source-marker";
+    el.title = `Source ${sourcePoint.lat.toFixed(4)}°, ${sourcePoint.lon.toFixed(4)}°`;
+    sourceMarker.current = new maplibregl.Marker({ element: el })
+      .setLngLat([sourcePoint.lon, sourcePoint.lat])
+      .addTo(map);
+  }, [ready, sourcePoint]);
 
   // Render the selected detection's overlay + mask + wind. The overlay/mask/wind
   // of a detection are immutable, so a refetch of the same one is a no-op —

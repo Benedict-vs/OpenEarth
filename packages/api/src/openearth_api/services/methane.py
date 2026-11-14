@@ -328,6 +328,7 @@ def _result_payload(result: DetectionResult, xch4_max: float | None) -> dict[str
         {
             "method": result.method,
             "flags": result.flags,
+            "source_distance_m": result.source_distance_m,
             "percentiles": em.percentiles,
             "histogram": em.histogram,
             "calibration": result.calibration,

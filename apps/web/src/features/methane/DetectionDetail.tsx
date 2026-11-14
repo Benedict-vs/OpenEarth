@@ -310,6 +310,7 @@ function ReferenceBlock({ detail }: { detail: DetectionDetailT }) {
       k_sigma: (p.k_sigma as number) ?? 2,
       min_area_px: (p.min_area_px as number) ?? 5,
       seed: (p.seed as number) ?? 0,
+      source_lonlat: (p.source_lonlat as AnalyzeRequest["source_lonlat"]) ?? null,
     };
     try {
       const { job_id } = await submitAnalyze(body);

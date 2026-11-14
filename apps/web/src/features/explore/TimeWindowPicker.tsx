@@ -13,6 +13,7 @@ import {
   WINDOW_PRESETS,
   type TimeWindow,
 } from "../../lib/timeWindow";
+import { DateField } from "./DateField";
 
 interface TimeWindowPickerProps {
   window: TimeWindow;
@@ -42,15 +43,12 @@ export function TimeWindowPicker({
     <div className={compact ? "window-picker compact" : "window-picker"}>
       <label className="window-center">
         {compact ? "Center" : "Window center"}
-        <input
-          type="date"
+        <DateField
           value={window.center}
           min={min}
           max={max}
           title={coverage ?? undefined}
-          onChange={(e) =>
-            e.target.value && onChange({ center: clampDate(e.target.value, bounds) })
-          }
+          onCommit={(center) => onChange({ center })}
         />
       </label>
       <div className="window-presets">

@@ -490,6 +490,62 @@ button.danger:hover {
   width: 100%;
 }
 
+/* Typeable date field (DateField): text entry + optional native calendar. */
+.date-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.date-field .date-text {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.date-field .date-text.invalid {
+  border-color: var(--danger);
+  outline-color: var(--danger);
+}
+button.date-cal-button {
+  flex: none;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1;
+  background: transparent;
+  color: var(--muted);
+}
+button.date-cal-button:hover {
+  color: inherit;
+}
+/* Rendered (showPicker needs layout) but invisible and inert. */
+.date-native {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.date-note {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 2;
+  font-size: 10.5px;
+  color: #f0a336;
+  white-space: nowrap;
+}
+.period-shift {
+  display: flex;
+  gap: 4px;
+}
+.period-shift button {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Settings ──────────────────────────────────────────────── */
 
 .settings-page {
@@ -3083,4 +3139,30 @@ button.link-button {
   gap: 2px;
   font-size: 11px;
   color: var(--muted);
+}
+
+/* Lab: typed coordinates + the optional source point. */
+.coord-fields {
+  display: flex;
+  gap: 6px;
+}
+.coord-fields .coord-input {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.coord-fields .coord-input.invalid {
+  border-color: var(--danger);
+}
+.source-head {
+  margin-top: 6px;
+}
+.source-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #f0a336;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
 }
