@@ -39,7 +39,7 @@ from openearth.methane.conversion import (
 from openearth.methane.ime import emission_over_mask
 from openearth.methane.plume import mask_outline_geojson
 from openearth.methane.retrieval import RetrievalChip, check_chip_bbox, fetch_chip
-from openearth.methane.scenes import S2Scene, list_scenes, pick_reference
+from openearth.methane.scenes import S2Scene, dedupe_overpasses, list_scenes, pick_reference
 from openearth.methane.wind import sample_wind_at
 from openearth.settings import Settings
 from openearth_api.models import Detection, utcnow_iso
@@ -49,6 +49,7 @@ from openearth_api.services.methane import (
     _overlay_bounds,
     _resolve_bbox,
     derive_physics_agreement,
+    insert_detection,
 )
 
 # Nominal 10 m wind σ (m/s): recorded on the row but unused by the single-pass
@@ -140,6 +141,7 @@ def _persist_ml_detection(
     n_candidates: int,
     model_version: str,
     disagreement: str,
+    flags: list[str],
 ) -> str:
     det_id = uuid4().hex
     _detections_dir(settings).mkdir(parents=True, exist_ok=True)
@@ -168,7 +170,7 @@ def _persist_ml_detection(
         # Scan-time snapshot of physics agreement (historical). Display uses the
         # read-time-derived DetectionOut.physics_agreement, so old rows stay correct.
         "disagreement": disagreement,
-        "flags": [],
+        "flags": flags,
         "review": "ML candidate — requires review; not an autonomous detection.",
         # Grid corners so the detail's overlay places on the map and the
         # validation cross-match can locate the candidate (same key physics writes).
@@ -199,9 +201,7 @@ def _persist_ml_detection(
         created_at=now,
         updated_at=now,
     )
-    with Session(engine) as session:
-        session.add(row)
-        session.commit()
+    insert_detection(engine, row)
     return det_id
 
 
@@ -260,6 +260,9 @@ def _scan_one_scene(
         n_candidates=len(cands),
         model_version=manifest["model_version"],
         disagreement=derive_physics_agreement(engine, site_id, scene.scene_id),
+        # A footprint whose IME is net negative is a ΔΩ deficit, not an enhancement:
+        # keep the honest number but say so (the training label gate rejects these).
+        flags=["net_negative_ime"] if (emission.q_kg_h or 0.0) < 0.0 else [],
     )
 
 
@@ -279,7 +282,9 @@ async def submit_ml_scan(
 
     def runner(ctx: Any) -> dict[str, Any]:
         model = load_model(settings)
-        targets = list_scenes(bbox, req.start, req.end)
+        # Near a UTM-zone edge each acquisition is listed once per MGRS tile; scan
+        # it once (duplicates gave two candidates — and two different Qs — per pass).
+        targets = dedupe_overpasses(list_scenes(bbox, req.start, req.end), prefer_tile=None)
         if req.max_scenes:
             targets = targets[: req.max_scenes]
         # Reference candidate pool matches the training exporter's ±150-day / cloud-60
@@ -292,15 +297,32 @@ async def submit_ml_scan(
             max_cloud=60.0,
         )
         det_ids: list[str] = []
+        failed: list[dict[str, str]] = []
+        last_error: Exception | None = None
         for i, scene in enumerate(targets):
             if ctx.cancelled.is_set():
                 break
-            det_id = _scan_one_scene(req.site_id, scene, ref_pool, bbox, model, settings, engine)
+            # One bad scene (EE quota, a broken chip) must not fail the scan and
+            # strand the rows already written — they would land in the feed with
+            # no ids returned. Failures are reported alongside the hits.
+            try:
+                det_id = _scan_one_scene(
+                    req.site_id, scene, ref_pool, bbox, model, settings, engine
+                )
+            except Exception as exc:
+                failed.append({"scene_id": scene.scene_id, "error": str(exc)})
+                last_error = exc
+                det_id = None
             if det_id is not None:
                 det_ids.append(det_id)
             label = f"scanned {i + 1}/{len(targets)}, {len(det_ids)} hit(s)"
+            if failed:
+                label += f", {len(failed)} failed"
             ctx.progress(i + 1, len(targets), label)
-        return {"detection_ids": det_ids}
+        # Every scene failing is an outage, not a partial result — fail loudly.
+        if last_error is not None and len(failed) == len(targets):
+            raise last_error
+        return {"detection_ids": det_ids, "failed_scenes": failed}
 
     job_id = await jobs.submit("methane_ml_scan", req.model_dump(mode="json"), runner)
     return JobCreated(job_id=job_id)

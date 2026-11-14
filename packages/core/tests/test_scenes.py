@@ -11,7 +11,13 @@ import pytest
 from openearth.errors import RetrievalError
 from openearth.geometry import BBox
 from openearth.methane import scenes as scenes_mod
-from openearth.methane.scenes import S2Scene, list_scenes, pick_reference, pick_reference_set
+from openearth.methane.scenes import (
+    S2Scene,
+    dedupe_overpasses,
+    list_scenes,
+    pick_reference,
+    pick_reference_set,
+)
 
 
 def _scene(
@@ -144,6 +150,63 @@ def test_pick_reference_set_cloud_overpass_and_range_gates() -> None:
 def test_pick_reference_set_empty_when_nothing_qualifies() -> None:
     target = _scene("t", 19, orbit=50)
     assert pick_reference_set(target, [_scene("x", 18, orbit=93)], 5) == []
+
+
+# ── tile copies of one acquisition (UTM-zone overlap) ──
+
+
+def _tiled(
+    datatake_day: int, tile: str, *, second: int = 0, cloud: float = 0.0, sat: str = "Sentinel-2B"
+) -> S2Scene:
+    # Real Korpezhe layout: one datatake listed on T39SYC and T40SBH, the
+    # T40SBH copy timestamped ~0.8 s earlier.
+    return S2Scene(
+        scene_id=f"201806{datatake_day:02d}T070619_201806{datatake_day:02d}T071300_T{tile}",
+        time=datetime(2018, 6, datatake_day, 7, 19, second, tzinfo=UTC),
+        cloud_pct=cloud,
+        relative_orbit=106,
+        spacecraft=sat,
+        sun_zenith_deg=20.0,
+        view_zenith_deg=5.0,
+    )
+
+
+def test_dedupe_overpasses_prefers_target_tile_then_cloud() -> None:
+    a_39, a_40 = _tiled(29, "39SYC", second=1), _tiled(29, "40SBH", second=0)
+    b_40_clear, b_40_cloudy = _tiled(9, "40SBH", cloud=1.0), _tiled(9, "40SBH", cloud=9.0)
+    b_40_cloudy = S2Scene(  # a reprocessed duplicate: same datatake, other generation id
+        "20180609T070619_20180609T090000_T40SBH",
+        b_40_cloudy.time,
+        9.0,
+        106,
+        "Sentinel-2B",
+        20.0,
+        5.0,
+    )
+    kept = dedupe_overpasses([a_40, a_39, b_40_cloudy, b_40_clear], prefer_tile="39SYC")
+    assert [s.scene_id for s in kept] == [a_39.scene_id, b_40_clear.scene_id]
+
+
+def test_dedupe_overpasses_keeps_distinct_spacecraft() -> None:
+    s2a, s2b = _tiled(24, "39SYC", sat="Sentinel-2A"), _tiled(24, "39SYC", sat="Sentinel-2B")
+    assert len(dedupe_overpasses([s2a, s2b], prefer_tile="39SYC")) == 2
+
+
+def test_pick_reference_prefers_same_tile_copy() -> None:
+    # Before the fix the T40SBH copy won the sub-second Δt tie → cross-tile reference.
+    target = _tiled(19, "39SYC", second=0)
+    copies = [_tiled(29, "40SBH", second=0), _tiled(29, "39SYC", second=1)]
+    assert pick_reference(target, copies).scene_id.endswith("_T39SYC")
+
+
+def test_pick_reference_set_counts_each_overpass_once() -> None:
+    # Korpezhe 2018-06-19: 06-29/07-09 were each listed twice, so "5 members"
+    # were 3 overpasses. Now k members are k distinct acquisitions.
+    target = _tiled(19, "39SYC")
+    cands = [_tiled(d, t) for d in (24, 29) for t in ("39SYC", "40SBH")]
+    picked = pick_reference_set(target, cands, 5)
+    assert [s.scene_id[:8] for s in picked] == ["20180624", "20180629"]
+    assert all(s.scene_id.endswith("_T39SYC") for s in picked)
 
 
 # ── list_scenes parsing (canned getInfo payload) ──

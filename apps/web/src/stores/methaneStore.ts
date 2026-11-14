@@ -27,6 +27,8 @@ interface MethaneState {
   targetSceneTime: string | null;
   /** "auto" selects a reference server-side (MBMP); or an explicit scene id. */
   referenceSceneId: string | "auto";
+  /** The pinned reference's acquisition time (null while "auto") — for Δt display. */
+  referenceSceneTime: string | null;
   params: RunParams;
   selectedDetectionId: string | null;
   job: JobProgress | null;
@@ -45,7 +47,8 @@ interface MethaneState {
   selectSite(site: Site | null): void;
   setDates(start: string, end: string): void;
   setTarget(sceneId: string | null, time?: string | null): void;
-  setReference(sceneId: string | "auto"): void;
+  /** Pinning a scene forces single-reference mode (the API refuses composite + a pin). */
+  setReference(sceneId: string | "auto", time?: string | null): void;
   setParams(params: Partial<RunParams>): void;
   selectDetection(id: string | null): void;
   setJob(job: JobProgress | null): void;
@@ -79,6 +82,7 @@ export const useMethaneStore = create<MethaneState>()((set) => ({
   targetSceneId: null,
   targetSceneTime: null,
   referenceSceneId: "auto",
+  referenceSceneTime: null,
   params: DEFAULT_PARAMS,
   selectedDetectionId: null,
   job: null,
@@ -96,15 +100,39 @@ export const useMethaneStore = create<MethaneState>()((set) => ({
       targetSceneId: null,
       targetSceneTime: null,
       referenceSceneId: "auto",
+      referenceSceneTime: null,
       selectedDetectionId: null,
       analysisArea: site ? defaultAnalysisArea(site) : null,
       placingArea: false,
     }),
   setDates: (start, end) => set({ dates: { start, end } }),
   setTarget: (sceneId, time = null) =>
-    set({ targetSceneId: sceneId, targetSceneTime: sceneId ? time : null }),
-  setReference: (sceneId) => set({ referenceSceneId: sceneId }),
-  setParams: (params) => set((s) => ({ params: { ...s.params, ...params } })),
+    set((s) => ({
+      targetSceneId: sceneId,
+      targetSceneTime: sceneId ? time : null,
+      // A scene cannot be its own reference — promoting the pin to target unpins it.
+      ...(sceneId != null && sceneId === s.referenceSceneId
+        ? { referenceSceneId: "auto", referenceSceneTime: null }
+        : {}),
+    })),
+  setReference: (sceneId, time = null) =>
+    set((s) =>
+      sceneId === "auto"
+        ? { referenceSceneId: "auto", referenceSceneTime: null }
+        : {
+            referenceSceneId: sceneId,
+            referenceSceneTime: time,
+            params: { ...s.params, referenceMode: "single" },
+          },
+    ),
+  setParams: (params) =>
+    set((s) => ({
+      params: { ...s.params, ...params },
+      // Composite medians its own members — a pinned single reference contradicts it.
+      ...(params.referenceMode === "composite"
+        ? { referenceSceneId: "auto", referenceSceneTime: null }
+        : {}),
+    })),
   selectDetection: (id) => set({ selectedDetectionId: id }),
   setJob: (job) => set({ job }),
   setEmitPlumes: (enabled) => set({ emitPlumesEnabled: enabled }),
@@ -115,3 +143,12 @@ export const useMethaneStore = create<MethaneState>()((set) => ({
   setOverlayVisible: (visible) => set({ overlayVisible: visible }),
   setOverlayOpacity: (opacity) => set({ overlayOpacity: opacity }),
 }));
+
+/**
+ * True while the Lab still shows the site a job was submitted from. Job
+ * callbacks outlive site switches: a run finishing after the user moved on
+ * must refresh the feed but not hijack the new site's selection (and map).
+ */
+export function isStillOnSite(siteId: number | null): boolean {
+  return useMethaneStore.getState().selectedSite?.id === siteId;
+}

@@ -59,6 +59,7 @@
           },
           "seed": {
             "default": 0,
+            "minimum": 0.0,
             "title": "Seed",
             "type": "integer"
           },
@@ -999,6 +1000,18 @@
               }
             ],
             "title": "Status"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "const": "contradicted",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
           }
         },
         "title": "DetectionPatch",
@@ -3752,6 +3765,11 @@
       },
       "ValidationImportOut": {
         "properties": {
+          "duplicates": {
+            "default": 0,
+            "title": "Duplicates",
+            "type": "integer"
+          },
           "imported": {
             "title": "Imported",
             "type": "integer"
@@ -5484,6 +5502,7 @@
             "name": "start",
             "required": true,
             "schema": {
+              "format": "date",
               "title": "Start",
               "type": "string"
             }
@@ -5493,6 +5512,7 @@
             "name": "end",
             "required": true,
             "schema": {
+              "format": "date",
               "title": "End",
               "type": "string"
             }
@@ -5838,6 +5858,7 @@
             "name": "start",
             "required": true,
             "schema": {
+              "format": "date",
               "title": "Start",
               "type": "string"
             }
@@ -5847,6 +5868,7 @@
             "name": "end",
             "required": true,
             "schema": {
+              "format": "date",
               "title": "End",
               "type": "string"
             }

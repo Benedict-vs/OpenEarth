@@ -368,6 +368,50 @@ this phase. Promotion + the v5.1 event re-curation (roadmap D12) is one future d
 with this evidence in hand. The ML scan deliberately stays single-reference (channel parity with
 training, §9.4).
 
+**Correction (2026-11-14) — the A/B above did not test the composite as designed.** A
+reference-selection bug, fixed on branch `v2/methane-lab-bugfixes`, corrupted the member sets.
+Where an ROI touches more than one MGRS tile (UTM-zone overlaps, tile edges), the S2 L1C catalog
+lists each acquisition once per tile — same datatake, timestamps < 1 s apart.
+`pick_reference_set` did not collapse those copies, so "k = 5 members" could be 2–3 overpasses
+counted 2–3 times each, mixing tiles (`cross_tile_reference`). That voids the 50 % breakdown
+argument the experiment was testing: a plume on 2 dates can fill 4 of 5 members. Recomputing the
+Phase-8 member sets offline from the live catalog (same ±130 d window and 90 % cloud listing as
+`analyze`; selection only, no retrieval) for the 14 MBMP events:
+
+| event | overpasses behind the "5 members" |
+|---|---|
+| libya-sirte-2020-01-21 | **2** |
+| permian-2023-09-27 | **2** |
+| turkmenistan-south-2018-10-02 | **2** |
+| korpezhe-2018-06-19 | 3 |
+| hassi-messaoud-2020-01-19 | 3 |
+| turkmenistan-caspian-2017-11-26 | 3 |
+| the other 8 MBMP events (single tile) | 5 — unaffected |
+
+Consequences for the text above:
+
+- **libya-sirte "refuted" → unsupported.** Its composite was a median over 2 overpasses, so the
+  1.72 → 1.76 t/h result says nothing about the breakdown point. Whether a true 5-overpass
+  median rescues the persistent emitter is untested.
+- **korpezhe 10.95 → 162 t/h is a bug artifact**, and so is the slope 1.105 → 1.962 it
+  dominates. The "members share Korpezhe's contamination" explanation is not supported. On
+  current code (MC n = 300, seed 0), the duplicated set gives 166 t/h (4083-px mask); the
+  de-duplicated set — 5 distinct same-tile overpasses, 05-20 … 07-29 — gives **no plume**,
+  still flagged `possible_reference_contamination`. It fails in the other direction.
+- **The table stays as the record of what was measured** (pre-registration discipline), but it
+  must not be cited as evidence about the composite method.
+- **Unaffected:** the frozen single-reference baselines (v3–v5.1). 14 of 17 events pin their
+  reference, and the other 3 are MBSP, so the picker is never consulted. Also unaffected: the
+  2-event gate, which re-passes after the fix (Korpezhe 14.0 ± 22.5, Hassi Messaoud 9.06 t/h).
+- **Also fixed:** the single auto picker shared the root cause — on a sub-second Δt tie it
+  preferred the cross-tile copy. `dedupe_overpasses` now keeps one product per
+  (spacecraft, datatake), preferring the target's tile, for both pickers and the ML scan's
+  target list.
+
+The opt-in, default-off status stands on the safe side, but its evidential basis is gone. A
+re-run of the composite A/B on the fixed picker — with hypotheses re-registered before the run —
+belongs with the Phase 11 reference-ladder work.
+
 ## 8. Reproduction and calibration results
 
 Two live-EE instruments validate the pipeline. They are complementary: the first is a fast

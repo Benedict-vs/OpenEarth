@@ -11,6 +11,7 @@ mypy strict, no exemptions.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -170,3 +171,60 @@ def mask_outline_geojson(mask: NDArray[np.bool_], grid: GridSpec) -> dict[str, A
             }
         ],
     }
+
+
+def _ring_area_centroid(
+    ring: list[list[float]], origin: tuple[float, float]
+) -> tuple[float, float, float]:
+    """Signed shoelace area and centroid (x, y) of one closed ring, relative to *origin*.
+
+    Shifting to a local origin matters: with absolute degrees (~54, ~38) the
+    cross products are ~10⁸× a plume's area and cancel catastrophically.
+    """
+    ox, oy = origin
+    pts = [(x - ox, y - oy) for x, y in ring]
+    area2 = cx = cy = 0.0
+    for (x0, y0), (x1, y1) in pairwise(pts):
+        cross = x0 * y1 - x1 * y0
+        area2 += cross
+        cx += (x0 + x1) * cross
+        cy += (y0 + y1) * cross
+    if area2 == 0.0:
+        return 0.0, 0.0, 0.0
+    return area2 / 2.0, cx / (3.0 * area2), cy / (3.0 * area2)
+
+
+def mask_centroid(mask_geojson: dict[str, Any] | None) -> tuple[float, float] | None:
+    """Area-weighted (lat, lon) centroid of a :func:`mask_outline_geojson` outline.
+
+    This is where the plume IS — the place a coincidence match (EMIT, reference
+    events) must measure from. The chip centre can sit up to ~14 km away on a
+    20 km chip, beyond a 5 km match radius. Holes subtract (their signed area is
+    opposite to the shell's). Planar in degrees: the components span ≤ 20 km, so
+    the cos-latitude distortion is uniform across them. None for an empty mask.
+    """
+    if not mask_geojson:
+        return None
+    total = sx = sy = 0.0
+    origin: tuple[float, float] | None = None
+    for feature in mask_geojson.get("features", []):
+        geometry = feature.get("geometry") or {}
+        polygons = geometry.get("coordinates", [])
+        if geometry.get("type") == "Polygon":
+            polygons = [polygons]
+        for polygon in polygons:
+            shell_sign = 0.0
+            for ring in polygon:
+                if origin is None:
+                    origin = (float(ring[0][0]), float(ring[0][1]))
+                area, cx, cy = _ring_area_centroid(ring, origin)
+                if shell_sign == 0.0:
+                    shell_sign = 1.0 if area >= 0 else -1.0
+                # Normalise orientation: shell positive, holes negative.
+                weight = area * shell_sign
+                total += weight
+                sx += weight * cx
+                sy += weight * cy
+    if total <= 0.0 or origin is None:
+        return None
+    return (origin[1] + sy / total, origin[0] + sx / total)

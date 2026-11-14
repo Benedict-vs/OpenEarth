@@ -17,8 +17,9 @@ from typing import TYPE_CHECKING, Any
 import ee
 import numpy as np
 
+from openearth.catalog.registry import get_product
 from openearth.ee.client import ee_call
-from openearth.errors import JobError
+from openearth.errors import JobError, RetrievalError
 from openearth.methane.plume import robust_sigma
 from openearth.providers.s5p import get_trace_gas_collection
 
@@ -93,6 +94,12 @@ def _cells(bbox: BBox, cell_deg: float) -> list[_Cell]:
     return cells
 
 
+def check_lattice(bbox: BBox, cell_deg: float) -> None:
+    """Raise ``ValueError`` if the screening lattice would exceed the cell cap —
+    lets the API refuse an oversized request at submit, not minutes into the job."""
+    _cells(bbox, cell_deg)
+
+
 def _week_ranges(start: date, end: date) -> list[tuple[date, date]]:
     """Split ``[start, end)`` into consecutive 7-day (ISO-week-length) buckets."""
     weeks: list[tuple[date, date]] = []
@@ -113,6 +120,21 @@ def _cell_features(cells: list[_Cell]) -> ee.FeatureCollection:
     )
 
 
+def _gap_safe(collection: ee.ImageCollection) -> ee.ImageCollection:
+    """Append one fully-masked CH4 placeholder so an empty window still reduces.
+
+    The GEE OFFL L3 archive has whole-week gaps (0 granules in the week of
+    2023-08-17). ``.mean()`` of an empty collection is a *bandless* image, and
+    ``subtract`` then fails the entire screening job. With the placeholder the
+    mean keeps its band — fully masked, since ImageCollection reducers skip
+    masked pixels — so every cell reduces to null and ``stitch_hotspots``
+    counts that week as unobserved, exactly like a cloudy week.
+    """
+    band = get_product("s5p", "CH4").band
+    placeholder = ee.Image.constant(0).toFloat().rename(band).updateMask(ee.Image.constant(0))
+    return collection.merge(ee.ImageCollection([placeholder]))
+
+
 def _reduce_week(
     bbox: BBox,
     background: ee.Image,
@@ -120,8 +142,8 @@ def _reduce_week(
     cells_fc: ee.FeatureCollection,
 ) -> list[dict[str, Any]]:
     """One ee_call: weekly-mean minus background, reduced over the cell lattice."""
-    week_mean = get_trace_gas_collection(
-        "CH4", bbox, week[0].isoformat(), week[1].isoformat()
+    week_mean = _gap_safe(
+        get_trace_gas_collection("CH4", bbox, week[0].isoformat(), week[1].isoformat())
     ).mean()
     enh = week_mean.subtract(background)
     reduced = enh.reduceRegions(collection=cells_fc, reducer=ee.Reducer.mean(), scale=_S5P_SCALE_M)
@@ -204,9 +226,19 @@ def screen_region(
     """
     cells = _cells(bbox, cell_deg)
     cells_fc = _cell_features(cells)
-    background = get_trace_gas_collection(
-        "CH4", bbox, (start - timedelta(days=background_days)).isoformat(), start.isoformat()
-    ).median()
+    background_start = start - timedelta(days=background_days)
+    background_coll = get_trace_gas_collection(
+        "CH4", bbox, background_start.isoformat(), start.isoformat()
+    )
+    # An empty background would mask every cell-week and return [] — a silent
+    # "no hotspots" that is really "no baseline". Fail loudly instead.
+    if not ee_call(background_coll.size().getInfo):
+        raise RetrievalError(
+            f"No TROPOMI CH4 data in the {background_days}-day background window "
+            f"{background_start.isoformat()} → {start.isoformat()}; move the start date "
+            "later (the archive begins 2019-02-08)."
+        )
+    background = background_coll.median()
 
     weeks = _week_ranges(start, end)
     weekly_features: list[list[dict[str, Any]]] = []

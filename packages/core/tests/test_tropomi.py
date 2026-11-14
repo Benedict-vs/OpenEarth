@@ -8,7 +8,7 @@ from itertools import pairwise
 
 import pytest
 
-from openearth.errors import JobError
+from openearth.errors import JobError, RetrievalError
 from openearth.geometry import BBox
 from openearth.methane import tropomi as trop
 from openearth.methane.tropomi import (
@@ -153,11 +153,41 @@ def test_screen_region_stitches_faked_weeks(monkeypatch: pytest.MonkeyPatch) -> 
     assert all(0.0 <= h.lon <= 0.2 and 0.0 <= h.lat <= 0.2 for h in hotspots)
 
 
+class _StubNumber:
+    def __init__(self, value: int) -> None:
+        self._value = value
+
+    def getInfo(self) -> int:
+        return self._value
+
+
 class _StubImageColl:
     """Stands in for the CH4 collection so .median() is a lazy no-op object."""
 
+    def __init__(self, size: int = 30) -> None:
+        self._size = size
+
     def median(self) -> object:
         return object()
+
+    def size(self) -> _StubNumber:
+        return _StubNumber(self._size)
+
+
+def test_screen_region_refuses_empty_background(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(trop, "get_trace_gas_collection", lambda *a, **k: _StubImageColl(0))
+    monkeypatch.setattr(trop, "_cell_features", lambda cells: None)
+    with pytest.raises(RetrievalError, match="background window"):
+        screen_region(BBox(0.0, 0.0, 0.2, 0.2), date(2019, 2, 9), date(2019, 3, 1), cell_deg=0.1)
+
+
+def test_stitch_treats_empty_week_as_unobserved() -> None:
+    # An archive-gap week reduces to null cells via the masked placeholder.
+    cells = _four_cells()
+    observed = [[_feat(0, 40.0), _feat(1, 0.0), _feat(2, 1.0), _feat(3, -1.0)]] * 3
+    gap = [[_feat(i, None) for i in range(4)]]
+    hotspots = stitch_hotspots(observed + gap, cells, sigma_thresh=2.0, top_n=50)
+    assert hotspots[0].weeks_observed == 3
 
     def mean(self) -> object:
         return object()

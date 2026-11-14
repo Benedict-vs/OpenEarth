@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useImportValidation, useValidationEvents } from "../../api/methaneQueries";
+import { describeApiError } from "../../lib/methane";
 
 /** Reference-event import (file + source) and the imported-events table. */
 export function ValidationPanel() {
@@ -32,9 +33,13 @@ export function ValidationPanel() {
           Import
         </button>
       </div>
-      {importEvents.data ? (
+      {importEvents.isError ? (
+        <p className="error-text">{describeApiError(importEvents.error)}</p>
+      ) : importEvents.data ? (
         <p className="muted">
-          Imported {importEvents.data.imported}, skipped {importEvents.data.skipped}.
+          Imported {importEvents.data.imported}, skipped {importEvents.data.skipped}
+          {importEvents.data.duplicates ? `, ${importEvents.data.duplicates} already imported` : ""}
+          .
         </p>
       ) : null}
       {events && events.length > 0 ? (

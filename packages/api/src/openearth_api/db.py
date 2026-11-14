@@ -149,6 +149,23 @@ _MIGRATIONS: list[tuple[str, ...]] = [
     # query provenance, checked-at — is a JSON blob; rows predating this migration
     # keep emit_json IS NULL, meaning "never checked" (not "no match").
     ("ALTER TABLE detections ADD COLUMN emit_json TEXT",),
+    # 6 — data repair, not DDL: ``ON DELETE SET NULL`` on detections.site_id never
+    # fired (SQLite only enforces FKs under a per-connection pragma), so deleted
+    # sites left dangling ids — and sites reuse the highest freed id, handing the
+    # orphans to the next new site. delete_site/insert_detection now null them
+    # explicitly; this clears the ones already dangling.
+    (
+        "UPDATE detections SET site_id = NULL "
+        "WHERE site_id IS NOT NULL AND site_id NOT IN (SELECT id FROM sites)",
+    ),
+    # 7 — a rename-proof noise-floor key. Floors (data/noise_floor_v*.json) are keyed
+    # by the seeded site name, and lookups used the *editable* name, so renaming a
+    # seeded site silently swapped its floor for the global one. Existing rows keep
+    # their current name as the key; user-created sites get NULL (→ global floor).
+    (
+        "ALTER TABLE sites ADD COLUMN floor_key TEXT",
+        "UPDATE sites SET floor_key = name",
+    ),
 ]
 
 

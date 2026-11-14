@@ -196,3 +196,66 @@ def test_serve_reference_pool_widens_window(
     assert r_start == date(2021, 7, 1) - timedelta(days=150)
     assert r_end == date(2021, 8, 1) + timedelta(days=150)
     assert r_cloud == 60.0
+
+
+def test_ml_scan_one_bad_scene_keeps_the_other_hits(
+    client: TestClient, scan_ready: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def flaky_fetch(scene: S2Scene, bbox: Any, **_k: Any) -> RetrievalChip:
+        if scene.scene_id == "B":
+            raise RuntimeError("EE computePixels quota on scene B")
+        return _chip(scene)
+
+    monkeypatch.setattr(svc_ml, "fetch_chip", flaky_fetch)
+    site_id = client.get("/api/methane/sites").json()[0]["id"]
+    resp = client.post(
+        "/api/methane/ml/scan",
+        json={"site_id": site_id, "roi": SCAN_ROI, "start": "2021-07-01", "end": "2021-08-01"},
+    )
+    result = _wait_succeeded(client, resp.json()["job_id"])["result"]
+    assert len(result["detection_ids"]) == 1  # scene A's hit is reported, not stranded
+    assert result["failed_scenes"] == [
+        {"scene_id": "B", "error": "EE computePixels quota on scene B"}
+    ]
+
+
+def test_ml_scan_fails_when_every_scene_fails(
+    client: TestClient, scan_ready: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def dead_fetch(*_a: Any, **_k: Any) -> RetrievalChip:
+        raise RuntimeError("EE down")
+
+    monkeypatch.setattr(svc_ml, "fetch_chip", dead_fetch)
+    site_id = client.get("/api/methane/sites").json()[0]["id"]
+    resp = client.post(
+        "/api/methane/ml/scan",
+        json={"site_id": site_id, "roi": SCAN_ROI, "start": "2021-07-01", "end": "2021-08-01"},
+    )
+    job_id = resp.json()["job_id"]
+    deadline = time.monotonic() + 5
+    while client.get(f"/api/jobs/{job_id}").json()["status"] == "running":
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+    assert client.get(f"/api/jobs/{job_id}").json()["status"] == "failed"
+
+
+def test_ml_scan_scans_each_overpass_once(
+    client: TestClient, scan_ready: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def tiles(sid: str) -> S2Scene:
+        return S2Scene(
+            sid, datetime(2019, 2, 4, 7, 19, tzinfo=UTC), 0.0, 106, "Sentinel-2B", 30.0, 5.0
+        )
+
+    copies = [
+        tiles("20190204T071109_20190204T071212_T40SBH"),
+        tiles("20190204T071109_20190204T071212_T39SYC"),
+    ]
+    monkeypatch.setattr(svc_ml, "list_scenes", lambda *a, **k: copies)
+    site_id = client.get("/api/methane/sites").json()[0]["id"]
+    resp = client.post(
+        "/api/methane/ml/scan",
+        json={"site_id": site_id, "roi": SCAN_ROI, "start": "2019-02-01", "end": "2019-02-10"},
+    )
+    result = _wait_succeeded(client, resp.json()["job_id"])["result"]
+    assert len(result["detection_ids"]) == 1

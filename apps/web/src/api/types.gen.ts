@@ -1226,6 +1226,8 @@ export interface components {
       notes?: string | null;
       /** Status */
       status?: ("candidate" | "accepted" | "rejected") | null;
+      /** Verdict */
+      verdict?: "contradicted" | null;
     };
     /**
      * EmbeddingChangeRequest
@@ -2219,6 +2221,11 @@ export interface components {
     };
     /** ValidationImportOut */
     ValidationImportOut: {
+      /**
+       * Duplicates
+       * @default 0
+       */
+      duplicates: number;
       /** Imported */
       imported: number;
       /**

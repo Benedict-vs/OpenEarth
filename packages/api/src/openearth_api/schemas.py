@@ -8,6 +8,7 @@ for geometric validation.
 
 from __future__ import annotations
 
+import math
 import re
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
@@ -384,12 +385,23 @@ class WorkspaceOut(BaseModel):
 # ── Methane Lab (Phase 3) ────────────────────────────────────
 
 
+def _require_ordered(start: date | None, end: date | None, what: str) -> None:
+    """Reject a reversed date pair (either side may be absent)."""
+    if start is not None and end is not None and end < start:
+        raise ValueError(f"{what}: end ({end}) must not be before start ({start}).")
+
+
 class SiteIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     bbox: BBoxIn
     date_hint_start: date | None = None
     date_hint_end: date | None = None
     notes: str | None = None
+
+    @model_validator(mode="after")
+    def _ordered_hint(self) -> SiteIn:
+        _require_ordered(self.date_hint_start, self.date_hint_end, "date hint")
+        return self
 
 
 class SitePatch(BaseModel):
@@ -400,6 +412,13 @@ class SitePatch(BaseModel):
     date_hint_start: date | None = None
     date_hint_end: date | None = None
     notes: str | None = None
+
+    @model_validator(mode="after")
+    def _ordered_hint(self) -> SitePatch:
+        # Only when both arrive together; a one-sided patch is checked against
+        # the stored row in the service.
+        _require_ordered(self.date_hint_start, self.date_hint_end, "date hint")
+        return self
 
 
 class SiteOut(BaseModel):
@@ -444,7 +463,28 @@ class AnalyzeRequest(BaseModel):
     k_sigma: float = Field(default=2.0, ge=0.5, le=5.0)
     min_area_px: int = Field(default=5, ge=1, le=100000)
     source_lonlat: tuple[float, float] | None = None
-    seed: int = 0
+    # numpy's default_rng rejects negatives — fail at submit, not after the EE work.
+    seed: int = Field(default=0, ge=0)
+
+    @field_validator("source_lonlat")
+    @classmethod
+    def _finite_source(cls, v: tuple[float, float] | None) -> tuple[float, float] | None:
+        if v is None:
+            return v
+        lon, lat = v
+        if not (math.isfinite(lon) and math.isfinite(lat)):
+            raise ValueError("source_lonlat must be finite.")
+        if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
+            raise ValueError(f"source_lonlat out of range: lon={lon}, lat={lat}.")
+        return v
+
+    @model_validator(mode="after")
+    def _reference_is_not_the_target(self) -> AnalyzeRequest:
+        # Differencing a scene against itself gives ΔΩ ≡ 0 — a misleading
+        # "no plume" that looks like a real result.
+        if self.reference_scene_id is not None and self.reference_scene_id == self.target_scene_id:
+            raise ValueError("reference_scene_id must differ from target_scene_id.")
+        return self
 
     @model_validator(mode="after")
     def _composite_excludes_explicit_reference(self) -> AnalyzeRequest:
@@ -509,10 +549,16 @@ class DetectionDetailOut(DetectionOut):
 class DetectionPatch(BaseModel):
     status: Literal["candidate", "accepted", "rejected"] | None = None
     notes: str | None = None
+    # Human verdict: "contradicted" is never assigned automatically (core
+    # validation); an explicit null clears it. Re-running /validate keeps it.
+    verdict: Literal["contradicted"] | None = None
 
 
 class DetectionCreated(BaseModel):
     detection_id: str
+
+
+SCREENING_MAX_DAYS = 731  # two years of weekly reductions
 
 
 class ScreeningRequest(BaseModel):
@@ -525,6 +571,15 @@ class ScreeningRequest(BaseModel):
     cell_deg: float = Field(default=0.05, gt=0.0, le=1.0)
     sigma_thresh: float = Field(default=2.0, ge=0.0)
     top_n: int = Field(default=50, ge=1, le=500)
+
+    @model_validator(mode="after")
+    def _bounded_window(self) -> ScreeningRequest:
+        if self.end <= self.start:
+            raise ValueError(f"end ({self.end}) must be after start ({self.start}).")
+        # One EE round-trip per week: a multi-year request is a runaway job.
+        if (self.end - self.start).days > SCREENING_MAX_DAYS:
+            raise ValueError(f"Screening spans at most {SCREENING_MAX_DAYS} days per request.")
+        return self
 
 
 class HotspotOut(BaseModel):
@@ -548,6 +603,13 @@ class MlScanRequest(BaseModel):
     start: date
     end: date
     max_scenes: int | None = Field(default=None, ge=1, le=200)
+
+    @model_validator(mode="after")
+    def _ordered_window(self) -> MlScanRequest:
+        # A reversed window "succeeded" with zero scenes scanned.
+        if self.end <= self.start:
+            raise ValueError(f"end ({self.end}) must be after start ({self.start}).")
+        return self
 
 
 class MlStatusOut(BaseModel):
@@ -582,7 +644,8 @@ class NoiseFloorOut(BaseModel):
 
 class ValidationImportOut(BaseModel):
     imported: int
-    skipped: int
+    skipped: int  # unreadable/unplaceable records (bad coords, non-Point, no date)
+    duplicates: int = 0  # already imported (same source, time, position) — not re-added
     # Imported events whose rate was present in the source but not stored: an
     # ambiguous unit (unit-agnostic column under unit="auto") or the >500 t/h
     # sanity guard. The events still import and cross-match (space + time).

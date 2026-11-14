@@ -21,12 +21,11 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import ee
 
-from openearth.analytics.conversions import to_ee_date
 from openearth.ee.client import ee_call
 from openearth.geometry import BBox
 from openearth.methane.validation import haversine_km
@@ -294,6 +293,17 @@ def gee_available(start: str | date | datetime, end: str | date | datetime) -> b
 # ── GEE V001 query (Earth Engine) ────────────────────────────────────────────
 
 
+def gee_filter_range(start: str | date | datetime, end: str | date | datetime) -> tuple[str, str]:
+    """``filterDate`` bounds for the inclusive ``[start, end]`` day window.
+
+    ``filterDate``'s end is exclusive, so the last day must be pushed one day
+    out. Without that the GEE path silently dropped plumes on the window's last
+    day — and, since V002 starts at ``CUTOFF + 1``, every plume on the cutoff
+    day itself (2024-10-26) was never queried by either path.
+    """
+    return _as_date(start).isoformat(), (_as_date(end) + timedelta(days=1)).isoformat()
+
+
 def list_plumes_gee(
     bbox: BBox,
     start: str | date | datetime,
@@ -310,7 +320,7 @@ def list_plumes_gee(
     collection = (
         ee.ImageCollection(CH4PLM_COLLECTION_ID)
         .filterBounds(geometry)
-        .filterDate(to_ee_date(start), to_ee_date(end))
+        .filterDate(*gee_filter_range(start, end))
     )
 
     def _to_outline(image: ee.Image) -> ee.Feature:

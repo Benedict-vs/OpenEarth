@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCreateSite, useDeleteSite, useSites } from "../../api/methaneQueries";
 import type { SiteIn } from "../../api/types";
+import { parseNumberInput } from "../../lib/methane";
 import { useMethaneStore } from "../../stores/methaneStore";
 
 export function SiteList({ onScreen }: { onScreen: () => void }) {
@@ -51,7 +52,14 @@ export function SiteList({ onScreen }: { onScreen: () => void }) {
               title="Delete site"
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm(`Delete site "${site.name}"?`)) deleteSite.mutate(site.id);
+                if (!confirm(`Delete site "${site.name}"?`)) return;
+                deleteSite.mutate(site.id, {
+                  // A deleted site must not stay the working selection (its scenes,
+                  // area and Run button stayed live against a dead id).
+                  onSuccess: () => {
+                    if (useMethaneStore.getState().selectedSite?.id === site.id) selectSite(null);
+                  },
+                });
               }}
             >
               ✕
@@ -74,14 +82,24 @@ function NewSiteForm({
 }) {
   const [name, setName] = useState("");
   const [box, setBox] = useState({ west: "", south: "", east: "", north: "" });
+  const [formError, setFormError] = useState<string | null>(null);
 
   const submit = () => {
-    const west = Number(box.west);
-    const south = Number(box.south);
-    const east = Number(box.east);
-    const north = Number(box.north);
-    if (!name || [west, south, east, north].some((v) => Number.isNaN(v))) return;
-    onSubmit({ name, bbox: { kind: "bbox", west, south, east, north } });
+    // parseNumberInput: a blank box is NaN, not 0 (it used to save the site at 0°).
+    const west = parseNumberInput(box.west);
+    const south = parseNumberInput(box.south);
+    const east = parseNumberInput(box.east);
+    const north = parseNumberInput(box.north);
+    if (!name.trim()) {
+      setFormError("Give the site a name.");
+      return;
+    }
+    if (![west, south, east, north].every(Number.isFinite)) {
+      setFormError("Fill in all four bounds in decimal degrees.");
+      return;
+    }
+    setFormError(null);
+    onSubmit({ name: name.trim(), bbox: { kind: "bbox", west, south, east, north } });
   };
 
   return (
@@ -97,7 +115,7 @@ function NewSiteForm({
           />
         ))}
       </div>
-      {error ? <p className="error-text">{error}</p> : null}
+      {formError || error ? <p className="error-text">{formError ?? error}</p> : null}
       <button className="primary" disabled={busy} onClick={submit}>
         {busy ? "Saving…" : "Create site"}
       </button>

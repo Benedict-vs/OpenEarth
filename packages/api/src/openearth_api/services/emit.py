@@ -173,7 +173,17 @@ def list_plumes(
     bbox: BBox, start: str, end: str, cache: diskcache.Cache
 ) -> tuple[list[EmitPlume], list[str]]:
     """Cached combined plume list + the source paths queried (~1 day TTL)."""
-    key = cache_key("emit_plumes", bbox=roi_key_part(bbox), start=str(start), end=str(end))
+    # ``window`` versions this op alone: the GEE path became end-inclusive, so the
+    # same (bbox, start, end) now means a different query. Entries keyed before
+    # the fix (up to 1 day of TTL) must not be served — without busting every
+    # other cache via ALGO_VERSION.
+    key = cache_key(
+        "emit_plumes",
+        bbox=roi_key_part(bbox),
+        start=str(start),
+        end=str(end),
+        window="end_inclusive",
+    )
     cached = cache.get(key)
     if cached is not None:
         plumes = [_out_to_plume(EmitPlumeOut(**p)) for p in cached["plumes"]]
@@ -207,11 +217,14 @@ def match_detection(engine: Engine, cache: diskcache.Cache, det_id: str) -> Dete
         det_lat, det_lon = _detection_center(row)
         det_time = datetime.fromisoformat(row.scene_time_utc)
 
+    # Clamp the search box to valid lon/lat: near ±180° (or the poles) the raw box
+    # spilled past the range and BBox refused it with a confusing 422. Clamping
+    # gives up the far side of the antimeridian rather than failing the match.
     bbox = BBox(
-        det_lon - _MATCH_HALF_DEG,
-        det_lat - _MATCH_HALF_DEG,
-        det_lon + _MATCH_HALF_DEG,
-        det_lat + _MATCH_HALF_DEG,
+        max(det_lon - _MATCH_HALF_DEG, -180.0),
+        max(det_lat - _MATCH_HALF_DEG, -90.0),
+        min(det_lon + _MATCH_HALF_DEG, 180.0),
+        min(det_lat + _MATCH_HALF_DEG, 90.0),
     )
     query_start = (det_time - timedelta(days=_MATCH_QUERY_DAYS)).date().isoformat()
     query_end = (det_time + timedelta(days=_MATCH_QUERY_DAYS)).date().isoformat()

@@ -369,6 +369,28 @@ def test_mbsp_skips_reference_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
     assert [s[0] for s in steps] == [1, 2, 3, 4, 5, 6, 7]
 
 
+def test_mbmp_without_usable_reference_is_recorded_as_mbsp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Only candidate is 80 % cloud → pick_reference() is None. The run used to be
+    # stored as "mbmp" with no flag while computing target-only ΔΩ (= MBSP).
+    cloudy = S2Scene(
+        "20180609T074619_x",
+        datetime(2018, 6, 9, 7, 46, tzinfo=UTC),
+        80.0,
+        50,
+        "Sentinel-2A",
+        40.0,
+        5.0,
+    )
+    counts = _install_fakes(monkeypatch, target_delta=_truth_delta_omega(), reference=cloudy)
+    result = analyze(_BBOX, "20180619T074619_x", method="mbmp", mc=McParams(n=50))
+    assert result.method == "mbsp"
+    assert "no_reference_mbsp_fallback" in result.flags
+    assert result.reference is None
+    assert counts["fetch_chip"] == 1  # target only
+
+
 # ── Phase 8: composite reference (opt-in) ──
 
 

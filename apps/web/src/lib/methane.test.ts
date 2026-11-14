@@ -1,19 +1,27 @@
 import { describe, expect, it } from "vitest";
+import { ApiError } from "../api/client";
 import type { DetectionDetail, Site } from "../api/types";
 import {
   DEFAULT_ANALYSIS_KM,
+  FLAG_HINTS,
   MIN_ANALYSIS_KM,
   analysisAreaPx,
   analysisAreaToBBox,
+  describeApiError,
   defaultAnalysisArea,
   detectionNumbers,
   disagreementBadge,
   formatEmission,
   formatFloorTh,
   histogramOption,
+  isIntInRange,
   kghToTh,
+  mgrsTile,
   mlDetectionNumbers,
+  parseNumberInput,
   pctFraction,
+  referenceCheck,
+  referenceDeltaDays,
   toImageCoordinates,
   verdictBadge,
 } from "./methane";
@@ -197,4 +205,121 @@ describe("disagreementBadge", () => {
     expect(disagreementBadge(undefined)).toBeNull();
     expect(disagreementBadge("nonsense")).toBeNull();
   });
+});
+
+describe("referenceCheck", () => {
+  // Korpezhe 2018-06-19 with its documented pinned reference (validate_events.py).
+  const TARGET = {
+    scene_id: "20180619T070619_20180619T071220_T39SYC",
+    time: "2018-06-19T07:12:20Z",
+    cloud_pct: 0,
+    relative_orbit: 106,
+    spacecraft: "Sentinel-2A",
+  };
+  const scene = (over: Partial<typeof TARGET>) => ({ ...TARGET, ...over });
+
+  it("accepts the documented Korpezhe reference with no warnings", () => {
+    const ref = scene({
+      scene_id: "20180624T070621_20180624T071359_T39SYC",
+      time: "2018-06-24T07:13:59Z",
+    });
+    expect(referenceCheck(TARGET, ref)).toEqual({ ok: true, reason: null, warnings: [] });
+    expect(referenceDeltaDays(TARGET.time, ref.time)).toBeCloseTo(5, 1);
+  });
+
+  it("refuses the target itself and a same-overpass adjacent tile", () => {
+    expect(referenceCheck(TARGET, TARGET).ok).toBe(false);
+    const adjacent = scene({
+      scene_id: "20180619T070619_20180619T071220_T39SYD",
+      time: "2018-06-19T07:12:24Z",
+    });
+    const check = referenceCheck(TARGET, adjacent);
+    expect(check.ok).toBe(false);
+    expect(check.reason).toMatch(/same overpass/i);
+  });
+
+  it("mirrors the server's ±130 d window on the target's UTC day (exclusive end)", () => {
+    // Window = [2018-02-09, 2018-10-27) from target day 2018-06-19.
+    expect(referenceCheck(TARGET, scene({ scene_id: "a", time: "2018-02-09T00:00:00Z" })).ok).toBe(
+      true,
+    );
+    expect(referenceCheck(TARGET, scene({ scene_id: "b", time: "2018-02-08T23:59:59Z" })).ok).toBe(
+      false,
+    );
+    expect(referenceCheck(TARGET, scene({ scene_id: "c", time: "2018-10-26T23:59:59Z" })).ok).toBe(
+      true,
+    );
+    expect(referenceCheck(TARGET, scene({ scene_id: "d", time: "2018-10-27T00:00:00Z" })).ok).toBe(
+      false,
+    );
+  });
+
+  it("warns (but allows) different orbit, spacecraft, tile and cloudy scenes", () => {
+    const check = referenceCheck(
+      TARGET,
+      scene({
+        scene_id: "20180629T065621_20180629T070000_T40SBH",
+        time: "2018-06-29T07:00:00Z",
+        relative_orbit: 63,
+        spacecraft: "Sentinel-2B",
+        cloud_pct: 42,
+      }),
+    );
+    expect(check.ok).toBe(true);
+    expect(check.warnings).toHaveLength(4);
+    expect(check.warnings.join(" ")).toMatch(/different_orbit_reference/);
+    expect(check.warnings.join(" ")).toMatch(/cross_tile_reference/);
+  });
+});
+
+describe("mgrsTile", () => {
+  it("parses the tile suffix and rejects other ids", () => {
+    expect(mgrsTile("20180619T070619_20180619T071220_T39SYC")).toBe("39SYC");
+    expect(mgrsTile("not-a-scene")).toBeNull();
+  });
+});
+
+describe("number inputs", () => {
+  it("parses blank as NaN, never 0", () => {
+    expect(parseNumberInput("")).toBeNaN();
+    expect(parseNumberInput("  ")).toBeNaN();
+    expect(parseNumberInput("abc")).toBeNaN();
+    expect(parseNumberInput("0")).toBe(0);
+    expect(parseNumberInput("-103.85")).toBe(-103.85);
+  });
+
+  it("validates whole numbers in range", () => {
+    expect(isIntInRange(5, 1)).toBe(true);
+    expect(isIntInRange(0, 1)).toBe(false);
+    expect(isIntInRange(Number.NaN, 0)).toBe(false);
+    expect(isIntInRange(2.5, 0)).toBe(false);
+    expect(isIntInRange(201, 1, 200)).toBe(false);
+  });
+});
+
+describe("describeApiError", () => {
+  it("turns a FastAPI 422 list into field: message", () => {
+    const err = new ApiError(
+      422,
+      JSON.stringify([
+        {
+          type: "greater_than_equal",
+          loc: ["body", "min_area_px"],
+          msg: "Input should be greater than or equal to 1",
+        },
+      ]),
+    );
+    expect(describeApiError(err)).toBe("min_area_px: Input should be greater than or equal to 1");
+  });
+
+  it("passes plain details and generic errors through", () => {
+    expect(describeApiError(new ApiError(409, "A site with that name already exists."))).toBe(
+      "A site with that name already exists.",
+    );
+    expect(describeApiError(new Error("network down"))).toBe("network down");
+  });
+});
+
+it("explains the MBMP→MBSP fallback flag", () => {
+  expect(FLAG_HINTS.no_reference_mbsp_fallback).toMatch(/single-scene MBSP/);
 });

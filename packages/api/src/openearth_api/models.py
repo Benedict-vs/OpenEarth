@@ -83,6 +83,9 @@ class Site(SQLModel, table=True):
     date_hint_end: str | None = None
     notes: str | None = None
     created_at: str
+    # Noise-floor lookup key (migration 7): the seeded name, fixed at seed time so
+    # a rename never changes which floor applies. None → the global floor.
+    floor_key: str | None = None
 
 
 class Detection(SQLModel, table=True):

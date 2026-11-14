@@ -99,12 +99,15 @@ def _to_iso_utc(value: Any) -> str | None:
 
 
 def _float_or_none(value: Any, *, scale: float = 1.0) -> float | None:
+    """A finite float, else None — "nan"/"inf" are missing values, not data
+    (a NaN lat became NULL in a NOT NULL column and aborted the whole import)."""
     if value in (None, ""):
         return None
     try:
-        return float(value) * scale
+        number = float(value) * scale
     except (TypeError, ValueError):
         return None
+    return number if math.isfinite(number) else None
 
 
 def _looks_like_sigma(key: str) -> bool:
@@ -199,6 +202,8 @@ def _event_from_fields(row: dict[str, Any], source: str, unit: RateUnit) -> Refe
     iso = _to_iso_utc(when) if when is not None else None
     if lat is None or lon is None or iso is None:
         return None
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None  # e.g. lat=999 or swapped columns — an unplaceable event
     q_kg_h, rate_unit, dropped = _resolve_rate(row, unit)
     sigma = _resolve_sigma(row, rate_unit)
     raw = {k: v for k, v in row.items() if v not in (None, "")}
@@ -246,11 +251,19 @@ def _parse_geojson(data: bytes, source: str, unit: RateUnit) -> list[ReferenceEv
     features = doc.get("features", []) if isinstance(doc, dict) else []
     events: list[ReferenceEvent] = []
     for feature in features:
+        if not isinstance(feature, dict):
+            continue  # e.g. {"features": [null]}
         geometry = feature.get("geometry") or {}
-        if geometry.get("type") != "Point":
+        if not isinstance(geometry, dict) or geometry.get("type") != "Point":
             continue
-        coords = geometry.get("coordinates") or [None, None]
-        props = {str(k).strip().lower(): v for k, v in (feature.get("properties") or {}).items()}
+        coords = geometry.get("coordinates")
+        if not isinstance(coords, list) or len(coords) < 2:
+            continue  # a Point needs [lon, lat]
+        properties = feature.get("properties")
+        props = {
+            str(k).strip().lower(): v
+            for k, v in (properties.items() if isinstance(properties, dict) else [])
+        }
         props.setdefault("lon", coords[0])
         props.setdefault("lat", coords[1])
         event = _event_from_fields(props, source, unit)
