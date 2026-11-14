@@ -1,5 +1,6 @@
 /** Pure helpers for the Methane Lab (no React, no map — unit-tested). */
 import type { EChartsCoreOption } from "echarts/core";
+import { ApiError } from "../api/client";
 import type { BBoxIn, DetectionDetail, MethaneHistogram, Site } from "../api/types";
 
 /**
@@ -50,6 +51,95 @@ export function defaultAnalysisArea(site: Site): AnalysisArea {
   const heightKm = (north - south) * KM_PER_DEG;
   const fitKm = Math.min(DEFAULT_ANALYSIS_KM, widthKm, heightKm);
   return { lon, lat, sizeKm: Math.max(MIN_ANALYSIS_KM, Math.round(fitKm)) };
+}
+
+/**
+ * Pinned-MBMP-reference rules, mirroring the server: `detect.analyze` resolves
+ * an explicit reference only among scenes listed within ±130 d of the target's
+ * UTC day (exclusive end), and `pick_reference`'s 1-day floor excludes a
+ * same-overpass scene — an adjacent tile of the same acquisition images the
+ * same plume, so differencing against it would cancel the signal.
+ */
+export const REFERENCE_WINDOW_DAYS = 130;
+export const REFERENCE_MIN_DAYS = 1;
+/** The scene table's ● threshold — the auto picker's `max_cloud`. */
+export const REFERENCE_CLEAR_PCT = 30;
+
+const DAY_MS = 86_400_000;
+
+/** The scene fields the reference rules need (a subset of `SceneOut`). */
+export interface ReferenceSceneInfo {
+  scene_id: string;
+  time: string;
+  cloud_pct: number;
+  relative_orbit: number;
+  spacecraft: string;
+}
+
+export interface ReferenceCheck {
+  /** False ⇒ the server would refuse it, or it would cancel the plume. */
+  ok: boolean;
+  reason: string | null;
+  /** Usable, but the run will carry a QC flag or deserves a look. */
+  warnings: string[];
+}
+
+/** Signed reference − target offset in days. */
+export function referenceDeltaDays(targetTime: string, referenceTime: string): number {
+  return (Date.parse(referenceTime) - Date.parse(targetTime)) / DAY_MS;
+}
+
+/** MGRS tile from an S2 product id (`…_T39SYC`), or null. Near UTM-zone edges
+ *  one acquisition is listed once per overlapping tile — this tells them apart. */
+export function mgrsTile(sceneId: string): string | null {
+  return /_T(\d{2}[A-Z]{3})$/.exec(sceneId)?.[1] ?? null;
+}
+
+export function referenceCheck(
+  target: ReferenceSceneInfo,
+  candidate: ReferenceSceneInfo,
+): ReferenceCheck {
+  const refuse = (reason: string): ReferenceCheck => ({ ok: false, reason, warnings: [] });
+  if (candidate.scene_id === target.scene_id) return refuse("This is the target scene.");
+
+  const delta = referenceDeltaDays(target.time, candidate.time);
+  if (Math.abs(delta) < REFERENCE_MIN_DAYS) {
+    return refuse(
+      "Same overpass as the target — it images the same plume, so differencing would cancel it.",
+    );
+  }
+  const targetDay = Date.parse(`${target.time.slice(0, 10)}T00:00:00Z`);
+  const candidateMs = Date.parse(candidate.time);
+  if (
+    candidateMs < targetDay - REFERENCE_WINDOW_DAYS * DAY_MS ||
+    candidateMs >= targetDay + REFERENCE_WINDOW_DAYS * DAY_MS
+  ) {
+    return refuse(
+      `More than ${REFERENCE_WINDOW_DAYS} days from the target — outside the server's reference search window.`,
+    );
+  }
+
+  const warnings: string[] = [];
+  if (candidate.relative_orbit !== target.relative_orbit) {
+    warnings.push(
+      `different relative orbit (${candidate.relative_orbit} vs ${target.relative_orbit}) — viewing geometry differs; flagged different_orbit_reference`,
+    );
+  }
+  if (candidate.spacecraft !== target.spacecraft) {
+    warnings.push(
+      "different spacecraft — S2A/S2B/S2C SWIR responses differ slightly; the auto picker avoids this",
+    );
+  }
+  const [tTile, cTile] = [mgrsTile(target.scene_id), mgrsTile(candidate.scene_id)];
+  if (tTile && cTile && tTile !== cTile) {
+    warnings.push(`different MGRS tile (${cTile} vs ${tTile}); flagged cross_tile_reference`);
+  }
+  if (candidate.cloud_pct > REFERENCE_CLEAR_PCT) {
+    warnings.push(
+      `${candidate.cloud_pct.toFixed(0)}% tile cloud (> ${REFERENCE_CLEAR_PCT}%) — check the chip is clear in the RGB`,
+    );
+  }
+  return { ok: true, reason: null, warnings };
 }
 
 /** MapLibre image-source corner order [TL, TR, BR, BL]. */
@@ -218,6 +308,10 @@ export const FLAG_HINTS: Record<string, string> = {
   surface_correlated:
     "the plume mask correlates with the visible (B4/B3/B2) bands — methane is invisible there, so the mask may be tracking a surface feature, not gas",
   sparse_chip: "fewer than 70% of the chip's pixels are valid — the retrieval is unreliable here",
+  net_negative_ime:
+    "the ML footprint's integrated ΔΩ is net negative — a column deficit, not an enhancement; the Q is reported as computed but this is unlikely to be a plume",
+  no_reference_mbsp_fallback:
+    "MBMP was requested but no reference qualified (≤ 30 % cloud, 1–120 d) — this is a single-scene MBSP result; pin a reference to run MBMP",
   cloudy_chip: "high mean blue-band (B2) reflectance suggests cloud/haze contamination",
 };
 
@@ -240,4 +334,43 @@ export function disagreementBadge(state: string | null | undefined): VerdictBadg
     default:
       return null;
   }
+}
+
+/**
+ * One readable line from a failed API call. FastAPI 422s carry a JSON list of
+ * pydantic errors; show "field: message" instead of the raw blob.
+ */
+export function describeApiError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 422) {
+      try {
+        const items = JSON.parse(err.detail) as { loc?: unknown[]; msg?: string }[];
+        if (Array.isArray(items) && items.length > 0) {
+          return items
+            .map((it) => {
+              const field = (it.loc ?? []).filter((p) => p !== "body").join(".");
+              return field ? `${field}: ${it.msg ?? "invalid"}` : (it.msg ?? "invalid");
+            })
+            .join("; ");
+        }
+      } catch {
+        // detail was a plain string — fall through
+      }
+    }
+    return err.detail || `Request failed (${err.status})`;
+  }
+  return err instanceof Error ? err.message : "Request failed";
+}
+
+/**
+ * Parse a numeric text input strictly: blank or non-numeric is NaN, never 0
+ * (`Number("")` is 0 — a blank "east" used to save a site at 0°).
+ */
+export function parseNumberInput(text: string): number {
+  return text.trim() === "" ? Number.NaN : Number(text);
+}
+
+/** An integer within [min, max] (inclusive), for run-parameter validation. */
+export function isIntInRange(value: number, min: number, max = Number.POSITIVE_INFINITY): boolean {
+  return Number.isInteger(value) && value >= min && value <= max;
 }

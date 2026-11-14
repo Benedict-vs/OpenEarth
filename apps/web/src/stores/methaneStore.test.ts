@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Site } from "../api/types";
-import { useMethaneStore } from "./methaneStore";
+import { isStillOnSite, useMethaneStore } from "./methaneStore";
 
 const SITE: Site = {
   id: 1,
@@ -19,6 +19,14 @@ describe("methaneStore", () => {
       dates: { start: "2024-06-01", end: "2024-09-01" },
       targetSceneId: null,
       referenceSceneId: "auto",
+      referenceSceneTime: null,
+      params: {
+        method: "mbmp",
+        referenceMode: "single",
+        kSigma: 2,
+        minAreaPx: 5,
+        seed: 0,
+      },
       selectedDetectionId: null,
       job: null,
     });
@@ -73,5 +81,46 @@ describe("methaneStore", () => {
     const params = useMethaneStore.getState().params;
     expect(params.kSigma).toBe(2.5);
     expect(params.method).toBe("mbsp");
+  });
+
+  it("pinning a reference forces single mode; composite clears the pin", () => {
+    const store = useMethaneStore.getState();
+    store.setParams({ referenceMode: "composite" });
+    store.setReference("ref-1", "2018-06-24T07:13:59Z");
+
+    let next = useMethaneStore.getState();
+    expect(next.referenceSceneId).toBe("ref-1");
+    expect(next.referenceSceneTime).toBe("2018-06-24T07:13:59Z");
+    expect(next.params.referenceMode).toBe("single");
+
+    next.setParams({ referenceMode: "composite" });
+    next = useMethaneStore.getState();
+    expect(next.referenceSceneId).toBe("auto");
+    expect(next.referenceSceneTime).toBeNull();
+
+    // Unrelated param changes leave a pin alone.
+    next.setReference("ref-1", "2018-06-24T07:13:59Z");
+    next.setParams({ kSigma: 2.5 });
+    expect(useMethaneStore.getState().referenceSceneId).toBe("ref-1");
+  });
+
+  it("promoting the pinned reference to target unpins it", () => {
+    const store = useMethaneStore.getState();
+    store.setReference("scene-2", "2018-06-24T07:13:59Z");
+    store.setTarget("scene-1", "2018-06-19T07:12:20Z");
+    expect(useMethaneStore.getState().referenceSceneId).toBe("scene-2");
+
+    store.setTarget("scene-2", "2018-06-24T07:13:59Z");
+    expect(useMethaneStore.getState().referenceSceneId).toBe("auto");
+    expect(useMethaneStore.getState().referenceSceneTime).toBeNull();
+  });
+
+  it("isStillOnSite guards late job callbacks after a site switch", () => {
+    useMethaneStore.getState().selectSite(SITE);
+    expect(isStillOnSite(1)).toBe(true);
+    useMethaneStore.getState().selectSite({ ...SITE, id: 2, name: "Other" });
+    expect(isStillOnSite(1)).toBe(false);
+    useMethaneStore.getState().selectSite(null);
+    expect(isStillOnSite(1)).toBe(false);
   });
 });

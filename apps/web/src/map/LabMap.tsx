@@ -4,7 +4,7 @@
  * overlay image, the plume-mask outline, and a rotated wind-arrow marker.
  */
 import maplibregl from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { mintTiles } from "../api/queries";
 import { useDetectionDetail, useEmitPlumes } from "../api/methaneQueries";
 import { overlayUrl } from "../api/methaneQueries";
@@ -67,8 +67,15 @@ function areaGeoJSON(bbox: BBoxIn): GeoJSON.Feature {
 export function LabMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const readyRef = useRef(false);
+  // State, not a ref: every layer effect lists `ready` as a dependency, so work
+  // skipped before the style loaded re-runs once it has. With a ref, a remount
+  // (leaving the Lab and coming back) bailed out early and never re-drew the
+  // site box, analysis area, RGB or overlay.
+  const [ready, setReady] = useState(false);
   const windMarker = useRef<maplibregl.Marker | null>(null);
+  /** Detection whose layers are on the map — a refetch of the same immutable
+   *  detection (after Accept, notes, EMIT match …) must not rebuild or re-fit. */
+  const renderedDetection = useRef<string | null>(null);
 
   const site = useMethaneStore((s) => s.selectedSite);
   const detId = useMethaneStore((s) => s.selectedDetectionId);
@@ -107,7 +114,6 @@ export function LabMap() {
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
     mapRef.current = map;
     map.on("load", () => {
-      readyRef.current = true;
       map.addSource(BOX_SRC, {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -134,20 +140,23 @@ export function LabMap() {
         source: AREA_SRC,
         paint: { "line-color": AREA_COLOR, "line-width": 2 },
       });
+      setReady(true);
     });
     return () => {
-      readyRef.current = false;
+      setReady(false);
+      renderedDetection.current = null;
       map.remove();
       mapRef.current = null;
     };
   }, []);
 
-  // Fit to the selected site and draw its box.
+  // Fit to the selected site and draw its box (cleared when the site is deselected/deleted).
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !readyRef.current || !site) return;
+    if (!map || !ready) return;
     const src = map.getSource(BOX_SRC) as maplibregl.GeoJSONSource | undefined;
-    src?.setData({ type: "FeatureCollection", features: [boxGeoJSON(site)] });
+    src?.setData({ type: "FeatureCollection", features: site ? [boxGeoJSON(site)] : [] });
+    if (!site) return;
     map.fitBounds(
       [
         [site.bbox.west, site.bbox.south],
@@ -155,39 +164,40 @@ export function LabMap() {
       ],
       { padding: 40, duration: 600 },
     );
-  }, [site]);
+  }, [ready, site]);
 
   // Keep the analysis-area box (the chip actually analyzed) in sync.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !readyRef.current) return;
+    if (!map || !ready) return;
     const src = map.getSource(AREA_SRC) as maplibregl.GeoJSONSource | undefined;
     src?.setData({
       type: "FeatureCollection",
       features: area ? [areaGeoJSON(analysisAreaToBBox(area))] : [],
     });
-  }, [area]);
+  }, [ready, area]);
 
   // ΔXCH4 overlay visibility/opacity — paint/layout only, never a re-mint.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !readyRef.current || !map.getLayer(`${OVERLAY_SRC}-layer`)) return;
+    if (!map || !ready || !map.getLayer(`${OVERLAY_SRC}-layer`)) return;
     map.setLayoutProperty(
       `${OVERLAY_SRC}-layer`,
       "visibility",
       overlayVisible ? "visible" : "none",
     );
     map.setPaintProperty(`${OVERLAY_SRC}-layer`, "raster-opacity", overlayOpacity);
-  }, [overlayVisible, overlayOpacity]);
+  }, [ready, overlayVisible, overlayOpacity]);
 
   // True-colour preview of the scene under review, beneath the boxes — surface
   // context for placing the analysis area and the bare-eye false-positive check.
-  // A selected detection supplies its own scene time, so feed review keeps the
-  // RGB context through this same single layer.
-  const rgbSceneTime = targetSceneTime ?? detail?.scene_time_utc ?? null;
+  // A selected detection's own scene wins: its ΔXCH4 overlay sits on top, and
+  // the bare-eye check is only meaningful against the same acquisition.
+  // (Picking a new target row deselects the detection — SceneStrip.)
+  const rgbSceneTime = detId ? (detail?.scene_time_utc ?? null) : targetSceneTime;
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !readyRef.current) return;
+    if (!map || !ready) return;
     const remove = () => {
       if (map.getLayer(`${SCENE_RGB_SRC}-layer`)) map.removeLayer(`${SCENE_RGB_SRC}-layer`);
       if (map.getSource(SCENE_RGB_SRC)) map.removeSource(SCENE_RGB_SRC);
@@ -217,7 +227,7 @@ export function LabMap() {
     return () => {
       stale = true; // re-runs start with remove(); unmount destroys the map anyway
     };
-  }, [rgbEnabled, site, rgbSceneTime]);
+  }, [ready, rgbEnabled, site, rgbSceneTime]);
 
   // "Place on map": the next click recentres the analysis area.
   useEffect(() => {
@@ -236,12 +246,18 @@ export function LabMap() {
     };
   }, [placing, setAnalysisArea, setPlacingArea]);
 
-  // Render the selected detection's overlay + mask + wind + RGB context.
+  // Render the selected detection's overlay + mask + wind. The overlay/mask/wind
+  // of a detection are immutable, so a refetch of the same one is a no-op —
+  // rebuilding re-downloaded the PNG and snapped the camera back on every Accept.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !readyRef.current) return;
+    if (!map || !ready) return;
+    const wanted = detId && detail ? detId : null;
+    if (wanted !== null && renderedDetection.current === wanted) return;
     clearDetectionLayers(map, windMarker);
+    renderedDetection.current = null;
     if (!detId || !detail) return;
+    renderedDetection.current = detId;
 
     const coords = toImageCoordinates(detail.overlay_bounds);
     if (coords) {
@@ -277,16 +293,23 @@ export function LabMap() {
     if (coords && typeof from === "number") {
       const [tl, , br] = coords;
       const center: [number, number] = [(tl[0] + br[0]) / 2, (tl[1] + br[1]) / 2];
-      windMarker.current = new maplibregl.Marker({ element: windArrowEl(from) })
+      // Rotation via the Marker option: MapLibre owns the element's `transform`
+      // (positioning) and silently overwrote a CSS rotate — every arrow pointed north.
+      // It points where the wind blows TOWARD (from + 180°), aligned to the map.
+      windMarker.current = new maplibregl.Marker({
+        element: windArrowEl(from),
+        rotation: from + 180,
+        rotationAlignment: "map",
+      })
         .setLngLat(center)
         .addTo(map);
     }
-  }, [detId, detail]);
+  }, [ready, detId, detail]);
 
   // EMIT plume overlay: outlines styled by provenance, click for q ± σ.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !readyRef.current) return;
+    if (!map || !ready) return;
     if (!emitEnabled || !plumes) {
       removePlumeLayers(map);
       return;
@@ -298,7 +321,7 @@ export function LabMap() {
     } else {
       addPlumeLayers(map, fc);
     }
-  }, [emitEnabled, plumes]);
+  }, [ready, emitEnabled, plumes]);
 
   const plumeCount = emitEnabled ? (plumes?.plumes.length ?? null) : null;
 
@@ -496,8 +519,6 @@ function windArrowEl(fromDeg: number): HTMLElement {
   const el = document.createElement("div");
   el.className = "wind-arrow";
   el.title = `Wind from ${Math.round(fromDeg)}°`;
-  // Arrow points in the direction the wind blows TOWARD (from + 180°).
-  el.style.transform = `rotate(${fromDeg + 180}deg)`;
-  el.textContent = "↑";
+  el.textContent = "↑"; // rotated by the Marker (see the render effect)
   return el;
 }

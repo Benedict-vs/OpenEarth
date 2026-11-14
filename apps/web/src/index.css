@@ -1051,6 +1051,52 @@ button.ghost {
 .dot.ok {
   background: #3fb950;
 }
+/* Pinned MBMP reference: the Ref dot is a toggle; the row gets an amber edge
+   so target (accent fill) and reference read as distinct roles. */
+.scene-row.ref-pinned {
+  box-shadow: inset 3px 0 0 #f0a336;
+}
+button.ref-pin {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+}
+button.ref-pin:not(:disabled):hover {
+  border-color: var(--muted);
+}
+button.ref-pin:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+button.ref-pin.pinned {
+  border-color: #f0a336;
+  box-shadow: 0 0 0 1px #f0a336;
+}
+.ref-warnings {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 4px 8px;
+  border-left: 3px solid #f0a336;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ref-pinned-note {
+  margin: 4px 0 0;
+}
+button.link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
 
 /* Run panel */
 .run-panel {

@@ -17,6 +17,7 @@ import {
   FLAG_HINTS,
   ML_Q_CAPTION,
   NOISE_FLOOR_TOOLTIP,
+  describeApiError,
   detectionNumbers,
   disagreementBadge,
   formatFloorTh,
@@ -24,7 +25,7 @@ import {
   pctFraction,
   verdictBadge,
 } from "../../lib/methane";
-import { useMethaneStore } from "../../stores/methaneStore";
+import { isStillOnSite, useMethaneStore } from "../../stores/methaneStore";
 import { McHistogram } from "./McHistogram";
 import { ValidationPanel } from "./ValidationPanel";
 
@@ -36,7 +37,6 @@ export function DetectionDetail() {
   const { data: detail } = useDetectionDetail(detId);
   const patch = usePatchDetection();
   const validate = useValidateDetection();
-  const [notes, setNotes] = useState<string>("");
 
   if (!detId || !detail) return <p className="muted">Run or pick a detection to see details.</p>;
 
@@ -112,20 +112,8 @@ export function DetectionDetail() {
         </button>
       </div>
 
-      <div className="notes-row">
-        <textarea
-          placeholder="Notes…"
-          value={notes || detail.notes || ""}
-          onChange={(e) => setNotes(e.target.value)}
-        />
-        <button
-          className="mini"
-          onClick={() => patch.mutate({ id: detId, body: { notes } })}
-          disabled={patch.isPending}
-        >
-          Save note
-        </button>
-      </div>
+      {/* Keyed by detection: a draft never follows you to the next detection. */}
+      <NotesEditor key={detId} detId={detId} saved={detail.notes ?? null} />
 
       <div className="validate-row">
         <span className={badge.className}>{badge.label}</span>
@@ -136,11 +124,63 @@ export function DetectionDetail() {
         >
           {validate.isPending ? "Matching…" : "Validate"}
         </button>
+        {/* "Contradicted" is a human verdict only (never automatic); it survives re-validation. */}
+        <button
+          className="mini"
+          title={
+            verdict === "contradicted"
+              ? "Clear the human 'contradicted' verdict"
+              : "Reference data contradicts this detection (human verdict)"
+          }
+          onClick={() =>
+            patch.mutate({
+              id: detId,
+              body: { verdict: verdict === "contradicted" ? null : "contradicted" },
+            })
+          }
+          disabled={patch.isPending}
+        >
+          {verdict === "contradicted" ? "Clear contradicted" : "Mark contradicted"}
+        </button>
       </div>
+      {validate.isError ? <p className="error-text">{describeApiError(validate.error)}</p> : null}
 
       <ValidationPanel />
 
       <EmitSection detId={detId} detail={detail} />
+    </div>
+  );
+}
+
+/**
+ * Notes for one detection. `draft === null` means "unedited — show what is
+ * saved", so clearing the box to "" is a real edit (the old `notes || saved`
+ * fallback snapped an emptied box back to the stored text).
+ */
+function NotesEditor({ detId, saved }: { detId: string; saved: string | null }) {
+  const patch = usePatchDetection();
+  const [draft, setDraft] = useState<string | null>(null);
+  const dirty = draft !== null && draft !== (saved ?? "");
+
+  return (
+    <div className="notes-row">
+      <textarea
+        placeholder="Notes…"
+        value={draft ?? saved ?? ""}
+        onChange={(e) => setDraft(e.target.value)}
+      />
+      <button
+        className="mini"
+        onClick={() =>
+          patch.mutate(
+            { id: detId, body: { notes: draft ?? "" } },
+            { onSuccess: () => setDraft(null) },
+          )
+        }
+        disabled={!dirty || patch.isPending}
+      >
+        Save note
+      </button>
     </div>
   );
 }
@@ -245,6 +285,7 @@ function ReferenceBlock({ detail }: { detail: DetectionDetailT }) {
   const selectDetection = useMethaneStore((s) => s.selectDetection);
   const setJob = useMethaneStore((s) => s.setJob);
   const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   if (detail.method !== "mbmp" || !detail.reference_scene_id) return null;
 
@@ -252,10 +293,14 @@ function ReferenceBlock({ detail }: { detail: DetectionDetailT }) {
   const refMode = result.reference_mode === "composite" ? "composite" : "single";
   const members = (result.reference_members ?? []) as ReferenceMemberView[];
   const contaminated = detail.flags.includes("possible_reference_contamination");
+  // The stored request params say whether the user pinned the reference.
+  const pinned = typeof (detail.params ?? {}).reference_scene_id === "string";
 
   const retryComposite = async () => {
     const p = (detail.params ?? {}) as Record<string, unknown>;
+    const siteAtSubmit = useMethaneStore.getState().selectedSite?.id ?? null;
     setRetrying(true);
+    setRetryError(null);
     const body: AnalyzeRequest = {
       site_id: (p.site_id as number | null) ?? null,
       roi: (p.roi as AnalyzeRequest["roi"]) ?? null,
@@ -287,7 +332,7 @@ function ReferenceBlock({ detail }: { detail: DetectionDetailT }) {
         onDone: (d) => {
           setJob({ jobId: job_id, step: 7, total: 7, message: "Done", status: "done" });
           const detId = (d.result as { detection_id?: string }).detection_id;
-          if (detId) selectDetection(detId);
+          if (detId && isStillOnSite(siteAtSubmit)) selectDetection(detId);
           void qc.invalidateQueries({ queryKey: ["methane", "detections"] });
           setRetrying(false);
         },
@@ -303,7 +348,8 @@ function ReferenceBlock({ detail }: { detail: DetectionDetailT }) {
           setRetrying(false);
         },
       });
-    } catch {
+    } catch (err) {
+      setRetryError(describeApiError(err));
       setRetrying(false);
     }
   };
@@ -329,7 +375,9 @@ function ReferenceBlock({ detail }: { detail: DetectionDetailT }) {
           </table>
         </>
       ) : (
-        <p className="muted small">Single scene: {detail.reference_scene_id}</p>
+        <p className="muted small">
+          Single scene ({pinned ? "pinned" : "auto-selected"}): {detail.reference_scene_id}
+        </p>
       )}
       {contaminated ? (
         <div className="contamination-hint">
@@ -347,6 +395,7 @@ function ReferenceBlock({ detail }: { detail: DetectionDetailT }) {
               <button className="mini" disabled={retrying} onClick={retryComposite}>
                 {retrying ? "Retrying…" : "Retry with composite reference"}
               </button>
+              {retryError ? <p className="error-text">{retryError}</p> : null}
             </>
           )}
         </div>

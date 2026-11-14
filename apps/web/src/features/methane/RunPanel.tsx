@@ -14,9 +14,13 @@ import {
   NOISE_FLOOR_TOOLTIP,
   analysisAreaPx,
   analysisAreaToBBox,
+  describeApiError,
   formatFloorTh,
+  isIntInRange,
+  parseNumberInput,
+  referenceDeltaDays,
 } from "../../lib/methane";
-import { useMethaneStore } from "../../stores/methaneStore";
+import { isStillOnSite, useMethaneStore } from "../../stores/methaneStore";
 
 /** One-line method digests (full theory in docs/methane_methods.md §1). */
 const METHOD_TIPS = {
@@ -28,6 +32,10 @@ export function RunPanel() {
   const qc = useQueryClient();
   const site = useMethaneStore((s) => s.selectedSite);
   const target = useMethaneStore((s) => s.targetSceneId);
+  const targetTime = useMethaneStore((s) => s.targetSceneTime);
+  const reference = useMethaneStore((s) => s.referenceSceneId);
+  const referenceTime = useMethaneStore((s) => s.referenceSceneTime);
+  const setReference = useMethaneStore((s) => s.setReference);
   const params = useMethaneStore((s) => s.params);
   const setParams = useMethaneStore((s) => s.setParams);
   const job = useMethaneStore((s) => s.job);
@@ -37,9 +45,17 @@ export function RunPanel() {
   const floor = useSiteNoiseFloor(site?.id ?? null);
 
   const running = job?.status === "running";
+  // Blank/invalid number boxes block the run here instead of reaching the API as
+  // 0 (→ 422, previously swallowed) or a negative seed (→ fails after the EE work).
+  const paramsError = !isIntInRange(params.minAreaPx, 1)
+    ? "Min area must be a whole number ≥ 1."
+    : !isIntInRange(params.seed, 0)
+      ? "Seed must be a whole number ≥ 0."
+      : null;
 
   const run = async () => {
-    if (!site || !target || !area) return;
+    if (!site || !target || !area || paramsError) return;
+    const siteAtSubmit = site.id;
     const body: AnalyzeRequest = {
       site_id: site.id,
       roi: analysisAreaToBBox(area),
@@ -47,11 +63,23 @@ export function RunPanel() {
       method: params.method,
       // Composite reference is an MBMP-only option; MBSP has no reference pass.
       reference_mode: params.method === "mbmp" ? params.referenceMode : "single",
+      // The store clears the pin on composite, so this never trips the API's 422.
+      reference_scene_id:
+        params.method === "mbmp" && params.referenceMode === "single" && reference !== "auto"
+          ? reference
+          : null,
       k_sigma: params.kSigma,
       min_area_px: params.minAreaPx,
       seed: params.seed,
     };
-    const { job_id } = await submitAnalyze(body);
+    let job_id: string;
+    try {
+      ({ job_id } = await submitAnalyze(body));
+    } catch (err) {
+      const detail = describeApiError(err);
+      setJob({ jobId: "", step: 0, total: 7, message: detail, status: "error", detail });
+      return;
+    }
     setJob({ jobId: job_id, step: 0, total: 7, message: "Queued", status: "running" });
     subscribeJob(job_id, {
       onProgress: (d) =>
@@ -65,7 +93,7 @@ export function RunPanel() {
       onDone: (d) => {
         setJob({ jobId: job_id, step: 7, total: 7, message: "Done", status: "done" });
         const detId = (d.result as { detection_id?: string }).detection_id;
-        if (detId) selectDetection(detId);
+        if (detId && isStillOnSite(siteAtSubmit)) selectDetection(detId);
         void qc.invalidateQueries({ queryKey: ["methane", "detections"] });
       },
       onError: (d) =>
@@ -106,7 +134,7 @@ export function RunPanel() {
                 checked={params.referenceMode === "single"}
                 onChange={() => setParams({ referenceMode: "single" })}
               />
-              Single scene (auto or picked)
+              Single scene
             </label>
             <label>
               <input
@@ -117,11 +145,27 @@ export function RunPanel() {
               />
               Composite — median of up to 5 same-orbit scenes
             </label>
-            <p className="muted small">
-              {params.referenceMode === "composite"
-                ? "Robust background for recurrent emitters — an intermittent plume must appear in half the scenes to contaminate it."
-                : "The classic MBMP reference: one plume-free pass, auto-selected or the scene you pick."}
-            </p>
+            {params.referenceMode === "composite" ? (
+              <p className="muted small">
+                Robust background for recurrent emitters — an intermittent plume must appear in half
+                the scenes to contaminate it.
+              </p>
+            ) : reference === "auto" ? (
+              <p className="muted small">
+                Auto: the nearest clear pass, preferring the same orbit and spacecraft. To choose
+                one yourself, click its ● in the Scenes table.
+              </p>
+            ) : (
+              <p className="small ref-pinned-note">
+                Pinned: <b>{referenceTime?.slice(0, 10) ?? reference}</b>
+                {targetTime && referenceTime
+                  ? ` (${formatDeltaDays(referenceDeltaDays(targetTime, referenceTime))} from target)`
+                  : ""}{" "}
+                <button className="link-button" onClick={() => setReference("auto")}>
+                  use auto
+                </button>
+              </p>
+            )}
           </fieldset>
         ) : null}
         {floor.data?.floor_kg_h != null ? (
@@ -155,8 +199,9 @@ export function RunPanel() {
           <input
             type="number"
             min={1}
-            value={params.minAreaPx}
-            onChange={(e) => setParams({ minAreaPx: Number(e.target.value) })}
+            step={1}
+            value={Number.isNaN(params.minAreaPx) ? "" : params.minAreaPx}
+            onChange={(e) => setParams({ minAreaPx: parseNumberInput(e.target.value) })}
           />
         </label>
         <label
@@ -166,17 +211,20 @@ export function RunPanel() {
           Seed
           <input
             type="number"
-            value={params.seed}
-            onChange={(e) => setParams({ seed: Number(e.target.value) })}
+            min={0}
+            step={1}
+            value={Number.isNaN(params.seed) ? "" : params.seed}
+            onChange={(e) => setParams({ seed: parseNumberInput(e.target.value) })}
           />
         </label>
       </div>
 
       <AnalysisAreaControls />
 
+      {paramsError ? <p className="error-text">{paramsError}</p> : null}
       <button
         className="primary run-button"
-        disabled={!site || !target || !area || running}
+        disabled={!site || !target || !area || running || paramsError !== null}
         onClick={run}
       >
         {running ? "Running…" : "Run analysis"}
@@ -198,6 +246,11 @@ export function RunPanel() {
       <MlScanAction />
     </div>
   );
+}
+
+function formatDeltaDays(days: number): string {
+  const rounded = Math.round(days);
+  return `${rounded >= 0 ? "+" : "−"}${Math.abs(rounded)} d`;
 }
 
 /**
@@ -271,9 +324,11 @@ function MlScanAction() {
 
   const running = scan?.status === "running";
   const modelReady = status?.model_loaded ?? false;
+  const maxScenesValid = isIntInRange(maxScenes, 1, 200);
 
   const run = async () => {
-    if (!site || !area) return;
+    if (!site || !area || !maxScenesValid) return;
+    const siteAtSubmit = site.id;
     setScan({ status: "running", done: 0, total: 0, message: "Queued", hits: 0 });
     try {
       const { job_id } = await submitMlScan({
@@ -293,23 +348,27 @@ function MlScanAction() {
             hits: 0,
           }),
         onDone: (d) => {
-          const ids = (d.result as { detection_ids?: string[] }).detection_ids ?? [];
+          const result = d.result as { detection_ids?: string[]; failed_scenes?: unknown[] };
+          const ids = result.detection_ids ?? [];
+          const failed = result.failed_scenes?.length ?? 0;
           setScan((prev) => ({
             status: "done",
             done: prev?.total ?? 0,
             total: prev?.total ?? 0,
-            message: `${ids.length} candidate scene(s)`,
+            // A partial scan is still a result — but say what was not scanned.
+            message:
+              `${ids.length} candidate scene(s)` + (failed ? ` · ${failed} scene(s) failed` : ""),
             hits: ids.length,
           }));
           const first = ids[0];
-          if (first) selectDetection(first);
+          if (first && isStillOnSite(siteAtSubmit)) selectDetection(first);
           void qc.invalidateQueries({ queryKey: ["methane", "detections"] });
         },
         onError: (d) =>
           setScan({ status: "error", done: 0, total: 0, message: "", hits: 0, detail: d.detail }),
       });
     } catch (err) {
-      const detail = err instanceof Error ? err.message : "ML scan failed to start";
+      const detail = describeApiError(err);
       setScan({ status: "error", done: 0, total: 0, message: "", hits: 0, detail });
     }
   };
@@ -333,13 +392,14 @@ function MlScanAction() {
           type="number"
           min={1}
           max={200}
-          value={maxScenes}
-          onChange={(e) => setMaxScenes(Number(e.target.value))}
+          step={1}
+          value={Number.isNaN(maxScenes) ? "" : maxScenes}
+          onChange={(e) => setMaxScenes(parseNumberInput(e.target.value))}
         />
       </label>
       <button
         className="ghost ml-scan-button"
-        disabled={!site || !area || !modelReady || running}
+        disabled={!site || !area || !modelReady || running || !maxScenesValid}
         title={modelReady ? undefined : "ML model not installed — see Settings"}
         onClick={run}
       >
