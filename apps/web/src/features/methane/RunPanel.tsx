@@ -16,11 +16,13 @@ import {
   analysisAreaToBBox,
   describeApiError,
   formatFloorTh,
+  isInAnalysisArea,
   isIntInRange,
   parseNumberInput,
   referenceDeltaDays,
 } from "../../lib/methane";
 import { isStillOnSite, useMethaneStore } from "../../stores/methaneStore";
+import { CoordFields } from "./CoordFields";
 
 /** One-line method digests (full theory in docs/methane_methods.md §1). */
 const METHOD_TIPS = {
@@ -42,6 +44,7 @@ export function RunPanel() {
   const setJob = useMethaneStore((s) => s.setJob);
   const selectDetection = useMethaneStore((s) => s.selectDetection);
   const area = useMethaneStore((s) => s.analysisArea);
+  const sourcePoint = useMethaneStore((s) => s.sourcePoint);
   const floor = useSiteNoiseFloor(site?.id ?? null);
 
   const running = job?.status === "running";
@@ -71,6 +74,8 @@ export function RunPanel() {
       k_sigma: params.kSigma,
       min_area_px: params.minAreaPx,
       seed: params.seed,
+      // Anchors plume selection to a known emitter; unset → the strongest blob in the chip.
+      source_lonlat: sourcePoint ? [sourcePoint.lon, sourcePoint.lat] : null,
     };
     let job_id: string;
     try {
@@ -264,9 +269,14 @@ function AnalysisAreaControls() {
   const setArea = useMethaneStore((s) => s.setAnalysisArea);
   const placing = useMethaneStore((s) => s.placingArea);
   const setPlacing = useMethaneStore((s) => s.setPlacingArea);
+  const source = useMethaneStore((s) => s.sourcePoint);
+  const setSource = useMethaneStore((s) => s.setSourcePoint);
+  const placingSource = useMethaneStore((s) => s.placingSource);
+  const setPlacingSource = useMethaneStore((s) => s.setPlacingSource);
   if (!area) return null;
 
   const px = analysisAreaPx(area.sizeKm);
+  const sourceOutside = source !== null && !isInAnalysisArea(area, source.lat, source.lon);
   return (
     <div className="analysis-area">
       <div className="analysis-area-head">
@@ -279,6 +289,11 @@ function AnalysisAreaControls() {
           {placing ? "Click map…" : "Place on map"}
         </button>
       </div>
+      <CoordFields
+        label="Area centre"
+        value={{ lat: area.lat, lon: area.lon }}
+        onCommit={(v) => v && setArea({ lat: v.lat, lon: v.lon })}
+      />
       <label className="slider-row">
         Size: <b>{area.sizeKm} km</b>
         <input
@@ -291,8 +306,47 @@ function AnalysisAreaControls() {
         />
       </label>
       <p className="muted analysis-area-caption">
-        {px}×{px} px @ 20 m · centre {area.lat.toFixed(3)}°, {area.lon.toFixed(3)}°
+        {px}×{px} px @ 20 m · centre {area.lat.toFixed(4)}°, {area.lon.toFixed(4)}°
       </p>
+
+      <div className="analysis-area-head source-head">
+        <span title="Optional known emitter location. The plume must touch it (±60 m); otherwise the result is flagged source_not_in_mask instead of silently reporting the strongest blob elsewhere.">
+          Source point <span className="muted">(optional)</span>
+        </span>
+        <button
+          className={placingSource ? "ghost place-button active" : "ghost place-button"}
+          title="Click the map to set the source point"
+          onClick={() => setPlacingSource(!placingSource)}
+        >
+          {placingSource ? "Click map…" : "Pick on map"}
+        </button>
+      </div>
+      <CoordFields label="Source" optional value={source} onCommit={setSource} />
+      {sourceOutside ? (
+        <p className="error-text small">
+          Outside the analysis area — it would be ignored.{" "}
+          <button
+            className="link-button"
+            onClick={() => source && setArea({ lat: source.lat, lon: source.lon })}
+          >
+            Centre area on source
+          </button>
+        </p>
+      ) : (
+        <p className="muted small">
+          {source
+            ? "The plume must touch this point (±60 m); otherwise it is flagged and the distance is shown."
+            : "Without one, the strongest blob anywhere in the area is reported."}
+          {source ? (
+            <>
+              {" "}
+              <button className="link-button" onClick={() => setSource(null)}>
+                clear
+              </button>
+            </>
+          ) : null}
+        </p>
+      )}
     </div>
   );
 }

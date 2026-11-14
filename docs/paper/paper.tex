@@ -39,7 +39,7 @@ detection suite}}
 \small Faculty of Physics and Astronomy, Heidelberg University\\
 \small \texttt{benedictvonschubert@gmail.com}}
 
-\date{\small July 2026, revised November 2026 (composite-reference correction, Sect.~\ref{sec:composite}) \;\textperiodcentered\; preprint describing OpenEarth~v2 (development phase~8)}
+\date{\small July 2026, revised November 2026 (corrections in Sects.~\ref{sec:composite}, \ref{sec:gate} and \ref{sec:calibration}) \;\textperiodcentered\; preprint describing OpenEarth~v2 (development phase~8)}
 
 \begin{document}
 \maketitle
@@ -65,7 +65,10 @@ is consistent with no aggregate offset --- median ratio 1.00, though the
 $n{=}13$ bootstrap intervals are wide --- but shows a factor
 ${\approx}2.8$ log-scatter and no per-event rank skill, much of which is
 anticipated by an empirical detection floor measured on 35 plume-free
-scene pairs (pooled $24.6\perh$). A U-Net candidate ranker trained on CH4Net is evaluated
+scene pairs (pooled $24.6\perh$); a later audit found that 6 of the 13
+quantified masks lie 0.8--3\,km from the catalogued source and that the
+Korpezhe anchor had been analysed ${\sim}20$\,km from its source
+(Sect.~\ref{sec:calibration}). A U-Net candidate ranker trained on CH4Net is evaluated
 under a leakage-controlled protocol (scene-level $F_1$ 0.571 vs.\ 0.416
 for the physics baseline), with its label-inheritance limits stated. Two
 pre-registered design hypotheses were tested: adding interfering-gas and
@@ -646,8 +649,9 @@ emitter is \emph{untested}. Korpezhe's $162\perh$ --- and the slope
 movement it dominates --- is an artifact of the bug, not of shared
 contamination: on current code, the duplicated member set reproduces the
 blow-up ($166\perh$), while the de-duplicated set of five distinct
-same-tile overpasses yields no plume at all and still trips the
-contamination flag, failing in the opposite direction. The
+same-tile overpasses yields no plume at all. (Both Korpezhe chips were,
+moreover, ${\sim}20$\,km from the real source; see
+Sect.~\ref{sec:calibration}.) The
 single-reference baselines are unaffected (14 of 17 events pin their
 reference and the other 3 are MBSP), as is the two-event gate. The single
 auto-picker shared the root cause (it could prefer a cross-tile copy on a
@@ -734,6 +738,19 @@ $9.3 \pm 5.5\perh$ & $8.5\perh$ (6.8, 13.2, 5.4) \\
 \end{tabular}
 \end{table}
 
+\paragraph{Correction (November 2026).} The Korpezhe row of
+Table~\ref{tab:gate} was retrieved ${\sim}20$\,km west of the source.
+\citet{varon2021} place it at 38.4939\,N, 54.1977\,E (tile 40SBH); from
+Phase~3 on our event used 53.9648\,E --- a chip of plume-free desert
+whose strongest surface residual happened to integrate to a
+published-looking rate. They also quantify Korpezhe
+with MBSP, not MBMP. Re-run at the published source with MBSP, the gate
+gives $4.4 \pm 4.5\perh$ against $11.2 \pm 5.2\perh$ --- marginal (the
+$\sigma$ bands overlap; the point estimate is below the $\pm50\,\%$
+window). The mask touches the source; a ${\sim}2$\,km downwind streak
+is visible in the field, but at $k\sigma$ on a noisy MBSP field only the
+pixels at the source survive. Hassi Messaoud is unaffected.
+
 \subsection{Consistency with published quantifications}\label{sec:calibration}
 
 \begin{figure}[tb]
@@ -749,7 +766,10 @@ fires on 12 of 13 events --- and on all 27 plume-free noise-floor pairs
 that produced a detection (Sect.~\ref{sec:floor}) --- a deliberately
 conservative prompt for review, not a discriminator. The
 libya-sirte outlier is the persistent-emitter reference-contamination
-failure discussed in Sect.~\ref{sec:composite}.}
+failure discussed in Sect.~\ref{sec:composite}. \emph{Corrected November
+2026:} the korpezhe point was retrieved ${\sim}20$\,km from its source,
+and 6 of the 13 masks lie 0.8--3\,km from theirs, libya-sirte's
+included (Sect.~\ref{sec:calibration}).}
 \label{fig:calibration}
 \end{figure}
 
@@ -865,6 +885,31 @@ finite-column physics and the tightened validity exclusion, explicitly
 \emph{not} as a demonstrated aggregate gain: the estimator split is
 structurally forced when a residual distribution straddles unity, and
 pretending otherwise would be over-claiming.
+
+\paragraph{Correction (November 2026): where the quantified masks are.}
+The Korpezhe un-clamping above happened on a chip ${\sim}20$\,km from
+the source (Sect.~\ref{sec:gate}): its landing on the published anchor
+was coincidence. Prompted by that, \code{analyze} now records the
+distance from a given source to the nearest masked pixel and flags a
+source whose ${\pm}60$\,m window holds no plume. Previously the mask then
+silently fell back to the chip's strongest blob. On the 13 quantified
+events (baseline v5.2, chips 4--5.5\,km), only 4 masks touch their
+source (${\le}30$\,m), 3 lie 0.1--0.4\,km away (plausibly the plume,
+given coordinate error and fragmented masks), and \textbf{6 lie
+0.8--3\,km away}: algeria-ghardaia, permian, gulf-of-suez,
+turkmenistan-caspian, libya-sirte and hassi-messaoud. Those six rates
+are not of the catalogued plumes. That includes libya-sirte, whose low
+single-reference rate ($1.7$ vs.\ $14.7\perh$) this paper attributes to a
+contaminated reference: that attribution is unsupported. The six misses are a plausible, untested
+explanation for the null rank skill above, and it makes the aggregate
+statistics of this section, including Fig.~\ref{fig:calibration},
+partly a measurement of surface residuals. The corrected baseline v5.2
+(Korpezhe fixed; one event changed by upstream data drift) gives slope
+1.15, median ratio 0.96, log-scatter 0.47 and Spearman $\rho = 0.20$
+($p = 0.51$). Restricting to masks within 500\,m ($n = 7$, a cut chosen
+after seeing the data) gives median ratio 0.66, log-scatter 0.33 and
+$\rho = 0.18$. How the intercomparison should treat source misses is
+open.
 
 \subsection{An empirical detection floor}\label{sec:floor}
 
@@ -1185,7 +1230,10 @@ Engine.
 Method is our per-event analysis choice (MBMP with a pinned plume-free
 reference wherever one exists); exclusions are documented and
 published-value-blind. Published rates: IMEO MARS-S2L per-scene
-quantifications \citep{mars_s2l_dataset}; Korpezhe from \citet{varon2021}.}
+quantifications \citep{mars_s2l_dataset}; Korpezhe from \citet{varon2021}.
+\emph{Corrected November 2026:} the Korpezhe row was retrieved
+${\sim}20$\,km from the source, and 6 quantified masks lie 0.8--3\,km
+from theirs (Sect.~\ref{sec:calibration}).}
 \label{tab:events}
 \setlength{\tabcolsep}{4pt}
 \footnotesize

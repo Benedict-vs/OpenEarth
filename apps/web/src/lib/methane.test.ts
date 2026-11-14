@@ -323,3 +323,15 @@ describe("describeApiError", () => {
 it("explains the MBMP→MBSP fallback flag", () => {
   expect(FLAG_HINTS.no_reference_mbsp_fallback).toMatch(/single-scene MBSP/);
 });
+
+it("shows the source → mask distance only when a source was given", () => {
+  const base = { result: {}, q_kg_h: 1000, q_sigma_kg_h: 100 } as unknown as DetectionDetail;
+  expect(detectionNumbers(base).some((r) => r.label === "Source → mask")).toBe(false);
+  const withSource = {
+    ...base,
+    result: { source_distance_m: 1412.4 },
+  } as unknown as DetectionDetail;
+  expect(detectionNumbers(withSource).find((r) => r.label === "Source → mask")?.value).toBe(
+    "1412 m",
+  );
+});

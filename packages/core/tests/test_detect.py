@@ -391,6 +391,40 @@ def test_mbmp_without_usable_reference_is_recorded_as_mbsp(
     assert counts["fetch_chip"] == 1  # target only
 
 
+def _lonlat_of(row: int, col: int) -> tuple[float, float]:
+    g = _grid()
+    return (g.x0 + (col + 0.5) * g.xscale, g.y0 - (row + 0.5) * g.yscale)
+
+
+def test_source_flags_when_the_plume_is_not_at_the_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Plume at (30, 30); a source on empty ground at (5, 5) used to be silently
+    # replaced by the peak blob. Korpezhe (2026-11): a residual 1.4 km away.
+    _install_fakes(monkeypatch, target_delta=_truth_delta_omega())
+    at = analyze(
+        _BBOX,
+        "20180619T074619_x",
+        method="mbmp",
+        source_lonlat=_lonlat_of(30, 30),
+        mc=McParams(n=50),
+    )
+    off = analyze(
+        _BBOX, "20180619T074619_x", method="mbmp", source_lonlat=_lonlat_of(5, 5), mc=McParams(n=50)
+    )
+    outside = analyze(
+        _BBOX, "20180619T074619_x", method="mbmp", source_lonlat=(0.0, 0.0), mc=McParams(n=50)
+    )
+    assert "source_not_in_mask" not in at.flags
+    assert "source_not_in_mask" in off.flags
+    assert "source_outside_chip" in outside.flags
+    # The distance quantifies the miss: ~0 at the source, hundreds of m off it.
+    assert at.source_distance_m is not None
+    assert at.source_distance_m < 50
+    assert off.source_distance_m is not None
+    assert off.source_distance_m > 200
+
+
 # ── Phase 8: composite reference (opt-in) ──
 
 

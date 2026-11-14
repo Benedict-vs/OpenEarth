@@ -446,21 +446,21 @@
       "published_instrument": "Sentinel-2",
       "published_time_utc": "2018-06-19T07:19:00Z",
       "lat": 38.4939,
-      "lon": 53.9648,
+      "lon": 54.1977,
       "bbox": [
-        53.94,
-        38.47,
-        53.99,
-        38.51
+        54.1727,
+        38.4739,
+        54.2227,
+        38.5139
       ],
-      "method": "mbmp",
-      "target_scene_id": "20180619T070619_20180619T071220_T39SYC",
-      "reference_scene_id": "20180624T070621_20180624T071359_T39SYC",
+      "method": "mbsp",
+      "target_scene_id": "20180619T070619_20180619T071220_T40SBH",
+      "reference_scene_id": null,
       "source_lonlat": [
-        53.9648,
+        54.1977,
         38.4939
       ],
-      "notes": "orbit-degenerate/cross-tile auto pick; ref pinned to plume-free same-tile 2018-06-24 (Phase 3 lesson)"
+      "notes": "Corrected 2026-11-14: Phase 3 placed this event at lon 53.9648 \u2014 ~20 km W of the source, on plume-free desert. Varon 2021 give 38.4939 N, 54.1977 E (Sect. 2, Sect. 3.5, Fig. 4; tile 40SBH) and quantify Korpezhe with MBSP (Sect. 4)."
     }
   ]
 }

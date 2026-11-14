@@ -397,7 +397,10 @@ Consequences for the text above:
   dominates. The "members share Korpezhe's contamination" explanation is not supported. On
   current code (MC n = 300, seed 0), the duplicated set gives 166 t/h (4083-px mask); the
   de-duplicated set — 5 distinct same-tile overpasses, 05-20 … 07-29 — gives **no plume**,
-  still flagged `possible_reference_contamination`. It fails in the other direction.
+  still flagged `possible_reference_contamination`. *Amended later the same day:* every
+  Korpezhe number here was computed ~20 km west of the real source (§8 correction), so none of
+  them says anything about Korpezhe; they stand only as a demonstration of the duplication
+  effect on one chip.
 - **The table stays as the record of what was measured** (pre-registration discipline), but it
   must not be cited as evidence about the composite method.
 - **Unaffected:** the frozen single-reference baselines (v3–v5.1). 14 of 17 events pin their
@@ -418,6 +421,56 @@ Two live-EE instruments validate the pipeline. They are complementary: the first
 pass/fail gate on two hand-checked events; the second is a multi-event regression that makes
 the LUT / masking changes of Phase 3.5 falsifiable.
 
+**Correction (2026-11-14) — Korpezhe was analyzed 20 km from its source, and most calibration
+masks are not at theirs.** Read this before any Korpezhe or calibration number below; the
+original text is kept as the record of what was measured.
+
+1. **Wrong location.** Varon et al. 2021 place the Korpezhe source at **38.4939 N, 54.1977 E**
+   (Sect. 2, Sect. 3.5 and the Fig. 4 caption; tile 40SBH). From Phase 3 (`af1baca`) on, the
+   gate and the calibration event used **53.9648 E**: same latitude, ~20 km west, on plume-free
+   desert. The gate's Korpezhe "PASS" (§8.1), the per-LUT Korpezhe values in §8.2 and the
+   *LUT history note*, and every calibration baseline's Korpezhe row (v3–v5.1) are retrievals of
+   surface residuals. Their agreement with 11.2 t/h was coincidence. A diagnostic run on the old
+   chip found the "plume" mask 1.4 km from the box centre; within 500 m of the nominal well the
+   field was +0.22 σ.
+2. **Wrong method.** Varon quantify Korpezhe with **MBSP** ("We therefore use the MBSP retrieval
+   to estimate source rates for Korpezhe"); our event was MBMP. The corrected event and gate run
+   MBSP at the published source on the 2018-06-19 T40SBH product.
+3. **Corrected gate:** Korpezhe **4.40 ± 4.47 t/h vs 11.2 ± 5.2 → ⚠ MARGINAL** (σ bands overlap;
+   point estimate below the ±50 % window; flag `unstable_mask`). The mask touches the source
+   (12 m). In the overlay a ~2 km streak runs downwind from the source, but at kσ on a σ ≈ 400 ppb
+   MBSP field only the 9 px at the source survive, which is why Q is low. Hassi Messaoud is
+   unchanged (9.06 t/h, PASS).
+4. **Source-distance audit (new instrument).** `analyze` now records `source_distance_m` (source
+   → nearest masked pixel) and flags `source_not_in_mask` when a given source's ±60 m window
+   holds no kept component (the selection then falls back to the chip's peak blob, which used to
+   be silent), and `source_outside_chip`. Applied to the frozen calibration set
+   (`calibration_baseline_v5.2.json`, chips 4.0–5.5 km), the quantified masks split three ways:
+
+   | source → mask | events (13 quantified) |
+   |---|---|
+   | at the source (≤ 30 m) | rub-al-khali 7, korpezhe 12, turkmenistan-south 14, kazakhstan 30 |
+   | near (100–400 m) — plausibly the plume (coordinate error, fragmented mask) | amudarya 106, marib 214, neuquen 366 |
+   | **elsewhere (0.8–3 km)** — not that source's plume | algeria 837, permian 952, gulf-of-suez 1471, turkmenistan-caspian 1704, libya-sirte 2878, hassi-messaoud 3010 |
+
+   So **6 of 13 calibration Q values are rates of something other than the catalogued plume**.
+   That includes libya-sirte, whose 1.7 vs 14.7 t/h has been attributed throughout (§7.1, §8.2)
+   to a contaminated reference. Its quantified mask is 2.9 km from the source, so that
+   attribution is unsupported.
+   That is a plausible, untested explanation of the long-standing null rank skill (§8.2).
+   Restricting to masks within 500 m (n = 7) gives slope 0.81, median ratio 0.66, log-scatter
+   0.33, Spearman ρ 0.18 (p 0.70). That's a sensitivity check, not a baseline: n is tiny and the
+   500 m cut was chosen after seeing the data.
+5. **Baseline v5.2** (LUT v5, ALGO 7, append-only beside v5.1): n = 13, slope 1.145, median
+   ratio 0.963, log-scatter 0.471, Theil–Sen 0.344, Spearman ρ 0.203 (p 0.51). Against v5.1 only
+   two rows differ. Korpezhe is the correction (9.82 → 4.40 t/h). turkmenistan-south flips from
+   excluded (out-of-validity fraction 0.23) to quantified (0.13, 16.5 t/h), and running the
+   *v5.1 code* (`2a8bcea`) today reproduces the new value. So that change is upstream EE data
+   drift since the July freeze, not code.
+
+How the calibration should treat source misses (exclude, re-anchor, enlarge the window) is an
+open methodology decision. Nothing here changes the exclusion rules.
+
 ### 8.1 Two-event exit gate (Phase 3)
 
 `OPENEARTH_EE_TESTS=1 uv run python scripts/validate_events.py` reproduces two documented
@@ -428,6 +481,9 @@ using the v3 (layered) LUT:
 |---|---|---|---|---|
 | Korpezhe, Turkmenistan, 2018-06-19 | MBMP (ref 2018-06-24) | 11.2 ± 5.2 t/h | 13.7 ± 22.7 t/h | ✅ within ±50 %, σ overlaps (wide MC band — see note) |
 | Hassi Messaoud blowout (Nov 2019 – Jan 2020) | MBSP, mean of 3 scenes | mean 9.3 ± 5.5 t/h | 8.5 t/h (6.8, 13.2, 5.4) | ✅ within ±50 % |
+
+*Superseded for Korpezhe (2026-11-14): this row was retrieved ~20 km from the source — see the
+correction at the top of §8; the corrected gate is MBSP at the source, ⚠ MARGINAL.*
 
 Korpezhe's reference is pinned (its auto pick is the unusable same overpass); Hassi Messaoud is
 a continuous blowout, so single-scene MBSP at the well is averaged over three cloud-free scenes.
@@ -560,6 +616,10 @@ exclusion, not as a demonstrated aggregate calibration gain.** Both baselines st
 (`calibration_baseline_v4.json`, `calibration_baseline_v5.json`) so the comparison is repo-checkable.
 
 ### LUT history note
+
+*(2026-11-14: these Korpezhe values are from a chip ~20 km west of the source — they illustrate
+the LUT-shape sensitivity of ΔΩ-space masking on a surface-residual field, not Korpezhe's
+plume. See the correction at the top of §8.)*
 
 **LUT history at Korpezhe (v1 → v2 → v3).** Korpezhe's point estimate moved
 9.6 → 5.4 → 13.7 t/h across the three LUTs while the retrieved ΔR field never changed —

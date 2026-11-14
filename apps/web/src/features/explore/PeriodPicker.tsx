@@ -4,8 +4,18 @@
  * the same vocabulary reads the same everywhere.
  */
 import { useEffect } from "react";
-import { boundsCaption, clampDate, clampPeriod, type DateBounds } from "../../lib/coverage";
+import { boundsCaption, clampPeriod, type DateBounds } from "../../lib/coverage";
+import { shiftPeriod, stepDate } from "../../lib/dateInput";
 import type { Period } from "../../lib/timeWindow";
+import { DateField } from "./DateField";
+
+/** The period moves as a whole: by a year (same season) or by its own length. */
+const SHIFTS = [
+  { by: "year", dir: -1, label: "−1 yr", title: "Same dates, one year earlier" },
+  { by: "span", dir: -1, label: "‹", title: "Previous period of the same length" },
+  { by: "span", dir: 1, label: "›", title: "Next period of the same length" },
+  { by: "year", dir: 1, label: "+1 yr", title: "Same dates, one year later" },
+] as const;
 
 interface PeriodPickerProps {
   period: Period;
@@ -38,30 +48,43 @@ export function PeriodPicker({
       <div className="date-inputs">
         <label>
           From
-          <input
-            type="date"
+          <DateField
             value={period.start}
             min={min}
-            max={period.end}
+            // A period needs ≥ 1 day: [start, end) ranges are empty when equal (→ 422).
+            max={stepDate(period.end, "day", -1)}
             title={coverage ?? undefined}
-            onChange={(e) =>
-              e.target.value && onChange(clampDate(e.target.value, bounds), period.end)
-            }
+            onCommit={(start) => onChange(start, period.end)}
           />
         </label>
         <label>
           To
-          <input
-            type="date"
+          <DateField
             value={period.end}
-            min={period.start}
+            min={stepDate(period.start, "day", 1)}
             max={max}
             title={coverage ?? undefined}
-            onChange={(e) =>
-              e.target.value && onChange(period.start, clampDate(e.target.value, bounds))
-            }
+            onCommit={(end) => onChange(period.start, end)}
           />
         </label>
+      </div>
+      <div className="period-shift" role="group" aria-label="Shift period">
+        {SHIFTS.map((s) => {
+          const next = shiftPeriod(period, s.by, s.dir);
+          const outside = (min && next.start < min) || (max && next.end > max);
+          return (
+            <button
+              key={`${s.by}${s.dir}`}
+              type="button"
+              className="mini ghost"
+              title={outside ? `${s.title} — outside the archive (${coverage})` : s.title}
+              disabled={Boolean(outside)}
+              onClick={() => onChange(next.start, next.end)}
+            >
+              {s.label}
+            </button>
+          );
+        })}
       </div>
       {coverage && !compact ? <p className="muted period-coverage">{coverage}</p> : null}
     </div>

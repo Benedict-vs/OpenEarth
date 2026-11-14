@@ -3,8 +3,9 @@ import { submitScreening, useCreateSite } from "../../api/methaneQueries";
 import { useCatalog } from "../../api/queries";
 import { subscribeJob } from "../../api/sse";
 import type { Hotspot, ScreeningRequest } from "../../api/types";
-import { boundsCaption, clampDate, productBounds } from "../../lib/coverage";
+import { productBounds } from "../../lib/coverage";
 import { useMethaneStore } from "../../stores/methaneStore";
+import { PeriodPicker } from "../explore/PeriodPicker";
 
 /** A 0.3° box around a hotspot cell (for "create site here"). */
 function cellBox(lat: number, lon: number) {
@@ -66,36 +67,12 @@ export function ScreeningDialog({ onClose }: { onClose: () => void }) {
         <p className="muted">
           {site ? `Region: ${site.name}` : "Region: default Turkmenistan box"}
         </p>
-        <div className="date-row">
-          <label>
-            Start
-            <input
-              type="date"
-              value={dates.start}
-              min={bounds.min}
-              max={dates.end}
-              title={boundsCaption(bounds) ?? undefined}
-              onChange={(e) => {
-                const start = clampDate(e.target.value, bounds);
-                if (e.target.value) setDates((d) => ({ ...d, start }));
-              }}
-            />
-          </label>
-          <label>
-            End
-            <input
-              type="date"
-              value={dates.end}
-              min={dates.start}
-              max={bounds.max}
-              title={boundsCaption(bounds) ?? undefined}
-              onChange={(e) => {
-                const end = clampDate(e.target.value, bounds);
-                if (e.target.value) setDates((d) => ({ ...d, end }));
-              }}
-            />
-          </label>
-        </div>
+        <PeriodPicker
+          period={dates}
+          onChange={(start, end) => setDates({ start, end })}
+          label="Screening period"
+          bounds={bounds}
+        />
         <button className="primary" onClick={run}>
           Run screening
         </button>
