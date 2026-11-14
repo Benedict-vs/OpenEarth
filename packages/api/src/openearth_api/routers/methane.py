@@ -7,6 +7,8 @@ download only read the DB/disk/cache and stay EE-free.
 
 from __future__ import annotations
 
+import math
+from datetime import date  # runtime import: FastAPI evaluates route annotations
 from typing import TYPE_CHECKING, Annotated, Literal
 
 import diskcache
@@ -23,6 +25,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 
+from openearth.errors import validate_date_range
 from openearth.geometry import BBox
 from openearth.settings import Settings
 from openearth_api.deps import ensure_ee, get_app_settings, get_cache, get_db_engine, get_jobs
@@ -95,8 +98,8 @@ def get_site_noise_floor(site_id: int, engine: EngineDep) -> NoiseFloorOut:
 def list_site_scenes(
     site_id: int,
     engine: EngineDep,
-    start: Annotated[str, Query()],
-    end: Annotated[str, Query()],
+    start: Annotated[date, Query()],
+    end: Annotated[date, Query()],
     max_cloud: Annotated[float, Query(ge=0, le=100)] = 80.0,
     # Optional analysis-area override (all four or none): scenes are listed over
     # the area actually analyzed, not the browse-scale site ROI, so a picked
@@ -111,6 +114,7 @@ def list_site_scenes(
         roi = BBoxIn(west=west, south=south, east=east, north=north)
     elif any(c is not None for c in (west, south, east, north)):
         raise HTTPException(422, "Provide all of west/south/east/north or none.")
+    validate_date_range(start, end)  # [start, end) — reversed/empty → 422, not an EE 502
     return svc.list_scenes_for(engine, site_id, roi, start, end, max_cloud)
 
 
@@ -168,6 +172,11 @@ def detection_overlay(
     vmin: Annotated[float | None, Query()] = None,
     vmax: Annotated[float | None, Query()] = None,
 ) -> Response:
+    # A NaN/inf or inverted range rendered a silently blank (or flat) PNG.
+    if any(v is not None and not math.isfinite(v) for v in (vmin, vmax)):
+        raise HTTPException(422, "vmin/vmax must be finite numbers.")
+    if vmin is not None and vmax is not None and vmin >= vmax:
+        raise HTTPException(422, f"vmin must be < vmax; got vmin={vmin}, vmax={vmax}.")
     png = svc.overlay_png(engine, settings, cache, det_id, vmin, vmax)
     return Response(content=png, media_type="image/png")
 
@@ -194,11 +203,14 @@ def list_emit_plumes(
     south: Annotated[float, Query(ge=-90, le=90)],
     east: Annotated[float, Query(ge=-180, le=180)],
     north: Annotated[float, Query(ge=-90, le=90)],
-    start: Annotated[str, Query()],
-    end: Annotated[str, Query()],
+    start: Annotated[date, Query()],
+    end: Annotated[date, Query()],
 ) -> EmitPlumesOut:
     bbox = BBox(west, south, east, north)  # InvalidROIError → 422
-    return svc_emit.list_plumes_out(bbox, start, end, cache)
+    # EMIT windows are inclusive day ranges, so a single day (start == end) is valid.
+    if end < start:
+        raise HTTPException(422, f"end must be on/after start; got start={start}, end={end}.")
+    return svc_emit.list_plumes_out(bbox, start.isoformat(), end.isoformat(), cache)
 
 
 @router.post("/methane/detections/{det_id}/emit-match", dependencies=[Depends(ensure_ee)])

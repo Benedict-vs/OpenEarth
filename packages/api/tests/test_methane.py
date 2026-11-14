@@ -376,7 +376,7 @@ def test_validation_import_and_cross_match(client: TestClient, analyze_ready: No
     assert imp.status_code == 200
     # `rate` is unit-agnostic + default unit="auto" → rates dropped (never guessed),
     # but the events still import and cross-match on space + time.
-    assert imp.json() == {"imported": 2, "skipped": 0, "rates_dropped": 2}
+    assert imp.json() == {"imported": 2, "skipped": 0, "duplicates": 0, "rates_dropped": 2}
 
     events = client.get("/api/methane/validation/events").json()
     assert len(events) == 2
@@ -411,7 +411,7 @@ def test_validation_import_counts_skipped(client: TestClient) -> None:
         files={"file": ("e.csv", csv, "text/csv")},
         data={"source": "manual", "fmt": "csv"},
     )
-    assert imp.json() == {"imported": 1, "skipped": 1, "rates_dropped": 1}
+    assert imp.json() == {"imported": 1, "skipped": 1, "duplicates": 0, "rates_dropped": 1}
 
 
 def test_validation_import_unit_field_and_imeo_kg_h(client: TestClient) -> None:
@@ -428,7 +428,7 @@ def test_validation_import_unit_field_and_imeo_kg_h(client: TestClient) -> None:
         },
         data={"source": "imeo", "fmt": "csv"},
     )
-    assert imeo.json() == {"imported": 1, "skipped": 0, "rates_dropped": 0}
+    assert imeo.json() == {"imported": 1, "skipped": 0, "duplicates": 0, "rates_dropped": 0}
     stored = client.get("/api/methane/validation/events").json()
     assert stored[-1]["q_kg_h"] == pytest.approx(1620.4)
 
@@ -438,17 +438,55 @@ def test_validation_import_unit_field_and_imeo_kg_h(client: TestClient) -> None:
         files={"file": ("r.csv", b"lat,lon,date,rate\n10,10,2020-01-01,5.0\n", "text/csv")},
         data={"source": "x", "fmt": "csv", "unit": "t_h"},
     )
-    assert th.json() == {"imported": 1, "skipped": 0, "rates_dropped": 0}
+    assert th.json() == {"imported": 1, "skipped": 0, "duplicates": 0, "rates_dropped": 0}
 
     # A > 500 t/h rate is a unit error → dropped by the guard.
     guard = client.post(
         "/api/methane/validation/import",
         files={
-            "file": ("g.csv", b"lat,lon,date,source_rate_t_h\n10,10,2020-01-01,999\n", "text/csv")
+            "file": ("g.csv", b"lat,lon,date,source_rate_t_h\n11,11,2020-01-01,999\n", "text/csv")
         },
         data={"source": "x", "fmt": "csv"},
     )
-    assert guard.json() == {"imported": 1, "skipped": 0, "rates_dropped": 1}
+    assert guard.json() == {"imported": 1, "skipped": 0, "duplicates": 0, "rates_dropped": 1}
+
+
+def test_validation_import_dedupes_and_survives_bad_files(client: TestClient) -> None:
+    def post(name: str, body: bytes, fmt: str, source: str = "dup") -> Any:
+        return client.post(
+            "/api/methane/validation/import",
+            files={"file": (name, body, "text/plain")},
+            data={"source": source, "fmt": fmt},
+        )
+
+    row = b"lat,lon,date\n20,20,2021-03-01\n"
+    assert post("a.csv", row, "csv").json()["imported"] == 1
+    again = post("a.csv", row, "csv").json()  # re-import must not duplicate
+    assert (again["imported"], again["duplicates"]) == (0, 1)
+    # Same event from another source is a distinct record.
+    assert post("a.csv", row, "csv", source="other").json()["imported"] == 1
+
+    # Unplaceable coordinates are skipped, never stored as NULL/inf.
+    bad = post(
+        "b.csv", b"lat,lon,date\nnan,1,2021-03-01\n999,1,2021-03-01\ninf,1,2021-03-01\n", "csv"
+    )
+    assert bad.status_code == 200
+    assert (bad.json()["imported"], bad.json()["skipped"]) == (0, 3)
+
+    # Malformed files → 422 or a counted skip, never a 500.
+    assert post("c.csv", b"\xff\xfe\x00bad", "csv").status_code == 422
+    assert post("d.json", b"{not json", "geojson").status_code == 422
+    nulls = post(
+        "e.json",
+        b'{"features": [null, {"geometry": {"type": "Point", "coordinates": [1]}}]}',
+        "geojson",
+    )
+    assert nulls.status_code == 200
+    assert (nulls.json()["imported"], nulls.json()["skipped"]) == (0, 2)
+    polygon = (
+        b'{"features": [{"geometry": {"type": "Polygon", "coordinates": []}, "properties": {}}]}'
+    )
+    assert post("f.json", polygon, "geojson").json()["skipped"] == 1  # counted, not invisible
 
 
 # ── fix 8: read-time ML↔physics agreement derivation ──
@@ -494,3 +532,84 @@ def test_physics_agreement_three_states(tmp_path: Path) -> None:
     assert svc.derive_physics_agreement(engine, 1, "SCENE_ABSENT") == "physics_not_run"
     # A physics row for a different site+scene must not count as agreement.
     assert svc.derive_physics_agreement(engine, 2, "SCENE_PLUME") == "physics_not_run"
+
+
+# ── deleted sites never leave dangling detection site_ids (ids are reused) ──
+
+
+def _detection_row(det_id: str, site_id: int | None) -> Any:
+    from openearth_api.models import Detection, utcnow_iso
+
+    now = utcnow_iso()
+    return Detection(
+        id=det_id,
+        site_id=site_id,
+        source="physics",
+        status="candidate",
+        method="mbmp",
+        scene_id="S",
+        scene_time_utc="2018-06-19T07:19:00+00:00",
+        params_json="{}",
+        result_json="{}",
+        array_path="x.npz",
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _site_ids_of(engine: Any) -> dict[str, int | None]:
+    from sqlmodel import Session, select
+
+    from openearth_api.models import Detection
+
+    with Session(engine) as session:
+        return {d.id: d.site_id for d in session.exec(select(Detection)).all()}
+
+
+def test_delete_site_unlinks_detections_and_reused_id_inherits_nothing(tmp_path: Path) -> None:
+    from openearth_api.schemas import SiteIn
+
+    engine = create_db_engine(tmp_path / "orphans.db")
+    migrate(engine)
+    box = {"kind": "bbox", "west": 53.9, "south": 38.4, "east": 54.0, "north": 38.5}
+    site = svc.create_site(SiteIn.model_validate({"name": "A", "bbox": box}), engine)
+    svc.insert_detection(engine, _detection_row("d1", site.id))
+
+    svc.delete_site(site.id, engine)
+    assert _site_ids_of(engine) == {"d1": None}
+
+    # SQLite reuses the freed id — the new site must start with an empty feed.
+    reused = svc.create_site(SiteIn.model_validate({"name": "B", "bbox": box}), engine)
+    assert reused.id == site.id
+    assert svc.list_detections(engine, reused.id, None, None, 100, 0) == []
+
+
+def test_insert_detection_unlinks_a_site_deleted_mid_job(tmp_path: Path) -> None:
+    engine = create_db_engine(tmp_path / "midjob.db")
+    migrate(engine)
+    svc.insert_detection(engine, _detection_row("late", 999))  # site already gone
+    assert _site_ids_of(engine) == {"late": None}
+
+
+def test_migration6_clears_existing_dangling_site_ids(tmp_path: Path) -> None:
+    from sqlmodel import Session
+
+    from openearth_api.models import utcnow_iso
+
+    engine = create_db_engine(tmp_path / "v5.db")
+    with engine.begin() as conn:
+        for batch in _MIGRATIONS[:5]:
+            for stmt in batch:
+                conn.exec_driver_sql(stmt)
+        conn.exec_driver_sql("PRAGMA user_version = 5")
+    with engine.begin() as conn:  # raw SQL: the v5 schema predates the ORM's floor_key
+        conn.exec_driver_sql(
+            "INSERT INTO sites (id, name, west, south, east, north, created_at) "
+            f"VALUES (1, 'live', 0, 0, 1, 1, '{utcnow_iso()}')"
+        )
+    with Session(engine) as session:
+        session.add(_detection_row("kept", 1))
+        session.add(_detection_row("orphan", 42))
+        session.commit()
+    assert migrate(engine) == len(_MIGRATIONS)
+    assert _site_ids_of(engine) == {"kept": 1, "orphan": None}

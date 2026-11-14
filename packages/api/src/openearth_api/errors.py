@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+import math
+from typing import TYPE_CHECKING, Any
 
 import ee
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from openearth.errors import (
@@ -37,7 +40,26 @@ def _detail(status_code: int, message: str) -> JSONResponse:
     return JSONResponse(status_code=status_code, content={"detail": message})
 
 
+def _json_safe(value: Any) -> Any:
+    """Replace non-finite floats (JSON has no NaN/Infinity) with their repr."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return repr(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(RequestValidationError)
+    async def _request_validation(request: Request, exc: RequestValidationError) -> JSONResponse:
+        # FastAPI's default handler echoes each error's ``input``; a NaN/Infinity
+        # there (``{"k_sigma": NaN}``) made the 422 itself unserialisable → 500.
+        return JSONResponse(
+            status_code=422, content={"detail": _json_safe(jsonable_encoder(exc.errors()))}
+        )
+
     @app.exception_handler(InvalidROIError)
     @app.exception_handler(InvalidDateRangeError)
     @app.exception_handler(InvalidDatasetSpecError)

@@ -314,7 +314,15 @@ class JobManager:
 
     def _persist_terminal(self, job: _Job, payload: dict[str, Any]) -> None:
         status = payload["status"]
-        fields: dict[str, Any] = {"status": status, "finished_at": utcnow_iso()}
+        # Progress writes are throttled, so the last one usually never landed —
+        # a finished job read back "5/7 · Retrieving". Persist the final snapshot.
+        fields: dict[str, Any] = {
+            "status": status,
+            "finished_at": utcnow_iso(),
+            "progress_done": int(job.snapshot.get("done", 0)),
+            "progress_total": int(job.snapshot.get("total", 0)),
+            "message": job.snapshot.get("message"),
+        }
         if status == "succeeded":
             fields["result_json"] = json.dumps(payload.get("result") or {}, default=str)
         else:

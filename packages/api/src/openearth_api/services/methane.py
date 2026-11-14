@@ -15,24 +15,25 @@ import csv
 import io
 import json
 import math
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import numpy as np
 from fastapi import HTTPException
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from openearth.catalog.presets import METHANE_SITES
 from openearth.geometry import BBox
 from openearth.methane.conversion import load_lut
 from openearth.methane.detect import analyze
 from openearth.methane.ime import McParams
-from openearth.methane.plume import mask_outline_geojson
+from openearth.methane.plume import mask_centroid, mask_outline_geojson
 from openearth.methane.retrieval import check_chip_bbox
 from openearth.methane.scenes import list_scenes
-from openearth.methane.tropomi import screen_region
+from openearth.methane.tropomi import check_lattice, screen_region
 from openearth.methane.validation import ReferenceEvent as CoreReferenceEvent
 from openearth.methane.validation import match_detection, parse_events
 from openearth_api.cache import cache_key
@@ -128,6 +129,7 @@ def seed_sites(engine: Engine) -> None:
                     date_hint_end=hint[1] if hint else None,
                     notes=None,
                     created_at=utcnow_iso(),
+                    floor_key=preset.name.removeprefix("CH4: "),
                 )
             )
         session.commit()
@@ -185,6 +187,9 @@ def patch_site(site_id: int, body: SitePatch, engine: Engine) -> SiteOut:
             row.date_hint_end = body.date_hint_end.isoformat() if body.date_hint_end else None
         if "notes" in fields:
             row.notes = body.notes
+        # A one-sided hint patch can still invert the stored pair.
+        if row.date_hint_start and row.date_hint_end and row.date_hint_end < row.date_hint_start:
+            raise HTTPException(422, "date hint: end must not be before start.")
         session.add(row)
         try:
             session.commit()
@@ -197,7 +202,27 @@ def patch_site(site_id: int, body: SitePatch, engine: Engine) -> SiteOut:
 def delete_site(site_id: int, engine: Engine) -> None:
     with Session(engine) as session:
         row = _require_site(session, site_id)
+        # Detections outlive their site, unlinked. Done explicitly: the schema's
+        # ON DELETE SET NULL is inert without PRAGMA foreign_keys, and a dangling
+        # id would be inherited by the next site (ids are reused).
+        session.exec(
+            update(Detection).where(col(Detection.site_id) == site_id).values(site_id=None)
+        )
         session.delete(row)
+        session.commit()
+
+
+def insert_detection(engine: Engine, row: Detection) -> None:
+    """Insert a runner-written detection row (physics analyze and ML scan).
+
+    A site deleted while its job ran must not leave a dangling ``site_id`` — the
+    same id-reuse hazard :func:`delete_site` guards against — so the row is
+    stored unlinked instead of failing the job and losing the finished result.
+    """
+    with Session(engine) as session:
+        if row.site_id is not None and session.get(Site, row.site_id) is None:
+            row.site_id = None
+        session.add(row)
         session.commit()
 
 
@@ -222,7 +247,12 @@ def _resolve_bbox(session: Session, site_id: int | None, roi: Any) -> BBox:
 
 
 def list_scenes_for(
-    engine: Engine, site_id: int | None, roi: Any, start: str, end: str, max_cloud: float
+    engine: Engine,
+    site_id: int | None,
+    roi: Any,
+    start: str | date,
+    end: str | date,
+    max_cloud: float,
 ) -> list[SceneInfoOut]:
     with Session(engine) as session:
         bbox = _resolve_bbox(session, site_id, roi)
@@ -399,9 +429,7 @@ def persist_detection(
         created_at=now,
         updated_at=now,
     )
-    with Session(engine) as session:
-        session.add(row)
-        session.commit()
+    insert_detection(engine, row)
     return det_id
 
 
@@ -523,8 +551,8 @@ def get_site_floor(engine: Engine, site_id: int) -> NoiseFloorOut:
     """The noise-floor context for one site — static Lab context before a run (fix 1)."""
     floor = load_floor()
     with Session(engine) as session:
-        site = session.get(Site, site_id)
-    name = site.name if site else None
+        site = _require_site(session, site_id)  # 404, not a global floor for a ghost site
+        name = site.floor_key
     entry = (floor.get("sites", {}) if floor else {}).get(name) if name else None
     if isinstance(entry, dict) and entry.get("floor_kg_h") is not None:
         return NoiseFloorOut(
@@ -543,11 +571,14 @@ def get_site_floor(engine: Engine, site_id: int) -> NoiseFloorOut:
 
 
 def _site_names(session: Session, site_ids: set[int]) -> dict[int, str]:
-    """Batched site_id → name map for read-time noise-floor resolution (fix 1)."""
+    """Batched site_id → noise-floor key for read-time resolution (fix 1).
+
+    The rename-proof ``floor_key`` (migration 7), never the editable name.
+    """
     if not site_ids:
         return {}
     rows = session.exec(select(Site).where(Site.id.in_(site_ids))).all()  # type: ignore[union-attr]
-    return {s.id: s.name for s in rows if s.id is not None}
+    return {s.id: s.floor_key for s in rows if s.id is not None and s.floor_key is not None}
 
 
 def _floor_name(names: dict[int, str], site_id: int | None) -> str | None:
@@ -663,6 +694,19 @@ def patch_detection(engine: Engine, det_id: str, body: DetectionPatch) -> Detect
             row.status = fields["status"]
         if "notes" in fields:
             row.notes = body.notes
+        if "verdict" in fields:
+            prior = json.loads(row.validation_json) if row.validation_json else {}
+            if body.verdict is not None:
+                row.validation_json = json.dumps(
+                    {
+                        "verdict": body.verdict,
+                        "matched_event_ids": prior.get("matched_event_ids", []),
+                        "set_by": "human",
+                        "validated_at": utcnow_iso(),
+                    }
+                )
+            elif prior.get("set_by") == "human":
+                row.validation_json = None  # clearing the human verdict → "not validated"
         row.updated_at = utcnow_iso()
         session.add(row)
         session.commit()
@@ -716,6 +760,10 @@ async def submit_screening(req: ScreeningRequest, jobs: JobManager) -> JobCreate
     there is no separate artifact.
     """
     bbox = req.roi.to_domain()  # 422 on malformed geometry
+    try:
+        check_lattice(bbox, req.cell_deg)  # oversized lattice → 422 now, not mid-job
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
     def runner(ctx: JobContext) -> dict[str, Any]:
         hotspots = screen_region(
@@ -752,12 +800,24 @@ async def submit_screening(req: ScreeningRequest, jobs: JobManager) -> JobCreate
 
 
 def _count_records(data: bytes, fmt: str) -> int:
-    """Count parseable-shape records so ``skipped = total − imported``."""
+    """Count every record so ``skipped = total − imported − duplicates``.
+
+    Every GeoJSON feature counts — a Polygon or malformed feature that cannot
+    import is *skipped*, not invisible (a Polygon-only file read 0 + 0).
+    """
     if fmt == "csv":
         return sum(1 for _ in csv.DictReader(io.StringIO(data.decode("utf-8-sig"))))
     doc = json.loads(data.decode("utf-8"))
     features = doc.get("features", []) if isinstance(doc, dict) else []
-    return sum(1 for f in features if (f.get("geometry") or {}).get("type") == "Point")
+    return len(features) if isinstance(features, list) else 0
+
+
+def _event_key(
+    source: str, event_time_utc: str, lat: float, lon: float
+) -> tuple[str, str, float, float]:
+    """Identity of a reference event: re-importing a file must not duplicate it
+    (duplicates inflated ``matched_event_ids``)."""
+    return (source, event_time_utc, round(lat, 6), round(lon, 6))
 
 
 def import_events(
@@ -767,11 +827,26 @@ def import_events(
         raise HTTPException(422, "fmt must be 'csv' or 'geojson'.")
     if unit not in ("auto", "t_h", "kg_h"):
         raise HTTPException(422, "unit must be 'auto', 't_h', or 'kg_h'.")
-    events = parse_events(data, fmt=fmt, source=source, unit=unit)  # type: ignore[arg-type]
-    total = _count_records(data, fmt)
+    try:
+        events = parse_events(data, fmt=fmt, source=source, unit=unit)  # type: ignore[arg-type]
+        total = _count_records(data, fmt)
+    except (UnicodeDecodeError, json.JSONDecodeError, csv.Error) as exc:
+        raise HTTPException(422, f"Could not read the file as UTF-8 {fmt.upper()}: {exc}") from exc
     now = utcnow_iso()
+    duplicates = 0
     with Session(engine) as session:
+        seen = {
+            _event_key(e.source, e.event_time_utc, e.lat, e.lon)
+            for e in session.exec(select(ReferenceEvent).where(ReferenceEvent.source == source))
+        }
+        stored: list[Any] = []
         for event in events:
+            key = _event_key(event.source, event.event_time_utc, event.lat, event.lon)
+            if key in seen:
+                duplicates += 1
+                continue
+            seen.add(key)
+            stored.append(event)
             session.add(
                 ReferenceEvent(
                     source=event.source,
@@ -786,10 +861,11 @@ def import_events(
             )
         session.commit()
     # A rate was present in the source but not stored (ambiguous unit or guard).
-    rates_dropped = sum(1 for e in events if "rate_dropped" in e.raw)
+    rates_dropped = sum(1 for e in stored if "rate_dropped" in e.raw)
     return ValidationImportOut(
-        imported=len(events),
+        imported=len(stored),
         skipped=max(0, total - len(events)),
+        duplicates=duplicates,
         rates_dropped=rates_dropped,
     )
 
@@ -815,7 +891,17 @@ def list_events(engine: Engine) -> list[ReferenceEventOut]:
 
 
 def _detection_center(row: Detection) -> tuple[float, float]:
-    """(lat, lon) of the detection from its stored overlay bounds (grid corners)."""
+    """(lat, lon) a coincidence match measures from: the plume itself.
+
+    The area-weighted centroid of the stored plume mask; only a maskless row
+    (no plume) falls back to the chip centre from its overlay bounds. Matching
+    from the chip centre missed real coincidences — on 15 of 43 stored physics
+    detections the plume sits > 5 km (the EMIT radius) from the chip centre.
+    """
+    if row.mask_geojson:
+        centroid = mask_centroid(json.loads(row.mask_geojson))
+        if centroid is not None:
+            return centroid
     bounds = json.loads(row.result_json).get("overlay_bounds")
     if not bounds:
         raise HTTPException(422, "Detection has no geometry to validate against.")
@@ -845,10 +931,19 @@ def validate_detection(engine: Engine, det_id: str) -> ValidationOut:
         ]
         verdict, matched_idx = match_detection(det_lat, det_lon, det_time, events)
         matched_ids = [e.id for i, e in enumerate(event_rows) if i in set(matched_idx) and e.id]
+        prior = json.loads(row.validation_json) if row.validation_json else {}
+        stored: dict[str, Any] = {
+            "verdict": verdict,
+            "matched_event_ids": matched_ids,
+            "validated_at": utcnow_iso(),
+        }
+        if prior.get("set_by") == "human":
+            # A human "contradicted" outranks the automatic match: keep it, refresh
+            # only the matched events (re-running Validate used to overwrite it).
+            verdict = prior["verdict"]
+            stored.update(verdict=verdict, set_by="human")
         result = ValidationOut(verdict=verdict, matched_event_ids=matched_ids)  # type: ignore[arg-type]
-        row.validation_json = json.dumps(
-            {"verdict": verdict, "matched_event_ids": matched_ids, "validated_at": utcnow_iso()}
-        )
+        row.validation_json = json.dumps(stored)
         row.updated_at = utcnow_iso()
         session.add(row)
         session.commit()
