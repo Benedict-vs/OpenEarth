@@ -14,9 +14,12 @@ date *hints* (2024) are irrelevant here — this script pins the historical even
 dates and the exact target/reference scene ids itself.
 
 Notes on method choice (documented in docs/methane_methods.md):
-  - Korpezhe is an intermittent source: MBMP against a plume-free different-date
-    reference. The auto reference is unusable here (all scenes share orbit 106,
-    and the nearest is the same overpass), so the reference is pinned.
+  - Korpezhe: single-scene MBSP at the published source (38.4939 N, 54.1977 E,
+    tile 40SBH) — the method Varon et al. 2021 use for its source rates (Sect. 4).
+    Corrected 2026-11-14: through Phase 10 this gate ran MBMP at lon 53.9648,
+    ~20 km W of the source, and its "PASS" was a surface residual matching by
+    coincidence (docs/methane_methods.md §8.1). ``--reference-mode composite``
+    runs an MBMP composite at the corrected location as evidence, never the gate.
   - Hassi Messaoud is a *continuous* blowout: every in-period scene carries the
     plume, so MBMP would cancel it. Single-scene MBSP with the source location
     is used, averaged over ≥ 3 cloud-free scenes.
@@ -53,24 +56,19 @@ PASS, MARGINAL, FAIL = "PASS", "⚠ MARGINAL", "FAIL"
 def korpezhe(reference_mode: str = "single") -> tuple[float, float, str, str]:
     """Korpezhe 2018-06-19 — published 11.2 ± 5.2 t/h (GHGSat-D: 11.6 ± 8.8).
 
-    PASS: Q ∈ [5.6, 16.8] t/h (published ±50 %) with σ overlapping. This
-    intermittent, pinned-reference event sits near a mask-size cliff, so its
-    point estimate is LUT-shape sensitive and its MC band is wide (see the
-    LUT history note in docs/methane_methods.md §8).
+    PASS: Q ∈ [5.6, 16.8] t/h (published ±50 %) with σ overlapping. The gate is
+    MBSP at the source, as published; ``composite`` instead runs MBMP with a
+    median-composite reference at the same location (evidence only).
     """
-    bbox = BBox(53.94, 38.47, 53.99, 38.51)
-    result = analyze(
-        bbox,
-        "20180619T070619_20180619T071220_T39SYC",
-        # Composite mode drops the pinned reference and medians its own members;
-        # single mode (the gate) keeps the documented pinned reference.
-        reference_scene_id=(
-            None if reference_mode == "composite" else "20180624T070621_20180624T071359_T39SYC"
-        ),
-        reference_mode=reference_mode,  # type: ignore[arg-type]
-        method="mbmp",
-        mc=_MC,
-    )
+    source = (54.1977, 38.4939)  # Varon et al. 2021, Sect. 2 / Fig. 4
+    bbox = BBox(54.1727, 38.4739, 54.2227, 38.5139)
+    target = "20180619T070619_20180619T071220_T40SBH"
+    if reference_mode == "composite":
+        result = analyze(
+            bbox, target, method="mbmp", reference_mode="composite", source_lonlat=source, mc=_MC
+        )
+    else:
+        result = analyze(bbox, target, method="mbsp", source_lonlat=source, mc=_MC)
     q, sigma = _q_th(result), _sigma_th(result)
     lo, hi = 5.6, 16.8
     # σ overlap: our [q−σ, q+σ] intersects the published [11.2−5.2, 11.2+5.2].
@@ -81,7 +79,13 @@ def korpezhe(reference_mode: str = "single") -> tuple[float, float, str, str]:
         verdict = MARGINAL
     else:
         verdict = FAIL
-    return q, sigma, verdict, f"published 11.2 ± 5.2 t/h; ±50 % window [{lo}, {hi}], σ overlaps"
+    flags = f"; flags {', '.join(result.flags)}" if result.flags else ""
+    return (
+        q,
+        sigma,
+        verdict,
+        f"published 11.2 ± 5.2 t/h; ±50 % window [{lo}, {hi}], σ overlaps{flags}",
+    )
 
 
 def hassi_messaoud() -> tuple[float, float, str, str]:
@@ -114,7 +118,7 @@ def main() -> int:
         "--reference-mode",
         choices=["single", "composite"],
         default="single",
-        help="MBMP reference for Korpezhe: single (the gate) or median composite (evidence)",
+        help="Korpezhe: single = the MBSP gate; composite = MBMP median-composite evidence run",
     )
     args = parser.parse_args()
 

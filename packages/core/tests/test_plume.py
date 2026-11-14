@@ -9,6 +9,7 @@ from openearth.ee.pixels import GridSpec, grid_for
 from openearth.geometry import BBox
 from openearth.methane.plume import (
     detect_plume,
+    distance_to_mask_m,
     mask_centroid,
     mask_outline_geojson,
     pixel_area_m2,
@@ -149,6 +150,13 @@ def test_component_selection_source_window_vs_peak() -> None:
     src = detect_plume(field, grid, k_sigma=2.0, source_rc=(15, 15))
     assert src.mask[15, 15]
     assert not src.mask[45, 45]
+    assert (peak.source_hit, src.source_hit) == (None, True)
+
+    # A source over empty ground: the peak fallback still picks the far blob, but
+    # now says so (it used to be indistinguishable from a source-anchored plume).
+    away = detect_plume(field, grid, k_sigma=2.0, source_rc=(5, 50))
+    assert away.mask[45, 45]
+    assert away.source_hit is False
 
 
 # ── mask_outline_geojson ──
@@ -198,3 +206,15 @@ def test_mask_centroid_none_for_empty_mask() -> None:
     grid = _grid((10, 10))
     assert mask_centroid(mask_outline_geojson(np.zeros((10, 10), bool), grid)) is None
     assert mask_centroid(None) is None
+
+
+def test_distance_to_mask_m() -> None:
+    grid = _grid((40, 40))
+    mask = np.zeros((40, 40), dtype=bool)
+    mask[10, 30] = True
+    # Source at the centre of pixel (10, 20): 10 columns west of the masked pixel.
+    lon = grid.x0 + 20.5 * grid.xscale
+    lat = grid.y0 - 10.5 * grid.yscale
+    expected = 10 * grid.xscale * 111_320.0 * np.cos(np.radians(lat))
+    assert distance_to_mask_m(mask, grid, lon, lat) == pytest.approx(expected, rel=1e-3)
+    assert distance_to_mask_m(np.zeros((40, 40), bool), grid, lon, lat) is None

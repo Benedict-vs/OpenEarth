@@ -171,6 +171,11 @@ def run_event(event: dict[str, object], *, reference_mode: str = "single") -> di
         row["exclusion_reason"] = f"analyze failed: {exc}"
         return row
     row["flags"] = list(result.flags)
+    # How far the quantified mask is from the catalogued source (m) — a Q from a blob
+    # kilometres away is not that source's rate (Korpezhe correction, 2026-11-14).
+    row["source_distance_m"] = (
+        round(result.source_distance_m, 1) if result.source_distance_m is not None else None
+    )
     # Record what the composite actually used (members + AMF spread) for the A/B.
     row["reference_members"] = [m.scene_id for m in result.reference_members]
     row["composite_amf_spread"] = round(result.composite_amf_spread, 4)
@@ -220,7 +225,7 @@ def _print_table(baseline: dict[str, object]) -> None:
         f"seed={baseline['mc_seed']}  n={baseline['mc_n']}  "
         f"git={baseline['git_hash']}"
     )
-    print(f"{'id':<30}{'method':<7}{'pub':>7}{'ours':>9}{'σ':>8}   note")
+    print(f"{'id':<30}{'method':<7}{'pub':>7}{'ours':>9}{'σ':>8}{'src→mask':>10}   note")
     print("-" * 90)
     for r in baseline["events"]:  # type: ignore[union-attr]
         if r["excluded"]:
@@ -230,9 +235,11 @@ def _print_table(baseline: dict[str, object]) -> None:
             )
         else:
             note = ",".join(r["flags"]) or "ok"  # type: ignore[arg-type]
+            dist = r.get("source_distance_m")  # type: ignore[union-attr]
+            dist_s = f"{dist:>8.0f} m" if dist is not None else f"{'—':>10}"
             print(
                 f"{r['id']:<30}{r['method']:<7}{r['published_q_t_h']:>7.1f}"
-                f"{r['q_ours_t_h']:>9.2f}{r['sigma_ours_t_h']:>8.2f}   {note}"
+                f"{r['q_ours_t_h']:>9.2f}{r['sigma_ours_t_h']:>8.2f}{dist_s}   {note}"
             )
     print("-" * 90)
     a = baseline["aggregates"]

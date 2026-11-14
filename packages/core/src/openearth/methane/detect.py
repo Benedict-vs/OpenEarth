@@ -35,7 +35,7 @@ from openearth.methane.evidence import (
 )
 from openearth.methane.flare import nhi_hot_mask
 from openearth.methane.ime import EmissionEstimate, McParams, quantify
-from openearth.methane.plume import PlumeMask, detect_plume
+from openearth.methane.plume import PlumeMask, detect_plume, distance_to_mask_m
 from openearth.methane.retrieval import RetrievalChip, fetch_chip, mbsp
 from openearth.methane.scenes import (
     S2Scene,
@@ -124,6 +124,10 @@ class DetectionResult:
     # (no migration); ``flare_lit_*`` flags fire when either is ≥ 1.
     n_hot_target: int = 0
     n_hot_reference: int = 0
+    # Ground distance (m) from a given source to the nearest masked pixel; None when
+    # no source was given or no plume was found. The flag says *whether* the mask
+    # touches the source; this says how far off it is.
+    source_distance_m: float | None = None
 
 
 def _median_composite_chip(chips: list[RetrievalChip]) -> RetrievalChip:
@@ -429,9 +433,16 @@ def analyze(
         source_rc=source_rc,
         mc=mc,
     )
+    # A given source location must never be silently dropped: outside the chip it
+    # was ignored, and with nothing at the source the mask fell back to the chip's
+    # peak blob — e.g. a surface residual 1.4 km away reported as "the" plume.
+    if source_lonlat is not None and source_rc is None:
+        flags.append("source_outside_chip")
     if plume.n_pixels == 0:
         flags.append("no_plume")
     else:
+        if plume.source_hit is False:
+            flags.append("source_not_in_mask")
         if bool(np.isnan(delta_omega[plume.mask]).any()):
             flags.append("nan_in_mask")
         # False-positive evidence checks (Phase 9; flag-only). Ehret dimming sign:
@@ -484,4 +495,9 @@ def analyze(
         composite_amf_spread=composite_amf_spread,
         n_hot_target=n_hot_target,
         n_hot_reference=n_hot_reference,
+        source_distance_m=(
+            distance_to_mask_m(plume.mask, grid, *source_lonlat)
+            if source_lonlat is not None
+            else None
+        ),
     )

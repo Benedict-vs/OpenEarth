@@ -40,6 +40,10 @@ class PlumeMask:
     k_sigma: float
     n_pixels: int
     area_m2: float
+    # Whether a given source pixel's window holds the kept plume: True = source-anchored,
+    # False = the source window was empty and the peak-blob fallback chose the mask
+    # (it may lie anywhere in the chip), None = no source given or nothing detected.
+    source_hit: bool | None = None
 
 
 def robust_sigma(field: NDArray[np.float64]) -> float:
@@ -65,12 +69,14 @@ def _select_components(
     field: NDArray[np.float64],
     valid_ids: list[int],
     source_rc: tuple[int, int] | None,
-) -> list[int]:
-    """Pick the label ids that make up the plume.
+) -> tuple[list[int], bool | None]:
+    """Pick the label ids that make up the plume, and whether the source anchored them.
 
     If *source_rc* is given, keep every valid component intersecting a 7×7
     window around it; otherwise (or if none intersect) keep the single valid
-    component containing the peak-enhancement pixel.
+    component containing the peak-enhancement pixel. The second value is True
+    for a source-anchored pick, False when a given source's window was empty and
+    the peak fallback chose a component elsewhere, None when no source was given.
     """
     if source_rc is not None:
         r, c = source_rc
@@ -79,14 +85,14 @@ def _select_components(
         window = labels[r0:r1, c0:c1]
         hit = [i for i in np.unique(window) if int(i) in valid_ids]
         if hit:
-            return [int(i) for i in hit]
+            return [int(i) for i in hit], True
 
     # Peak-enhancement fallback: the component holding the largest field value
     # among the valid components.
     in_valid = np.isin(labels, valid_ids)
     scored = np.where(in_valid & np.isfinite(field), field, -np.inf)
     peak_label = int(labels[np.unravel_index(int(np.argmax(scored)), scored.shape)])
-    return [peak_label]
+    return [peak_label], (False if source_rc is not None else None)
 
 
 def detect_plume(
@@ -136,7 +142,7 @@ def detect_plume(
     if not valid_ids:
         return empty
 
-    keep = _select_components(labels, field, valid_ids, source_rc)
+    keep, source_hit = _select_components(labels, field, valid_ids, source_rc)
     mask = np.isin(labels, keep)
     n_pixels = int(mask.sum())
     return PlumeMask(
@@ -145,6 +151,7 @@ def detect_plume(
         k_sigma=k_sigma,
         n_pixels=n_pixels,
         area_m2=n_pixels * pixel_area_m2(grid),
+        source_hit=source_hit,
     )
 
 
@@ -228,3 +235,23 @@ def mask_centroid(mask_geojson: dict[str, Any] | None) -> tuple[float, float] | 
     if total <= 0.0 or origin is None:
         return None
     return (origin[1] + sy / total, origin[0] + sx / total)
+
+
+def distance_to_mask_m(
+    mask: NDArray[np.bool_], grid: GridSpec, lon: float, lat: float
+) -> float | None:
+    """Ground distance (m) from (lon, lat) to the nearest masked pixel centre.
+
+    Records *how far* a reported plume is from a known source — a mask 80 m
+    downwind and one 3 km away are both "not touching" the source window, but
+    only one can be that source's plume. Local equirectangular metres (chips
+    are ≤ 20 km). None for an empty mask.
+    """
+    rows, cols = np.nonzero(mask)
+    if rows.size == 0:
+        return None
+    px_lon = grid.x0 + (cols + 0.5) * grid.xscale
+    px_lat = grid.y0 - (rows + 0.5) * grid.yscale
+    dx = (px_lon - lon) * _M_PER_DEG * np.cos(np.radians(lat))
+    dy = (px_lat - lat) * _M_PER_DEG
+    return float(np.hypot(dx, dy).min())
