@@ -10,6 +10,7 @@ selection are pure Python, unit-tested offline.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any
@@ -118,6 +119,41 @@ def list_scenes(
     return sorted(scenes, key=lambda s: s.time)
 
 
+_MGRS_TILE_RE = re.compile(r"_T(\d{2}[A-Z]{3})")
+
+
+def mgrs_tile(scene_id: str) -> str | None:
+    """The MGRS tile id embedded in an S2 system:index, or None (fix 4b)."""
+    match = _MGRS_TILE_RE.search(scene_id)
+    return match.group(1) if match else None
+
+
+def dedupe_overpasses(candidates: list[S2Scene], *, prefer_tile: str | None) -> list[S2Scene]:
+    """Keep ONE product per acquisition. Pure and unit-tested.
+
+    Near a UTM-zone edge an ROI touches several MGRS tiles, and the catalog lists
+    the same acquisition once per tile (``…_T39SYC`` and ``…_T40SBH``, identical
+    datatake, timestamps < 1 s apart). Left in, those copies made the composite
+    a median over duplicated overpasses (a plume on 2 dates filled 4 of 5
+    members) and let the single picker prefer a cross-tile copy on a sub-second
+    Δt tie. The overpass key is (spacecraft, datatake sensing time — the first
+    ``system:index`` token); within a group the target's own tile wins, then the
+    lower cloud cover, then the id (determinism).
+    """
+
+    def rank(scene: S2Scene) -> tuple[bool, float, str]:
+        cloud = scene.cloud_pct if not math.isnan(scene.cloud_pct) else math.inf
+        return (mgrs_tile(scene.scene_id) != prefer_tile, cloud, scene.scene_id)
+
+    best: dict[tuple[str, str], S2Scene] = {}
+    for scene in candidates:
+        key = (scene.spacecraft, scene.scene_id.split("_", 1)[0])
+        if key not in best or rank(scene) < rank(best[key]):
+            best[key] = scene
+    kept = set(map(id, best.values()))
+    return [s for s in candidates if id(s) in kept]
+
+
 def pick_reference(
     target: S2Scene,
     candidates: list[S2Scene],
@@ -136,6 +172,8 @@ def pick_reference(
     The ``min_days`` floor excludes a *same-overpass* scene (an adjacent UTM tile
     of the same acquisition, ``Δt ≈ 0``): it images the very same plume, so
     differencing against it would cancel the signal instead of the background.
+    Tile copies of one acquisition collapse to a single candidate, preferring
+    the target's tile (:func:`dedupe_overpasses`).
     """
 
     def score(candidate: S2Scene) -> float:
@@ -146,7 +184,7 @@ def pick_reference(
 
     eligible = [
         c
-        for c in candidates
+        for c in dedupe_overpasses(candidates, prefer_tile=mgrs_tile(target.scene_id))
         if c.scene_id != target.scene_id
         and c.cloud_pct <= max_cloud
         and min_days <= abs((c.time - target.time).total_seconds()) / 86400.0 <= max_days
@@ -172,12 +210,14 @@ def pick_reference_set(
     constraints, not soft penalties: the LUT is per-spacecraft and the median is
     only meaningful over a fixed viewing geometry — averaging across mixed
     geometries/SRFs would smear physics, not noise. Same cloud / ``|Δt|`` bounds
-    as the single picker; ``min_days`` still excludes the same overpass. Returns
-    ``[]`` when nothing qualifies (the caller falls back to single reference).
+    as the single picker; ``min_days`` still excludes the same overpass. Each
+    acquisition counts once (:func:`dedupe_overpasses`), so k members are k
+    distinct overpasses — the median's contamination bound depends on it.
+    Returns ``[]`` when nothing qualifies (the caller falls back to single reference).
     """
     eligible = [
         c
-        for c in candidates
+        for c in dedupe_overpasses(candidates, prefer_tile=mgrs_tile(target.scene_id))
         if c.scene_id != target.scene_id
         and c.spacecraft == target.spacecraft
         and c.relative_orbit == target.relative_orbit

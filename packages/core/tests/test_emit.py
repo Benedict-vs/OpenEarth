@@ -15,6 +15,7 @@ from openearth.methane.emit import (
     cross_match,
     dedup_plumes,
     gee_available,
+    gee_filter_range,
     parse_v002_geojson,
 )
 
@@ -285,3 +286,11 @@ def test_gee_features_to_plumes() -> None:
     assert p.q_kg_h is None
     assert p.max_enh_lat is None
     assert p.representative_point() == pytest.approx((31.9, -102.1), abs=0.01)
+
+
+def test_gee_filter_range_includes_the_last_day() -> None:
+    # filterDate's end is exclusive: [06-01, 06-16] must query up to 06-17, else a
+    # plume on 06-16 is lost (live repro: EMIT_L2B_CH4PLM_001_20230616T211343).
+    assert gee_filter_range("2023-06-01", "2023-06-16") == ("2023-06-01", "2023-06-17")
+    # The cutoff day is the GEE side's last day; V002 starts the day after.
+    assert gee_filter_range("2024-10-01", GEE_CH4PLM_CUTOFF) == ("2024-10-01", "2024-10-27")

@@ -8,7 +8,6 @@ them and manages progress/cancellation. Offline tests fake ``list_scenes``,
 
 from __future__ import annotations
 
-import re
 import threading
 import warnings
 from collections.abc import Callable
@@ -38,7 +37,13 @@ from openearth.methane.flare import nhi_hot_mask
 from openearth.methane.ime import EmissionEstimate, McParams, quantify
 from openearth.methane.plume import PlumeMask, detect_plume
 from openearth.methane.retrieval import RetrievalChip, fetch_chip, mbsp
-from openearth.methane.scenes import S2Scene, list_scenes, pick_reference, pick_reference_set
+from openearth.methane.scenes import (
+    S2Scene,
+    list_scenes,
+    pick_reference,
+    pick_reference_set,
+)
+from openearth.methane.scenes import mgrs_tile as _mgrs_tile
 from openearth.methane.wind import (
     GLOBAL_ERA5_HOURLY_ID,
     WindSample,
@@ -79,8 +84,6 @@ _LUT_HI_CLIP_FLAG_FRACTION = 0.05
 # swings by ≥ this ratio, or any k empties a mask the display k did not — the
 # order-of-magnitude mask noise made visible, not fixed.
 _MASK_STABILITY_RATIO_MAX = 4.0
-# MGRS tile in an S2 system:index, e.g. ..._T39RUN → "39RUN" (fix 4b / Tier 1 F5).
-_MGRS_TILE_RE = re.compile(r"_T(\d{2}[A-Z]{3})")
 
 
 @dataclass(frozen=True)
@@ -157,12 +160,6 @@ def _resolve_source_rc(
     if 0 <= row < grid.height and 0 <= col < grid.width:
         return (row, col)
     return None
-
-
-def _mgrs_tile(scene_id: str) -> str | None:
-    """The MGRS tile id embedded in an S2 system:index, or None (fix 4b)."""
-    match = _MGRS_TILE_RE.search(scene_id)
-    return match.group(1) if match else None
 
 
 def _overpass_wind(bbox: BBox, when: datetime) -> tuple[WindSample, float, bool]:
@@ -264,6 +261,13 @@ def analyze(
             t_tile, r_tile = _mgrs_tile(target.scene_id), _mgrs_tile(reference.scene_id)
             if t_tile and r_tile and t_tile != r_tile:
                 flags.append("cross_tile_reference")
+        else:
+            # Nothing qualified (every candidate > 30 % cloud, or none within
+            # 1–120 d): the retrieval below is target-only ΔΩ — numerically MBSP.
+            # Record the method that actually ran, not the one requested, so the
+            # row never claims a reference-differenced result it does not have.
+            flags.append("no_reference_mbsp_fallback")
+            method = "mbsp"
 
     # ── Step 2: fetch reference chip(s) (skipped for MBSP) ──
     check_cancel()

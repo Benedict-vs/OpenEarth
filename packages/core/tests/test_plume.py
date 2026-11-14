@@ -9,6 +9,7 @@ from openearth.ee.pixels import GridSpec, grid_for
 from openearth.geometry import BBox
 from openearth.methane.plume import (
     detect_plume,
+    mask_centroid,
     mask_outline_geojson,
     pixel_area_m2,
     robust_sigma,
@@ -175,3 +176,25 @@ def test_mask_outline_geojson_empty_mask() -> None:
     grid = _grid((10, 10))
     fc = mask_outline_geojson(np.zeros((10, 10), dtype=bool), grid)
     assert fc["features"] == []
+
+
+def test_mask_centroid_is_the_pixel_weighted_plume_centre() -> None:
+    # Two blobs of different size plus a hole: the centroid must equal the mean of
+    # the masked pixel centres, not the chip centre or a vertex average.
+    grid = _grid((40, 40))
+    mask = np.zeros((40, 40), dtype=bool)
+    mask[2:12, 3:13] = True  # 100 px, upper-left
+    mask[5:7, 5:7] = False  # a 4-px hole
+    mask[30:34, 30:36] = True  # 24 px, lower-right
+    rows, cols = np.nonzero(mask)
+    lon_px = grid.x0 + (cols + 0.5) * grid.xscale
+    lat_px = grid.y0 - (rows + 0.5) * grid.yscale  # yscale is a magnitude; lat falls by row
+    lat, lon = mask_centroid(mask_outline_geojson(mask, grid))  # type: ignore[misc]
+    assert lat == pytest.approx(lat_px.mean(), abs=1e-9)
+    assert lon == pytest.approx(lon_px.mean(), abs=1e-9)
+
+
+def test_mask_centroid_none_for_empty_mask() -> None:
+    grid = _grid((10, 10))
+    assert mask_centroid(mask_outline_geojson(np.zeros((10, 10), bool), grid)) is None
+    assert mask_centroid(None) is None
